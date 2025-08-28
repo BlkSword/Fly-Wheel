@@ -2,11 +2,11 @@ mod modules;
 
 use clap::{Parser, Subcommand};
 use modules::discover;
+use modules::info;
+use modules::r#move;
+use modules::persist;
 use modules::scan;
 use modules::vuln;
-use modules::r#move;
-use modules::info;
-use modules::persist;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -29,6 +29,15 @@ enum Commands {
         /// Target host (e.g., 192.168.1.1)
         #[arg(short, long)]
         target: String,
+
+        /// Port range to scan (e.g., 1-1000 or 22,80,443)
+        #[arg(
+            short,
+            long,
+            value_name = "PORTS",
+            help = "Port range to scan (e.g., 1-65535 or 22,80,443)"
+        )]
+        ports: Option<String>,
     },
     /// Vulnerability scanning and detection
     Vuln {
@@ -64,9 +73,9 @@ fn main() {
             println!("Performing network discovery on {}", target);
             discover::run(target);
         }
-        Commands::Scan { target } => {
+        Commands::Scan { target, ports } => {
             println!("Performing port scan on {}", target);
-            scan::run(target);
+            scan::run(target, ports.as_deref());
         }
         Commands::Vuln { target } => {
             println!("Scanning for vulnerabilities on {}", target);

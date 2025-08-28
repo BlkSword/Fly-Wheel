@@ -2,10 +2,8 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use socket2::{Domain, Protocol, Socket, Type};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::sync::Semaphore;
-use tokio::task::JoinHandle;
 
 // 默认批处理大小
 const AVERAGE_BATCH_SIZE: usize = 3000;

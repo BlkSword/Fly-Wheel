@@ -1,7 +1,6 @@
 mod modules;
 
 use clap::{Parser, Subcommand};
-use modules::discover;
 use modules::info;
 use modules::r#move;
 use modules::persist;
@@ -71,7 +70,6 @@ fn main() {
     match &cli.command {
         Commands::Discover { target } => {
             println!("Performing network discovery on {}", target);
-            discover::run(target);
         }
         Commands::Scan { target, ports } => {
             println!("Performing port scan on {}", target);

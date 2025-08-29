@@ -1,6 +1,7 @@
+// 端口扫描模块
+
 use futures::stream::{FuturesUnordered, StreamExt};
 use socket2::{Domain, Protocol, Socket, Type};
-use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use tokio::sync::Semaphore;
@@ -51,8 +52,8 @@ pub fn run(target: &str, ports: Option<&str>) -> String {
     }
 
     let mut result = format!("Open ports on {}:\n", target);
-    for (port, service) in open_ports {
-        result.push_str(&format!("  {} - {}\n", port, service));
+    for port in open_ports {
+        result.push_str(&format!("  {}\n", port));
     }
 
     result
@@ -118,19 +119,15 @@ fn parse_ports(ports: Option<&str>) -> Result<Vec<u16>, String> {
 }
 
 /// 异步扫描指定端口列表
-async fn scan_ports_async(
-    target: IpAddr,
-    ports: &[u16],
-    batch_size: usize,
-) -> HashMap<u16, String> {
-    let mut open_ports = HashMap::new();
+async fn scan_ports_async(target: IpAddr, ports: &[u16], batch_size: usize) -> Vec<u16> {
+    let mut open_ports = Vec::new();
     let semaphore = std::sync::Arc::new(Semaphore::new(batch_size));
     let mut futures = FuturesUnordered::new();
-    
+
     for &port in ports {
         let semaphore_clone = semaphore.clone();
         let target_clone = target.clone();
-        
+
         futures.push(tokio::spawn(async move {
             let _permit = semaphore_clone.acquire().await.unwrap();
             let addr = SocketAddr::new(target_clone, port);
@@ -142,9 +139,8 @@ async fn scan_ports_async(
     while let Some(result) = futures.next().await {
         if let Ok((port, is_open)) = result {
             if is_open {
-                let service = identify_service(port);
-                println!("Port {} is open - {}", port, service);
-                open_ports.insert(port, service);
+                println!("Port {} is open", port);
+                open_ports.push(port);
             }
         }
     }
@@ -196,7 +192,6 @@ fn get_optimal_batch_size() -> usize {
                 None => batch_size
             }
         } else {
-            // Windows系统使用默认值
             batch_size
         }
     }
@@ -217,45 +212,9 @@ fn get_fd_limit() -> Option<u64> {
     }
 }
 
-/// 根据端口号识别服务
-fn identify_service(port: u16) -> String {
-    match port {
-        21 => "FTP".to_string(),
-        22 => "SSH".to_string(),
-        23 => "Telnet".to_string(),
-        25 => "SMTP".to_string(),
-        53 => "DNS".to_string(),
-        80 => "HTTP".to_string(),
-        110 => "POP3".to_string(),
-        111 => "RPCBind".to_string(),
-        135 => "MS RPC".to_string(),
-        139 => "NetBIOS".to_string(),
-        143 => "IMAP".to_string(),
-        443 => "HTTPS".to_string(),
-        445 => "SMB".to_string(),
-        993 => "IMAPS".to_string(),
-        995 => "POP3S".to_string(),
-        1723 => "PPTP".to_string(),
-        3306 => "MySQL".to_string(),
-        3389 => "RDP".to_string(),
-        5432 => "PostgreSQL".to_string(),
-        5900 => "VNC".to_string(),
-        8080 => "HTTP-Alt".to_string(),
-        _ => "Unknown".to_string(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_service_identification() {
-        assert_eq!(identify_service(22), "SSH");
-        assert_eq!(identify_service(80), "HTTP");
-        assert_eq!(identify_service(443), "HTTPS");
-        assert_eq!(identify_service(9999), "Unknown");
-    }
 
     #[test]
     fn test_invalid_target() {

@@ -1,6 +1,7 @@
 mod modules;
 
 use clap::{Parser, Subcommand};
+use modules::host;
 use modules::info;
 use modules::r#move;
 use modules::persist;
@@ -17,6 +18,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Discover active hosts using ARP scanning
+    Host {
+        #[arg(
+            short, 
+            long, 
+            value_name = "NETWORK", 
+            help = "Target network to scan (e.g., 192.168.1.0/24)"
+        )]
+        target: String,
+    },
     Discover {
         #[arg(short, long)]
         target: String,
@@ -55,8 +66,14 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
+        Commands::Host { target } => {
+            println!("Performing ARP host discovery on {}", target);
+            let result = host::discover_hosts(target);
+            println!("{}", result);
+        }
         Commands::Discover { target } => {
             println!("Performing network discovery on {}", target);
+            // discover::run(target);
         }
         Commands::Scan { target, ports } => {
             println!("Performing port scan on {}", target);

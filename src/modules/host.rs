@@ -8,7 +8,9 @@ use pnet::packet::ethernet::{EtherTypes, MutableEthernetPacket};
 #[cfg(not(windows))]
 use pnet::packet::{MutablePacket, Packet};
 use std::collections::HashSet;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+#[cfg(windows)]
+use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 #[cfg(windows)]
 use tokio::net::TcpStream;
@@ -69,12 +71,16 @@ fn parse_network(network_str: &str) -> Result<(Ipv4Addr, u8), String> {
 /// 执行主机扫描
 async fn scan_hosts(network: Ipv4Addr, prefix: u8) -> Vec<IpAddr> {
     // 计算要扫描的IP地址
+    #[cfg(not(windows))]
     let target_ips = calculate_target_ips(network, prefix);
+
+    #[cfg(windows)]
+    let _target_ips = calculate_target_ips(network, prefix);
 
     // 在Windows上使用ICMP+TCP探测，在其他平台上使用ARP扫描
     #[cfg(windows)]
     {
-        windows_host_scan(target_ips).await
+        windows_host_scan(_target_ips).await
     }
     #[cfg(not(windows))]
     {
@@ -288,7 +294,7 @@ async fn arp_scan(network: Ipv4Addr, prefix: u8) -> Vec<IpAddr> {
     // 发送ARP请求
     for &target_ip in &target_ips {
         let arp_packet = create_arp_request(source_mac, IpAddr::V4(source_ip), target_ip);
-        if let Err(e) = tx.send_to(&arp_packet, None) {
+        if let Some(Err(e)) = tx.send_to(&arp_packet, None) {
             eprintln!("Failed to send ARP request to {}: {}", target_ip, e);
         }
     }

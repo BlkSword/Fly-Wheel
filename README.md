@@ -11,7 +11,10 @@ FlyWheel是一个基于Rust开发的功能完整的内网渗透测试工具，�
 确保你已经安装了Rust开发环境，然后克隆此仓库并构建项目：
 
 ```Shell
-cargo build --release
+# Install Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+cargo build
 ```
 
 

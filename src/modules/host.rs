@@ -1,31 +1,33 @@
 // 主机存活检测模块
-#[cfg(not(windows))]
-use pnet::datalink;
-#[cfg(not(windows))]
-use pnet::packet::arp::{ArpHardwareTypes, ArpOperations, ArpPacket, MutableArpPacket};
-#[cfg(not(windows))]
-use pnet::packet::ethernet::{EtherTypes, MutableEthernetPacket};
-#[cfg(not(windows))]
-use pnet::packet::{MutablePacket, Packet};
+// 254 IP
+// Icmp 15s
+// Tcp 2s
+
+use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::HashSet;
-#[cfg(windows)]
-use std::net::SocketAddr;
-use std::net::{IpAddr, Ipv4Addr};
+use std::io::Write;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::process::Command;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
-#[cfg(windows)]
 use tokio::net::TcpStream;
+use tokio::sync::Semaphore;
 
 /// 执行主机存活检测
 ///
-/// # 参数 -t
+/// # 参数
+///
+/// * `target_network` - 目标网段
+/// * `scan_type` - 扫描类型 ("icmp", "tcp")
 ///
 /// 返回发现的存活主机列表
-pub fn discover_hosts(target_network: &str) -> String {
+pub fn discover_hosts(target_network: &str, scan_type: &str) -> String {
     match parse_network(target_network) {
         Ok((network, prefix)) => {
             let active_hosts = tokio::runtime::Runtime::new()
                 .unwrap()
-                .block_on(scan_hosts(network, prefix));
+                .block_on(scan_hosts(network, prefix, scan_type));
 
             if active_hosts.is_empty() {
                 return format!("No active hosts found in network {}", target_network);
@@ -69,82 +71,128 @@ fn parse_network(network_str: &str) -> Result<(Ipv4Addr, u8), String> {
 }
 
 /// 执行主机扫描
-async fn scan_hosts(network: Ipv4Addr, prefix: u8) -> Vec<IpAddr> {
+async fn scan_hosts(network: Ipv4Addr, prefix: u8, scan_type: &str) -> Vec<IpAddr> {
     // 计算要扫描的IP地址
-    #[cfg(not(windows))]
     let target_ips = calculate_target_ips(network, prefix);
+    let total_ips = target_ips.len();
 
-    #[cfg(windows)]
-    let _target_ips = calculate_target_ips(network, prefix);
+    println!("Scanning {} hosts...", total_ips);
 
-    // 在Windows上使用ICMP+TCP探测，在其他平台上使用ARP扫描
-    #[cfg(windows)]
-    {
-        windows_host_scan(_target_ips).await
-    }
-    #[cfg(not(windows))]
-    {
-        arp_scan(network, prefix).await
+    match scan_type {
+        "icmp" => icmp_host_scan(target_ips, total_ips).await,
+        "tcp" => tcp_host_scan(target_ips, total_ips).await,
+        _ => {
+            eprintln!("Invalid scan type: {}. Using icmp as default.", scan_type);
+            icmp_host_scan(target_ips, total_ips).await
+        }
     }
 }
 
-/// 在Windows上使用ICMP和TCP端口探测进行主机扫描
-#[cfg(windows)]
-async fn windows_host_scan(target_ips: Vec<Ipv4Addr>) -> Vec<IpAddr> {
-    use futures::stream::{FuturesUnordered, StreamExt};
-
+/// 使用ICMP探测进行主机扫描
+async fn icmp_host_scan(target_ips: Vec<Ipv4Addr>, total_ips: usize) -> Vec<IpAddr> {
     let mut futures = FuturesUnordered::new();
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(50)); // 减少并发数以避免网络拥塞
+    // 增加并发数以提高扫描速度
+    let semaphore = Arc::new(Semaphore::new(100));
+    let scanned_count = Arc::new(AtomicUsize::new(0));
 
     for ip in target_ips {
         let semaphore_clone = semaphore.clone();
+        let scanned_count_clone = scanned_count.clone();
         futures.push(tokio::spawn(async move {
             let _permit = semaphore_clone.acquire().await.unwrap();
             let ip_addr = IpAddr::V4(ip);
 
-            // 添加小延迟以避免网络拥塞
-            tokio::time::sleep(Duration::from_millis(1)).await;
-
-            // 尝试ICMP探测
-            if ping_host(ip_addr).await {
+            let result = if ping_host(ip_addr).await {
                 Some(ip_addr)
             } else {
-                // 如果ICMP失败，尝试TCP端口探测
-                if tcp_port_scan(ip_addr).await {
-                    Some(ip_addr)
-                } else {
-                    None
-                }
-            }
+                None
+            };
+
+            // 更新进度
+            let scanned = scanned_count_clone.fetch_add(1, Ordering::Relaxed) + 1;
+            print_progress(scanned, total_ips);
+
+            result
         }));
     }
 
     let mut active_hosts = HashSet::new();
     while let Some(result) = futures.next().await {
-        match result {
-            Ok(Some(ip)) => {
-                active_hosts.insert(ip);
-            }
-            Ok(None) => {} // 主机未响应
-            Err(e) => {
-                eprintln!("Task failed: {}", e);
-            }
+        if let Ok(Some(ip)) = result {
+            active_hosts.insert(ip);
         }
     }
+
+    // 完成后换行
+    println!();
 
     active_hosts.into_iter().collect()
 }
 
-/// 使用ICMP Echo请求探测主机存活 (Windows)
-#[cfg(windows)]
+/// 使用TCP端口探测进行主机扫描
+async fn tcp_host_scan(target_ips: Vec<Ipv4Addr>, total_ips: usize) -> Vec<IpAddr> {
+    let mut futures = FuturesUnordered::new();
+    // 增加并发数以提高扫描速度
+    let semaphore = Arc::new(Semaphore::new(100));
+    let scanned_count = Arc::new(AtomicUsize::new(0));
+
+    for ip in target_ips {
+        let semaphore_clone = semaphore.clone();
+        let scanned_count_clone = scanned_count.clone();
+        futures.push(tokio::spawn(async move {
+            let _permit = semaphore_clone.acquire().await.unwrap();
+            let ip_addr = IpAddr::V4(ip);
+
+            let result = if tcp_port_scan(ip_addr).await {
+                Some(ip_addr)
+            } else {
+                None
+            };
+
+            // 更新进度
+            let scanned = scanned_count_clone.fetch_add(1, Ordering::Relaxed) + 1;
+            print_progress(scanned, total_ips);
+
+            result
+        }));
+    }
+
+    let mut active_hosts = HashSet::new();
+    while let Some(result) = futures.next().await {
+        if let Ok(Some(ip)) = result {
+            active_hosts.insert(ip);
+        }
+    }
+
+    // 完成后换行
+    println!();
+
+    active_hosts.into_iter().collect()
+}
+
+/// 打印进度条
+fn print_progress(current: usize, total: usize) {
+    let progress = (current as f64 / total as f64) * 100.0;
+    let filled = (progress as usize) / 2; // 50个字符宽度的进度条
+    let bar: String = std::iter::repeat('=')
+        .take(filled)
+        .chain(std::iter::repeat(' '))
+        .take(50)
+        .collect();
+
+    print!("\r[{}] {:.1}%", bar, progress);
+    std::io::stdout().flush().unwrap();
+}
+
+/// 使用ICMP Echo请求探测主机存活
 async fn ping_host(ip: IpAddr) -> bool {
-    // 在Windows上，使用系统ping命令作为简单实现
+    // 使用系统ping命令作为简单实现
     let ip_str = match ip {
         IpAddr::V4(addr) => addr.to_string(),
         IpAddr::V6(addr) => addr.to_string(),
     };
 
-    let output = std::process::Command::new("ping")
+    let output = Command::new("ping")
         .args(&["-n", "1", "-w", "1000", &ip_str])
         .output();
 
@@ -154,8 +202,7 @@ async fn ping_host(ip: IpAddr) -> bool {
     }
 }
 
-/// 使用TCP端口探测检测主机存活 (Windows)
-#[cfg(windows)]
+/// 使用TCP端口探测检测主机存活
 async fn tcp_port_scan(ip: IpAddr) -> bool {
     // 扩展常见端口列表，包括更多常用服务端口
     let common_ports = vec![
@@ -181,9 +228,9 @@ async fn tcp_port_scan(ip: IpAddr) -> bool {
         8080, // HTTP Alt
     ];
 
-    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(10)); // 限制TCP并发连接数
+    // 增加TCP连接并发数
+    let semaphore = Arc::new(Semaphore::new(20));
 
-    use futures::stream::{FuturesUnordered, StreamExt};
     let mut futures = FuturesUnordered::new();
 
     for port in common_ports {
@@ -211,166 +258,6 @@ async fn tcp_port_scan(ip: IpAddr) -> bool {
     }
 
     success
-}
-
-/// 执行ARP扫描 (非Windows平台)
-#[cfg(not(windows))]
-async fn arp_scan(network: Ipv4Addr, prefix: u8) -> Vec<IpAddr> {
-    // 获取所有网络接口
-    let interfaces = datalink::interfaces();
-
-    // 寻找与目标网络匹配的接口
-    let interface = match find_matching_interface(&interfaces, network, prefix) {
-        Some(iface) => iface,
-        None => {
-            eprintln!(
-                "No suitable network interface found for target network {}.{}/{}",
-                (network.octets()[0]),
-                (network.octets()[1]),
-                prefix
-            );
-            return Vec::new();
-        }
-    };
-
-    // 确保接口有MAC地址
-    let source_mac = match interface.mac {
-        Some(mac) => mac,
-        None => {
-            eprintln!("Interface {} does not have a MAC address", interface.name);
-            return Vec::new();
-        }
-    };
-
-    // 获取接口的IPv4地址
-    let source_ip = match interface.ips.iter().find_map(|ip_network| {
-        if let IpAddr::V4(ip) = ip_network.ip() {
-            // 检查IP地址是否与目标网络在同一网段
-            if is_same_network(ip, network, prefix) {
-                Some(ip)
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }) {
-        Some(ip) => ip,
-        None => {
-            eprintln!(
-                "Interface {} does not have a compatible IPv4 address",
-                interface.name
-            );
-            return Vec::new();
-        }
-    };
-
-    // 创建数据链路发送器和接收器
-    let (mut tx, mut rx) = match datalink::channel(&interface, Default::default()) {
-        Ok(datalink::Channel::Ethernet(tx, rx)) => (tx, rx),
-        Ok(_) => {
-            eprintln!("Unhandled channel type for interface {}", interface.name);
-            return Vec::new();
-        }
-        Err(e) => {
-            eprintln!(
-                "Error creating datalink channel for {}: {}",
-                interface.name, e
-            );
-            return Vec::new();
-        }
-    };
-
-    // 计算要扫描的IP地址
-    let target_ips = calculate_target_ips(network, prefix);
-    let mut active_hosts = HashSet::new();
-
-    eprintln!(
-        "Starting ARP scan on interface {} for {} hosts",
-        interface.name,
-        target_ips.len()
-    );
-
-    // 发送ARP请求
-    for &target_ip in &target_ips {
-        let arp_packet = create_arp_request(source_mac, IpAddr::V4(source_ip), target_ip);
-        if let Some(Err(e)) = tx.send_to(&arp_packet, None) {
-            eprintln!("Failed to send ARP request to {}: {}", target_ip, e);
-        }
-    }
-
-    // 接收ARP响应
-    let start_time = std::time::Instant::now();
-    let timeout = Duration::from_secs(3); // 增加超时到3秒
-    let mut buffer = vec![0u8; 1024];
-
-    while start_time.elapsed() < timeout {
-        match rx.next() {
-            Ok(packet) => {
-                if packet.len() <= buffer.len() {
-                    buffer[..packet.len()].copy_from_slice(&packet);
-                    if let Some(arp_pkt) = parse_arp_packet(&buffer[..packet.len()]) {
-                        // 检查是否是针对我们的ARP响应
-                        if arp_pkt.get_operation() == ArpOperations::Reply
-                            && target_ips.contains(&arp_pkt.get_sender_proto_addr())
-                        {
-                            let sender_ip = arp_pkt.get_sender_proto_addr();
-                            eprintln!("Found active host: {}", sender_ip);
-                            active_hosts.insert(IpAddr::V4(sender_ip));
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                // 超时是正常的，其他错误才需要报告
-                if e.kind() != std::io::ErrorKind::TimedOut {
-                    eprintln!("Error receiving packet: {}", e);
-                }
-            }
-        }
-    }
-
-    active_hosts.into_iter().collect()
-}
-
-/// 寻找与目标网络匹配的网络接口
-#[cfg(not(windows))]
-fn find_matching_interface(
-    interfaces: &[datalink::NetworkInterface],
-    target_network: Ipv4Addr,
-    prefix: u8,
-) -> Option<datalink::NetworkInterface> {
-    for interface in interfaces {
-        // 跳过回环和关闭的接口
-        if interface.is_loopback() || !interface.is_up() {
-            continue;
-        }
-
-        // 检查接口是否有IPv4地址
-        for ip_network in &interface.ips {
-            if let IpAddr::V4(ip) = ip_network.ip() {
-                if is_same_network(ip, target_network, prefix) {
-                    return Some(interface.clone());
-                }
-            }
-        }
-    }
-    None
-}
-
-/// 检查两个IP地址是否在同一个网络
-#[cfg(not(windows))]
-fn is_same_network(ip1: Ipv4Addr, ip2: Ipv4Addr, prefix: u8) -> bool {
-    let mask = if prefix == 0 {
-        0u32
-    } else {
-        u32::max_value() << (32 - prefix)
-    };
-
-    let ip1_u32 = u32::from(ip1);
-    let ip2_u32 = u32::from(ip2);
-
-    (ip1_u32 & mask) == (ip2_u32 & mask)
 }
 
 /// 计算目标网络中的所有IP地址
@@ -420,73 +307,4 @@ fn calculate_target_ips(network: Ipv4Addr, prefix: u8) -> Vec<Ipv4Addr> {
     }
 
     ips
-}
-
-/// 创建ARP请求包
-#[cfg(not(windows))]
-fn create_arp_request(
-    source_mac: pnet::datalink::MacAddr,
-    source_ip: IpAddr,
-    target_ip: Ipv4Addr,
-) -> Vec<u8> {
-    let source_ipv4 = match source_ip {
-        IpAddr::V4(addr) => addr,
-        IpAddr::V6(_) => {
-            eprintln!("Only IPv4 addresses are supported for ARP requests");
-            return Vec::new();
-        }
-    };
-
-    // 创建完整的以太网帧（14字节以太网头 + 28字节ARP包 = 42字节）
-    let mut ethernet_buffer = vec![0u8; 42];
-
-    {
-        let mut ethernet_packet = MutableEthernetPacket::new(&mut ethernet_buffer[..14]).unwrap();
-        ethernet_packet.set_destination(pnet::datalink::MacAddr::broadcast());
-        ethernet_packet.set_source(source_mac);
-        ethernet_packet.set_ethertype(EtherTypes::Arp);
-    }
-
-    {
-        let mut arp_packet = MutableArpPacket::new(&mut ethernet_buffer[14..]).unwrap();
-        arp_packet.set_hardware_type(ArpHardwareTypes::Ethernet);
-        arp_packet.set_protocol_type(EtherTypes::Ipv4);
-        arp_packet.set_hw_addr_len(6);
-        arp_packet.set_proto_addr_len(4);
-        arp_packet.set_operation(ArpOperations::Request);
-        arp_packet.set_sender_hw_addr(source_mac);
-        arp_packet.set_sender_proto_addr(source_ipv4);
-        arp_packet.set_target_hw_addr(pnet::datalink::MacAddr::zero());
-        arp_packet.set_target_proto_addr(target_ip);
-    }
-
-    ethernet_buffer
-}
-
-/// 解析ARP包
-#[cfg(not(windows))]
-fn parse_arp_packet(packet: &[u8]) -> Option<ArpPacket> {
-    // 检查最小长度要求
-    if packet.len() < 42 {
-        return None;
-    }
-
-    // 检查是否为以太网帧
-    if packet.len() < 14 {
-        return None;
-    }
-
-    // 检查是否为ARP包 (EtherType 0x0806)
-    let eth_type = u16::from_be_bytes([packet[12], packet[13]]);
-    if eth_type != 0x0806 {
-        return None;
-    }
-
-    // 检查ARP数据长度
-    if packet.len() < 42 {
-        return None;
-    }
-
-    let arp_data = &packet[14..42];
-    ArpPacket::new(arp_data)
 }

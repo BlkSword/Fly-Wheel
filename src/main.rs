@@ -18,15 +18,23 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Discover active hosts using ARP scanning
     Host {
         #[arg(
-            short, 
-            long, 
-            value_name = "NETWORK", 
+            short,
+            long,
+            value_name = "NETWORK",
             help = "Target network to scan (e.g., 192.168.1.0/24)"
         )]
         target: String,
+
+        #[arg(
+            short = 's',
+            long = "scan-type",
+            value_name = "SCAN_TYPE",
+            default_value = "icmp",
+            help = "Scan type: icmp or tcp"
+        )]
+        scan_type: String,
     },
     Discover {
         #[arg(short, long)]
@@ -66,9 +74,12 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Host { target } => {
-            println!("Performing ARP host discovery on {}", target);
-            let result = host::discover_hosts(target);
+        Commands::Host { target, scan_type } => {
+            println!(
+                "Performing host discovery on {} with {} scan",
+                target, scan_type
+            );
+            let result = host::discover_hosts(target, scan_type);
             println!("{}", result);
         }
         Commands::Discover { target } => {

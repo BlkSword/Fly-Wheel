@@ -1,10 +1,18 @@
-# FlyWheel - 内网渗透测试工具
+# FlyWheel - 内网渗透辅助工具
 
-FlyWheel是一个基于Rust开发的功能完整的内网渗透测试工具，具有以下核心功能：
+FlyWheel是一个基于Rust开发的内网渗透辅助工具(持续开发中...)
 
 ## 当前功能
 
-实现了高速端口扫描(单核服务器上3s全端口)
+### 高速端口扫描
+
+单核服务器上3s全端口
+
+### 存活主机快速检测
+
+两种方式：TCP,ICMP
+
+254个IP————TCP 2s，ICMP 15s
 
 ## 安装
 
@@ -21,25 +29,13 @@ cargo build
 ## 使用方法
 
 ```Shell
-# 网络发现
-./fly-wheel discover -t 192.168.1.0/24
+# 主机发现
+./fly-wheel host -t 192.168.1.0/24
 
 # 端口扫描
 ./fly-wheel scan -t 192.168.1.1
 
-# 漏洞扫描
-./fly-wheel vuln -t 192.168.1.1
-
-# 横向移动
-./fly-wheel move -t 192.168.1.1
-
-# 信息收集
-./fly-wheel info -t 192.168.1.1
-
-# 建立持久化
-./fly-wheel persist -t 192.168.1.1
 ```
-
 
 
 

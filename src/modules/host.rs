@@ -1,7 +1,4 @@
 // 主机存活检测模块
-// 254 IP
-// Icmp 15s
-// Tcp 2s
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use std::collections::HashSet;

@@ -2,7 +2,10 @@
 
 use futures::stream::{FuturesUnordered, StreamExt};
 use socket2::{Domain, Protocol, Socket, Type};
+use std::io::Write;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tokio::sync::Semaphore;
 
@@ -45,7 +48,12 @@ pub fn run(target: &str, ports: Option<&str>) -> String {
     // 使用异步运行时执行扫描
     let open_ports = tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(scan_ports_async(ip, &ports_to_scan, batch_size));
+        .block_on(scan_ports_async(
+            ip,
+            &ports_to_scan,
+            batch_size,
+            ports_to_scan.len(),
+        ));
 
     if open_ports.is_empty() {
         return format!("No open ports found on {}", target);
@@ -119,19 +127,31 @@ fn parse_ports(ports: Option<&str>) -> Result<Vec<u16>, String> {
 }
 
 /// 异步扫描指定端口列表
-async fn scan_ports_async(target: IpAddr, ports: &[u16], batch_size: usize) -> Vec<u16> {
+async fn scan_ports_async(
+    target: IpAddr,
+    ports: &[u16],
+    batch_size: usize,
+    total_ports: usize,
+) -> Vec<u16> {
     let mut open_ports = Vec::new();
-    let semaphore = std::sync::Arc::new(Semaphore::new(batch_size));
+    let semaphore = Arc::new(Semaphore::new(batch_size));
+    let scanned_count = Arc::new(AtomicUsize::new(0));
     let mut futures = FuturesUnordered::new();
 
     for &port in ports {
         let semaphore_clone = semaphore.clone();
         let target_clone = target.clone();
+        let scanned_count_clone = scanned_count.clone();
 
         futures.push(tokio::spawn(async move {
             let _permit = semaphore_clone.acquire().await.unwrap();
             let addr = SocketAddr::new(target_clone, port);
             let is_open = is_port_open_async(addr).await;
+
+            // 更新进度
+            let scanned = scanned_count_clone.fetch_add(1, Ordering::Relaxed) + 1;
+            print_progress(scanned, total_ports);
+
             (port, is_open)
         }));
     }
@@ -145,7 +165,24 @@ async fn scan_ports_async(target: IpAddr, ports: &[u16], batch_size: usize) -> V
         }
     }
 
+    // 完成后换行
+    println!();
+
     open_ports
+}
+
+/// 打印进度条
+fn print_progress(current: usize, total: usize) {
+    let progress = (current as f64 / total as f64) * 100.0;
+    let filled = (progress as usize) / 2; // 50个字符宽度的进度条
+    let bar: String = std::iter::repeat('=')
+        .take(filled)
+        .chain(std::iter::repeat(' '))
+        .take(50)
+        .collect();
+
+    print!("\r[{}] {:.1}%", bar, progress);
+    std::io::stdout().flush().unwrap();
 }
 
 /// 异步检查端口是否开放

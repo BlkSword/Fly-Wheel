@@ -22,6 +22,9 @@ FlyWheel是一个基于Rust开发的内网渗透辅助工具(暂时为当前功�
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
+
+# Clone the repository and build
+git clone https://github.com/BlkSword/Fly-Wheel.git
 cargo build
 ```
 

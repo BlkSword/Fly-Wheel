@@ -3,10 +3,8 @@ mod modules;
 use clap::{Parser, Subcommand};
 use modules::host;
 use modules::info;
-use modules::r#move;
 use modules::persist;
 use modules::scan;
-use modules::vuln;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -52,14 +50,6 @@ enum Commands {
         )]
         ports: Option<String>,
     },
-    Vuln {
-        #[arg(short, long)]
-        target: String,
-    },
-    Move {
-        #[arg(short, long)]
-        target: String,
-    },
     Info {
         #[arg(short, long)]
         target: String,
@@ -89,14 +79,6 @@ fn main() {
         Commands::Scan { target, ports } => {
             println!("Performing port scan on {}", target);
             scan::run(target, ports.as_deref());
-        }
-        Commands::Vuln { target } => {
-            println!("Scanning for vulnerabilities on {}", target);
-            vuln::run(target);
-        }
-        Commands::Move { target } => {
-            println!("Performing lateral movement to {}", target);
-            r#move::run(target);
         }
         Commands::Info { target } => {
             println!("Gathering information from {}", target);

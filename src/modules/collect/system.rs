@@ -49,10 +49,86 @@ impl SystemCollector {
             "Linux".to_string()
         };
 
+        // 获取真实的系统版本
+        let os_version = self.get_real_os_version();
+
         OsInfo {
             os_type,
-            os_version: env::consts::OS.to_string(),
+            os_version,
             arch: env::consts::ARCH.to_string(),
+        }
+    }
+
+    /// 获取真实的系统版本
+    fn get_real_os_version(&self) -> String {
+        // 使用单一的条件编译块
+        #[cfg(windows)]
+        {
+            self.get_windows_version_internal()
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            self.get_macos_version_internal()
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            self.get_linux_version_internal()
+        }
+
+        #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+        {
+            env::consts::OS.to_string()
+        }
+    }
+
+    /// Windows 版本获取
+    #[cfg(windows)]
+    fn get_windows_version_internal(&self) -> String {
+        env::var("OS")
+            .or_else(|_| env::var("WINDOWS_TRACING_FLAGS"))
+            .unwrap_or_else(|_| "Windows".to_string())
+    }
+
+    /// macOS 版本获取
+    #[cfg(target_os = "macos")]
+    fn get_macos_version_internal(&self) -> String {
+        use std::process::Command;
+        match Command::new("sw_vers")
+            .arg("-productVersion")
+            .output()
+        {
+            Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
+            Err(_) => env::consts::OS.to_string(),
+        }
+    }
+
+    /// Linux 版本获取
+    #[cfg(target_os = "linux")]
+    fn get_linux_version_internal(&self) -> String {
+        use std::process::Command;
+        // 尝试从 /etc/os-release 读取
+        if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
+            for line in content.lines() {
+                if line.starts_with("PRETTY_NAME=") {
+                    let version = line.trim_start_matches("PRETTY_NAME=")
+                        .trim_matches('"')
+                        .to_string();
+                    if !version.is_empty() {
+                        return version;
+                    }
+                }
+            }
+        }
+
+        // 回退到 uname 命令
+        match Command::new("uname")
+            .arg("-r")
+            .output()
+        {
+            Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
+            Err(_) => "Linux".to_string(),
         }
     }
 

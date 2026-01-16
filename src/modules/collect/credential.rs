@@ -3,8 +3,6 @@
 //! 收集密码哈希、令牌、SSH 密钥、API 密钥等凭据信息
 
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-use walkdir::WalkDir;
 
 /// 凭据收集器
 pub struct CredentialCollector;

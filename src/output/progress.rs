@@ -324,6 +324,111 @@ impl MultiProgress {
     }
 }
 
+/// 分层进度条
+///
+/// 显示总体进度条和当前任务详细信息
+pub struct LayeredProgress {
+    overall: ProgressBar,
+    task_detail: ProgressBar,
+    hidden: bool,
+}
+
+impl LayeredProgress {
+    /// 创建新的分层进度条
+    pub fn new() -> Self {
+        let overall_style = ProgressStyle::default_bar()
+            .template(
+                "{spinner:.green} [{elapsed_precise}] {msg}\n  {wide_bar:.cyan/blue} {pos}/{len} ({percent}%)\n{spinner:.blue} 当前: {prefix}",
+            )
+            .expect("创建进度条样式失败")
+            .progress_chars("=>-");
+
+        let overall = ProgressBar::new(8);
+        overall.set_style(overall_style);
+        overall.enable_steady_tick(Duration::from_millis(120));
+        overall.set_prefix("准备中...");
+
+        let task_style = ProgressStyle::default_bar()
+            .template("    详细: {msg}")
+            .expect("创建进度条样式失败");
+
+        let task_detail = ProgressBar::hidden();
+        task_detail.set_style(task_style);
+
+        Self {
+            overall,
+            task_detail,
+            hidden: false,
+        }
+    }
+
+    /// 创建隐藏的进度条（静默模式）
+    pub fn hidden() -> Self {
+        let overall = ProgressBar::hidden();
+        let task_detail = ProgressBar::hidden();
+
+        Self {
+            overall,
+            task_detail,
+            hidden: true,
+        }
+    }
+
+    /// 开始总体进度
+    pub fn start_overall(&self, message: &str, total: u64) {
+        if self.hidden {
+            return;
+        }
+        self.overall.set_length(total);
+        self.overall.set_message(message.to_string());
+    }
+
+    /// 开始新任务
+    pub fn start_task(&self, task_name: &str) {
+        if self.hidden {
+            return;
+        }
+        self.overall.set_prefix(task_name.to_string());
+        self.overall.set_message("正在收集系统信息...");
+        self.task_detail.set_message("初始化中...");
+    }
+
+    /// 完成当前任务
+    pub fn complete_task(&self, message: &str) {
+        if self.hidden {
+            return;
+        }
+        self.task_detail.set_message(format!("✓ {}", message));
+        self.task_detail.tick();
+        std::thread::sleep(Duration::from_millis(100));
+        self.overall.inc(1);
+    }
+
+    /// 更新当前任务详情
+    pub fn update_current(&self, message: &str) {
+        if self.hidden {
+            return;
+        }
+        self.overall.set_prefix(message.to_string());
+    }
+
+    /// 完成所有进度
+    pub fn finish(&self) {
+        if self.hidden {
+            return;
+        }
+        self.task_detail.finish();
+        self.overall.finish();
+    }
+}
+
+impl Drop for LayeredProgress {
+    fn drop(&mut self) {
+        self.task_detail.finish();
+        self.overall.finish();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,5 +498,18 @@ mod tests {
         // 任务1完成(100%)，任务2完成50%，总体应该是75%
         let progress = multi.overall_progress();
         assert!((progress - 75.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_layered_progress_creation() {
+        let progress = LayeredProgress::new();
+        // 验证创建成功
+        assert!(!progress.hidden);
+    }
+
+    #[test]
+    fn test_layered_progress_hidden() {
+        let progress = LayeredProgress::hidden();
+        assert!(progress.hidden);
     }
 }

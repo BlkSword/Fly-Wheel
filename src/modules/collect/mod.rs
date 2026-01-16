@@ -10,6 +10,6 @@ pub mod file;
 
 pub use system::{SystemCollector, SystemInfo};
 pub use network::{NetworkCollector, NetworkInterface, RouteEntry, ArpEntry, NetworkConnection};
-pub use process::{ProcessCollector, ProcessInfo, ProcessDetails};
+pub use process::{ProcessCollector, ProcessInfo};
 pub use credential::{CredentialCollector, HashEntry, Token, SshKey, ApiKey};
-pub use file::{FileCollector, SensitiveFile, ConfigFile, FileMatch};
+pub use file::{FileCollector, SensitiveFile, ConfigFile};

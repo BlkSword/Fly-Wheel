@@ -2,10 +2,8 @@
 //!
 //! 提供美化的终端输出功能
 
-pub mod table;
 pub mod progress;
 pub mod color;
 
-pub use table::{ResultTable, PortRow};
-pub use progress::ScanProgress;
+pub use progress::{ScanProgress, LayeredProgress};
 pub use color::Color;

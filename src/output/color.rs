@@ -269,6 +269,15 @@ pub fn print_warning(text: &str) {
     );
 }
 
+/// 打印横幅
+pub fn print_banner() {
+    println!();
+    println!("╔════════════════════════════════════════════════════════════════════════════╗");
+    println!("║  {}", ColoredText::new("Fly-Wheel 内网渗透辅助工具", Color::Cyan).bold());
+    println!("║  {}", ColoredText::new("版本: 0.2.0  作者: BlkSword", Color::BrightBlack).bold());
+    println!("╚════════════════════════════════════════════════════════════════════════════╝");
+}
+
 /// 打印信息消息
 pub fn print_info(text: &str) {
     println!(

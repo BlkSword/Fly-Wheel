@@ -232,7 +232,7 @@ impl Default for InfoCollector {
 /// 生成输出文件名
 pub fn generate_output_filename(hostname: &str) -> String {
     let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    format!("fly-wheel-{}-{}.json", hostname, timestamp)
+    format!("intrasweep-{}-{}.json", hostname, timestamp)
 }
 
 /// 保存报告到文件
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn test_generate_output_filename() {
         let filename = generate_output_filename("test-host");
-        assert!(filename.starts_with("fly-wheel-test-host-"));
+        assert!(filename.starts_with("intrasweep-test-host-"));
         assert!(filename.ends_with(".json"));
     }
 }

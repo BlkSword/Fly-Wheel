@@ -3,10 +3,103 @@
 //! 定义扫描器的配置选项和默认值
 
 use serde::{Deserialize, Serialize};
+use clap::{ValueEnum, Parser};
+
+/// 主机扫描方式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+pub enum HostScanMethod {
+    /// TCP SYN 扫描（默认，兼容性好）
+    #[serde(rename = "tcp_syn")]
+    #[clap(name = "tcp-syn")]
+    TcpSyn,
+
+    /// ICMP Ping 扫描
+    #[serde(rename = "icmp")]
+    Icmp,
+
+    /// ARP 扫描（仅本地网络）
+    #[serde(rename = "arp")]
+    Arp,
+
+    /// 混合模式（TCP SYN + ICMP）
+    #[serde(rename = "hybrid")]
+    #[clap(name = "hybrid")]
+    Hybrid,
+}
+
+impl HostScanMethod {
+    pub fn name(&self) -> &str {
+        match self {
+            HostScanMethod::TcpSyn => "tcp-syn",
+            HostScanMethod::Icmp => "icmp",
+            HostScanMethod::Arp => "arp",
+            HostScanMethod::Hybrid => "hybrid",
+        }
+    }
+
+    pub fn display_name(&self) -> &str {
+        match self {
+            HostScanMethod::TcpSyn => "TCP SYN",
+            HostScanMethod::Icmp => "ICMP",
+            HostScanMethod::Arp => "ARP",
+            HostScanMethod::Hybrid => "混合模式",
+        }
+    }
+}
+
+/// 端口扫描方式
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
+pub enum PortScanMethod {
+    /// TCP Connect 扫描（默认，兼容性最好）
+    #[serde(rename = "tcp_connect")]
+    #[clap(name = "tcp-connect")]
+    TcpConnect,
+
+    /// TCP SYN 扫描（需要管理员权限）
+    #[serde(rename = "tcp_syn")]
+    #[clap(name = "tcp-syn")]
+    TcpSyn,
+
+    /// UDP 扫描
+    #[serde(rename = "udp")]
+    Udp,
+
+    /// SCTP 扫描
+    #[serde(rename = "sctp")]
+    Sctp,
+}
+
+impl PortScanMethod {
+    pub fn name(&self) -> &str {
+        match self {
+            PortScanMethod::TcpConnect => "tcp-connect",
+            PortScanMethod::TcpSyn => "tcp-syn",
+            PortScanMethod::Udp => "udp",
+            PortScanMethod::Sctp => "sctp",
+        }
+    }
+
+    pub fn display_name(&self) -> &str {
+        match self {
+            PortScanMethod::TcpConnect => "TCP Connect",
+            PortScanMethod::TcpSyn => "TCP SYN",
+            PortScanMethod::Udp => "UDP",
+            PortScanMethod::Sctp => "SCTP",
+        }
+    }
+}
 
 /// 扫描器配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanConfig {
+    // 扫描方式
+    /// 主机扫描方式
+    #[serde(default = "default_host_scan_method")]
+    pub host_scan_method: HostScanMethod,
+    /// 端口扫描方式
+    #[serde(default = "default_port_scan_method")]
+    pub port_scan_method: PortScanMethod,
+
     // 并发配置
     /// 主机并发数（默认100）
     pub max_concurrent_hosts: usize,
@@ -46,9 +139,21 @@ pub struct ScanConfig {
     pub output_dir: Option<String>,
 }
 
+/// 默认主机扫描方式
+fn default_host_scan_method() -> HostScanMethod {
+    HostScanMethod::TcpSyn
+}
+
+/// 默认端口扫描方式
+fn default_port_scan_method() -> PortScanMethod {
+    PortScanMethod::TcpConnect
+}
+
 impl Default for ScanConfig {
     fn default() -> Self {
         Self {
+            host_scan_method: default_host_scan_method(),
+            port_scan_method: default_port_scan_method(),
             max_concurrent_hosts: 100,
             max_concurrent_ports: 3000,
             max_concurrent_sockets: 10000,

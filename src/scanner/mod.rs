@@ -9,7 +9,7 @@ pub mod models;
 pub mod port;
 pub mod service;
 
-pub use config::{ScanConfig, ScanPreset};
+pub use config::{ScanConfig, ScanPreset, HostScanMethod, PortScanMethod};
 pub use host::HostScanner;
 pub use models::{
     DomainTrust, DomainUser, HostResult, PortInfo, PortState, ScanResult, ScanStats, ScanType,
@@ -214,7 +214,7 @@ impl Scanner {
                 "scan".to_string()
             };
             let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-            PathBuf::from(format!("fly-wheel-scan-{}-{}.json", hostname, timestamp))
+            PathBuf::from(format!("intrasweep-scan-{}-{}.json", hostname, timestamp))
         });
 
         let json = serde_json::to_string_pretty(result)?;

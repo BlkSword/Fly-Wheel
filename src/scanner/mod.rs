@@ -15,7 +15,7 @@ pub use models::{
     DomainTrust, DomainUser, HostResult, PortInfo, PortState, ScanResult, ScanStats, ScanType,
     ServiceInfo, ServicePrincipalName,
 };
-pub use port::PortScanner;
+pub use port::{PortScanner, ProgressCallback};
 
 use chrono::Utc;
 use std::path::PathBuf;
@@ -25,12 +25,16 @@ use std::path::PathBuf;
 /// 提供一站式扫描接口
 pub struct Scanner {
     config: ScanConfig,
+    progress_callback: Option<ProgressCallback>,
 }
 
 impl Scanner {
     /// 创建新的扫描器
     pub fn new(config: ScanConfig) -> Self {
-        Self { config }
+        Self {
+            config,
+            progress_callback: None,
+        }
     }
 
     /// 使用默认配置创建
@@ -41,6 +45,12 @@ impl Scanner {
     /// 使用快速扫描预设
     pub fn fast_scan() -> Self {
         Self::new(ScanConfig::fast_scan())
+    }
+
+    /// 设置进度回调
+    pub fn with_progress_callback(mut self, callback: ProgressCallback) -> Self {
+        self.progress_callback = Some(callback);
+        self
     }
 
     /// 主机存活扫描
@@ -77,7 +87,12 @@ impl Scanner {
     /// 端口扫描
     pub async fn port_scan(&self, targets: Vec<String>) -> ScanResult {
         let start_time = Utc::now();
-        let port_scanner = PortScanner::new(self.config.clone());
+        let mut port_scanner = PortScanner::new(self.config.clone());
+
+        // 设置进度回调
+        if let Some(cb) = &self.progress_callback {
+            port_scanner = port_scanner.with_progress_callback(cb.clone());
+        }
 
         // 解析目标为IP地址
         let ip_targets = self.parse_targets(targets);
@@ -123,7 +138,13 @@ impl Scanner {
             .collect();
 
         // 对存活主机进行端口扫描
-        let port_scanner = PortScanner::new(self.config.clone());
+        let mut port_scanner = PortScanner::new(self.config.clone());
+
+        // 设置进度回调
+        if let Some(cb) = &self.progress_callback {
+            port_scanner = port_scanner.with_progress_callback(cb.clone());
+        }
+
         let ip_targets = self.parse_targets(alive_hosts);
         let ports = self.config.get_ports_to_scan();
 

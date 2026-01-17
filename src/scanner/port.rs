@@ -3,27 +3,48 @@
 //! 提供高性能端口扫描功能
 
 use crate::scanner::config::ScanConfig;
-use crate::scanner::models::{HostResult, PortInfo, PortState};
+use crate::scanner::models::{HostResult, PortInfo, PortState, ServiceInfo};
+use crate::scanner::service::ServiceIdentifier;
 use std::net::{IpAddr, SocketAddr};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::time::timeout;
 
+/// 进度回调函数类型
+pub type ProgressCallback = Arc<dyn Fn(usize, usize) + Send + Sync>;
+
 /// 端口扫描器
 pub struct PortScanner {
     config: ScanConfig,
+    service_identifier: ServiceIdentifier,
+    progress_callback: Option<ProgressCallback>,
 }
 
 impl PortScanner {
     /// 创建新的端口扫描器
     pub fn new(config: ScanConfig) -> Self {
-        Self { config }
+        let service_identifier = ServiceIdentifier::new()
+            .with_timeout(config.port_timeout_ms, config.service_timeout_ms);
+
+        Self {
+            config,
+            service_identifier,
+            progress_callback: None,
+        }
     }
 
     /// 使用默认配置创建
     pub fn with_default_config() -> Self {
         Self::new(ScanConfig::default())
+    }
+
+    /// 设置进度回调
+    pub fn with_progress_callback(mut self, callback: ProgressCallback) -> Self {
+        self.progress_callback = Some(callback);
+        self
     }
 
     /// 扫描单个主机的多个端口
@@ -66,6 +87,13 @@ impl PortScanner {
         // 排序端口
         open_ports.sort_by_key(|p| p.port);
 
+        // 服务探测
+        let services = if self.config.service_detection && !open_ports.is_empty() {
+            self.detect_services(host, &open_ports).await
+        } else {
+            vec![]
+        };
+
         HostResult {
             ip: host.to_string(),
             hostname: None,
@@ -73,8 +101,55 @@ impl PortScanner {
             latency_ms: Some(start_time.elapsed().as_millis() as u64),
             mac: None,
             open_ports,
-            services: vec![],
+            services,
         }
+    }
+
+    /// 服务探测
+    async fn detect_services(&self, host: IpAddr, open_ports: &[PortInfo]) -> Vec<ServiceInfo> {
+        let mut services = Vec::new();
+
+        // 过滤需要探测的端口
+        let ports_to_scan: Vec<u16> = open_ports
+            .iter()
+            .filter(|p| {
+                // 如果设置为仅探测常见端口，则只探测常见端口
+                if self.config.service_common_only {
+                    self.is_common_port(p.port)
+                } else {
+                    true
+                }
+            })
+            .map(|p| p.port)
+            .collect();
+
+        if ports_to_scan.is_empty() {
+            return services;
+        }
+
+        // 批量探测服务
+        let results = self.service_identifier.identify_batch(host, ports_to_scan).await;
+
+        for (port, service_info) in results {
+            if let Some(info) = service_info {
+                // 只保存有额外信息的服务
+                if !info.product.is_empty() || !info.version.is_empty() || !info.extra_info.is_empty() {
+                    services.push(info);
+                }
+            }
+        }
+
+        services
+    }
+
+    /// 判断是否为常见端口
+    fn is_common_port(&self, port: u16) -> bool {
+        const COMMON_PORTS: &[u16] = &[
+            21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 389, 443, 445, 465,
+            587, 593, 636, 993, 995, 1433, 1521, 3306, 3389, 5432, 5900, 5985,
+            5986, 6379, 8000, 8080, 8443, 8888, 9200, 27017,
+        ];
+        COMMON_PORTS.contains(&port)
     }
 
     /// 扫描单个端口
@@ -149,6 +224,8 @@ impl PortScanner {
     /// 扫描多个主机的指定端口
     pub async fn scan_hosts_ports(&self, hosts: Vec<IpAddr>, ports: Vec<u16>) -> Vec<HostResult> {
         let mut results = Vec::new();
+        let total_hosts = hosts.len();
+        let completed_count = Arc::new(AtomicUsize::new(0));
 
         // 并发扫描多个主机
         let semaphore = Arc::new(Semaphore::new(self.config.max_concurrent_hosts));
@@ -158,11 +235,21 @@ impl PortScanner {
             let semaphore = semaphore.clone();
             let ports_clone = ports.clone();
             let config = self.config.clone();
+            let completed = completed_count.clone();
+            let progress_cb = self.progress_callback.clone();
 
             let task = tokio::spawn(async move {
                 let _permit = semaphore.acquire().await.unwrap();
                 let scanner = PortScanner::new(config);
-                scanner.scan_host_ports(host, ports_clone).await
+                let result = scanner.scan_host_ports(host, ports_clone).await;
+
+                // 更新进度
+                let completed_hosts = completed.fetch_add(1, Ordering::Relaxed) + 1;
+                if let Some(cb) = progress_cb {
+                    cb(completed_hosts, total_hosts);
+                }
+
+                result
             });
 
             tasks.push(task);
@@ -227,8 +314,6 @@ impl Default for PortScanner {
         Self::with_default_config()
     }
 }
-
-use std::sync::Arc;
 
 #[cfg(test)]
 mod tests {

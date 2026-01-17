@@ -6,13 +6,19 @@ mod modules;
 mod output;
 mod scanner;
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
+use collector::models::{CredentialReport, FileReport, NetworkReport, ProcessReport};
 use collector::InfoCollector;
-use collector::models::{NetworkReport, ProcessReport, CredentialReport, FileReport};
 use core::error::Result;
-use modules::collect::{SystemCollector, NetworkCollector, ProcessCollector, CredentialCollector, FileCollector, SystemInfo};
+use modules::collect::{
+    CredentialCollector, FileCollector, NetworkCollector, ProcessCollector, SystemCollector,
+    SystemInfo,
+};
 use output::color::{print_error, print_info, print_success, Color};
-use scanner::{ScanConfig, Scanner, HostScanMethod, PortScanMethod};
+use output::progress::ScanProgress;
+use scanner::{HostScanMethod, PortScanMethod, ScanConfig, ScanPreset, Scanner};
+use std::sync::Arc;
+use std::io::{self, Write};
 use std::path::PathBuf;
 
 /// 格式化字节数
@@ -32,17 +38,161 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
-/// 扫描速度预设
-#[derive(Clone, ValueEnum, Copy, Debug)]
-enum ScanPreset {
-    /// 快速扫描 - 高并发，短超时，适合快速发现
-    Fast,
-    /// 标准扫描 - 平衡速度和准确性
-    Standard,
-    /// 深度扫描 - 扫描所有端口，低并发
-    Deep,
-    /// 隐蔽扫描 - 低并发，长延迟，避免检测
-    Stealth,
+// ============================================================
+// 交互式菜单系统
+// ============================================================
+
+struct InteractiveMenu;
+
+impl InteractiveMenu {
+    /// 读取用户输入
+    fn read_input(prompt: &str) -> String {
+        print!("{}", prompt);
+        io::stdout().flush().unwrap();
+
+        let mut input = String::new();
+        io::stdin().read_line(&mut input).unwrap();
+        input.trim().to_string()
+    }
+
+    /// 读取数字输入
+    fn read_number(prompt: &str, min: usize, max: usize) -> usize {
+        loop {
+            let input = Self::read_input(prompt);
+            match input.parse::<usize>() {
+                Ok(n) if n >= min && n <= max => return n,
+                _ => {
+                    print_error(&format!("请输入 {} 到 {} 之间的数字", min, max));
+                }
+            }
+        }
+    }
+
+    /// 主扫描菜单
+    fn scan_menu() -> ScanConfig {
+        println!();
+        println!("╔════════════════════════════════════════════════════════════════════════════╗");
+        println!("║  扫描配置菜单                                                              ║");
+        println!("╠════════════════════════════════════════════════════════════════════════════╣");
+        println!("║  1. 扫描目标                                                              ║");
+        println!("║  2. 扫描类型 (端口/主机/综合)                                               ║");
+        println!("║  3. 扫描预设 (快速/标准/深度/隐蔽)                                        ║");
+        println!("║  4. 服务探测                                                             ║");
+        println!("║  5. 高级选项                                                             ║");
+        println!("║  0. 开始扫描                                                             ║");
+        println!("╠════════════════════════════════════════════════════════════════════════════╣");
+        println!("║  当前配置预览:                                                            ║");
+        println!("╚════════════════════════════════════════════════════════════════════════════╝");
+
+        let mut config = ScanConfig::default();
+        let mut scan_type = "port".to_string();
+        let mut targets = Vec::new();
+
+        loop {
+            let choice = Self::read_number("\n请选择 [0-5]: ", 0, 5);
+
+            match choice {
+                0 => {
+                    if targets.is_empty() {
+                        print_error("请先设置扫描目标");
+                        continue;
+                    }
+                    break;
+                }
+                1 => {
+                    let input =
+                        Self::read_input("\n请输入扫描目标 (IP/CIDR/范围，多个用逗号分隔): ");
+                    targets = input.split(',').map(|s| s.trim().to_string()).collect();
+                    print_success(&format!("已设置目标: {}", targets.join(", ")));
+                }
+                2 => {
+                    println!("\n扫描类型:");
+                    println!("  1. 端口扫描");
+                    println!("  2. 主机存活扫描");
+                    println!("  3. 综合扫描");
+                    let ty = Self::read_number("请选择 [1-3]: ", 1, 3);
+                    scan_type = match ty {
+                        1 => "port".to_string(),
+                        2 => "host".to_string(),
+                        3 => "comprehensive".to_string(),
+                        _ => "port".to_string(),
+                    };
+                    print_success(&format!("已设置扫描类型: {}", scan_type));
+                }
+                3 => {
+                    println!("\n扫描预设:");
+                    println!("  1. Fast - 快速扫描 (高并发)");
+                    println!("  2. Standard - 标准扫描 (平衡)");
+                    println!("  3. Deep - 深度扫描 (全端口)");
+                    println!("  4. Stealth - 隐蔽扫描");
+                    let preset_choice = Self::read_number("请选择 [1-4]: ", 1, 4);
+                    config = match preset_choice {
+                        1 => ScanPreset::Fast.to_config(),
+                        2 => ScanPreset::Standard.to_config(),
+                        3 => ScanPreset::Deep.to_config(),
+                        4 => ScanPreset::Stealth.to_config(),
+                        _ => ScanPreset::Standard.to_config(),
+                    };
+                    print_success(&format!("已设置预设: {:?}", config));
+                }
+                4 => {
+                    let enable = Self::read_input("\n启用服务探测? [y/N]: ");
+                    if enable.to_lowercase() == "y" {
+                        config.service_detection = true;
+                        print_success("服务探测已启用");
+                    } else {
+                        config.service_detection = false;
+                        print_info("服务探测已禁用");
+                    }
+                }
+                5 => {
+                    println!("\n高级选项:");
+                    println!("  1. 主机扫描方式");
+                    println!("  2. 端口扫描方式");
+                    println!("  3. 返回");
+                    let adv = Self::read_number("请选择 [1-3]: ", 1, 3);
+                    if adv == 1 {
+                        println!("\n主机扫描方式:");
+                        println!("  1. TCP SYN (默认)");
+                        println!("  2. ICMP");
+                        println!("  3. ARP");
+                        println!("  4. 混合模式");
+                        let method = Self::read_number("请选择 [1-4]: ", 1, 4);
+                        config.host_scan_method = match method {
+                            1 => HostScanMethod::TcpSyn,
+                            2 => HostScanMethod::Icmp,
+                            3 => HostScanMethod::Arp,
+                            4 => HostScanMethod::Hybrid,
+                            _ => HostScanMethod::TcpSyn,
+                        };
+                        print_success(&format!(
+                            "已设置主机扫描方式: {}",
+                            config.host_scan_method.display_name()
+                        ));
+                    } else if adv == 2 {
+                        println!("\n端口扫描方式:");
+                        println!("  1. TCP Connect (默认)");
+                        println!("  2. TCP SYN");
+                        println!("  3. UDP");
+                        let method = Self::read_number("请选择 [1-3]: ", 1, 3);
+                        config.port_scan_method = match method {
+                            1 => PortScanMethod::TcpConnect,
+                            2 => PortScanMethod::TcpSyn,
+                            3 => PortScanMethod::Udp,
+                            _ => PortScanMethod::TcpConnect,
+                        };
+                        print_success(&format!(
+                            "已设置端口扫描方式: {}",
+                            config.port_scan_method.display_name()
+                        ));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        config
+    }
 }
 
 /// IntraSweep - 内网渗透辅助工具
@@ -75,27 +225,19 @@ enum Commands {
         quiet: bool,
     },
 
-    /// 扫描功能 (缩写: sc)
+    /// 扫描功能 - 进入交互式菜单 (缩写: sc)
     Scan {
-        /// 扫描类型: host(h), port(po), domain(d), comprehensive(c)
-        #[arg(required = true)]
-        scan_type: String,
-
-        /// 扫描目标 (IP/CIDR/范围)
+        /// 扫描目标 (IP/CIDR/范围) - 可选，不填则进入交互式模式
         #[arg(value_name = "TARGETS")]
-        targets: Vec<String>,
+        targets: Option<Vec<String>>,
 
-        /// 扫描预设: fast(快)/standard(中)/deep(深)/stealth(隐蔽)
-        #[arg(short, long, value_enum, default_value_t = ScanPreset::Standard)]
-        preset: ScanPreset,
+        /// 扫描类型: port(端口)/host(主机)/comprehensive(综合) - 可选
+        #[arg(value_name = "TYPE")]
+        scan_type: Option<String>,
 
-        /// 主机扫描方式: tcp-syn/icmp/arp/hybrid
-        #[arg(long, value_enum)]
-        host_method: Option<HostScanMethod>,
-
-        /// 端口扫描方式: tcp-connect/tcp-syn/udp/sctp
-        #[arg(long, value_enum)]
-        port_method: Option<PortScanMethod>,
+        /// 快速扫描模式 (等同于 --preset fast)
+        #[arg(short, long)]
+        fast: bool,
 
         /// 输出文件路径 (JSON格式)
         #[arg(short, long)]
@@ -172,51 +314,71 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Commands::System { item, output, quiet } => {
-            match parse_system_item(&item) {
-                Some("all") => run_system_collect_all(output, quiet),
-                Some("system") => run_system_collect_basic(output, quiet),
-                Some("network") => run_system_collect_network(output, quiet),
-                Some("process") => run_system_collect_process(output, quiet),
-                Some("credential") => run_system_collect_credential(output, quiet),
-                Some("file") => run_system_collect_file(output, quiet),
-                Some("domain") => run_domain_scan(output),
-                _ => {
-                    print_error(&format!("未知的收集项目: {}", item));
-                    print_system_items();
-                    std::process::exit(1);
-                }
+        Commands::System {
+            item,
+            output,
+            quiet,
+        } => match parse_system_item(&item) {
+            Some("all") => run_system_collect_all(output, quiet),
+            Some("system") => run_system_collect_basic(output, quiet),
+            Some("network") => run_system_collect_network(output, quiet),
+            Some("process") => run_system_collect_process(output, quiet),
+            Some("credential") => run_system_collect_credential(output, quiet),
+            Some("file") => run_system_collect_file(output, quiet),
+            Some("domain") => run_domain_scan(output),
+            _ => {
+                print_error(&format!("未知的收集项目: {}", item));
+                print_system_items();
+                std::process::exit(1);
             }
-        }
+        },
 
-        Commands::Scan { scan_type, targets, preset, host_method, port_method, output } => {
-            match parse_scan_type(&scan_type) {
-                Some("host") => {
-                    if targets.is_empty() {
-                        print_error("主机扫描需要指定目标");
+        Commands::Scan {
+            targets,
+            scan_type,
+            fast,
+            output,
+        } => {
+            // 如果没有提供目标或扫描类型，进入交互式模式
+            if targets.is_none() || scan_type.is_none() {
+                run_interactive_scan(targets, scan_type, fast, output)
+            } else {
+                // 快速模式：使用默认配置
+                let targets = targets.unwrap();
+                let scan_type = scan_type.unwrap();
+                let preset = if fast {
+                    ScanPreset::Fast
+                } else {
+                    ScanPreset::Standard
+                };
+
+                match parse_scan_type(&scan_type) {
+                    Some("host") => {
+                        if targets.is_empty() {
+                            print_error("主机扫描需要指定目标");
+                            std::process::exit(1);
+                        }
+                        run_host_scan(targets, preset, None, output)
+                    }
+                    Some("port") => {
+                        if targets.is_empty() {
+                            print_error("端口扫描需要指定目标");
+                            std::process::exit(1);
+                        }
+                        run_port_scan_simple(targets, preset, output)
+                    }
+                    Some("comprehensive") => {
+                        if targets.is_empty() {
+                            print_error("综合扫描需要指定目标");
+                            std::process::exit(1);
+                        }
+                        run_comprehensive_scan_simple(targets, preset, output)
+                    }
+                    _ => {
+                        print_error(&format!("未知的扫描类型: {}", scan_type));
+                        print_scan_types();
                         std::process::exit(1);
                     }
-                    run_host_scan(targets, preset, host_method, output)
-                }
-                Some("port") => {
-                    if targets.is_empty() {
-                        print_error("端口扫描需要指定目标");
-                        std::process::exit(1);
-                    }
-                    run_port_scan(targets, preset, port_method, output)
-                }
-                Some("domain") => run_domain_scan(output),
-                Some("comprehensive") => {
-                    if targets.is_empty() {
-                        print_error("综合扫描需要指定目标");
-                        std::process::exit(1);
-                    }
-                    run_comprehensive_scan(targets, preset, host_method, port_method, output)
-                }
-                _ => {
-                    print_error(&format!("未知的扫描类型: {}", scan_type));
-                    print_scan_types();
-                    std::process::exit(1);
                 }
             }
         }
@@ -226,6 +388,302 @@ fn main() {
         print_error(&format!("{}", e));
         std::process::exit(1);
     }
+}
+
+/// 运行交互式扫描向导
+fn run_interactive_scan(
+    initial_targets: Option<Vec<String>>,
+    initial_type: Option<String>,
+    fast: bool,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    print_banner();
+    println!();
+    print_info("IntraSweep 交互式扫描配置向导");
+    println!();
+
+    // 步骤 1: 扫描目标
+    let targets = if let Some(t) = initial_targets {
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  [1/5] 扫描目标");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!();
+        println!("已指定目标: {}", t.join(", "));
+        println!();
+        t
+    } else {
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  [1/5] 扫描目标");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!();
+        println!("输入格式示例:");
+        println!("  单个IP:       192.168.1.1");
+        println!("  IP范围:       192.168.1.1-192.168.1.100");
+        println!("  CIDR网段:     192.168.1.0/24");
+        println!("  多个目标:     192.168.1.1,192.168.1.2,192.168.1.0/24");
+        println!();
+
+        loop {
+            let input = InteractiveMenu::read_input("请输入扫描目标: ");
+            if !input.is_empty() {
+                let targets: Vec<String> = input.split(',').map(|s| s.trim().to_string()).collect();
+                println!();
+                print_success(&format!("已设置: {}", targets.join(", ")));
+                println!();
+                break targets;
+            }
+            print_error("目标不能为空，请重新输入");
+        }
+    };
+
+    // 步骤 2: 扫描类型
+    let scan_type = if let Some(st) = initial_type {
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  [2/5] 扫描类型");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!();
+        println!("已指定: {}", format_scan_type(&st));
+        println!();
+        st
+    } else {
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  [2/5] 扫描类型");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!();
+        println!("  1. 端口扫描       - 扫描指定主机的开放端口");
+        println!("  2. 主机存活       - 检测网段内的存活主机");
+        println!("  3. 综合扫描       - 主机发现 + 端口扫描");
+        println!();
+
+        let choice = InteractiveMenu::read_number("请选择扫描类型 [1-3]: ", 1, 3);
+        let scan_type = match choice {
+            1 => "port".to_string(),
+            2 => "host".to_string(),
+            3 => "comprehensive".to_string(),
+            _ => "port".to_string(),
+        };
+        println!();
+        print_success(&format!("已选择: {}", format_scan_type(&scan_type)));
+        println!();
+        scan_type
+    };
+
+    // 步骤 3: 扫描预设
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  [3/5] 扫描预设");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+    println!("  1. Fast       - 快速扫描 (高并发，短超时，适合大范围)");
+    println!("  2. Standard   - 标准扫描 (平衡速度和准确性)");
+    println!("  3. Deep       - 深度扫描 (全端口扫描)");
+    println!("  4. Stealth    - 隐蔽扫描 (低并发，有延迟)");
+    println!();
+
+    let preset_choice = InteractiveMenu::read_number("请选择扫描预设 [1-4, 默认2]: ", 1, 4);
+    let config = match preset_choice {
+        1 => {
+            println!();
+            print_success("已选择: Fast (快速扫描)");
+            ScanPreset::Fast.to_config()
+        }
+        2 => {
+            println!();
+            print_success("已选择: Standard (标准扫描)");
+            ScanPreset::Standard.to_config()
+        }
+        3 => {
+            println!();
+            print_success("已选择: Deep (深度扫描)");
+            ScanPreset::Deep.to_config()
+        }
+        4 => {
+            println!();
+            print_success("已选择: Stealth (隐蔽扫描)");
+            ScanPreset::Stealth.to_config()
+        }
+        _ => ScanPreset::Standard.to_config(),
+    };
+    println!();
+
+    // 步骤 4: 服务探测
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  [4/5] 服务探测");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+    println!("服务探测可以识别开放端口上运行的服务版本信息");
+    println!("但会增加扫描时间");
+
+    let enable_service = InteractiveMenu::read_input("是否启用服务探测? [y/N]: ");
+    let mut config = config;
+    config.service_detection = enable_service.to_lowercase() == "y";
+    println!();
+    if config.service_detection {
+        print_success("已启用服务探测");
+        println!();
+        // 询问服务探测超时
+        let timeout_input = InteractiveMenu::read_input("服务探测超时 (毫秒，默认5000): ");
+        if !timeout_input.is_empty() {
+            if let Ok(t) = timeout_input.parse::<u64>() {
+                config.service_timeout_ms = t;
+                print_success(&format!("超时设置为: {}ms", t));
+            }
+        }
+    } else {
+        print_info("已跳过服务探测");
+    }
+    println!();
+
+    // 步骤 5: 高级选项（可选）
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  [5/5] 高级选项");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+
+    let configure_advanced = InteractiveMenu::read_input("是否配置高级选项? [y/N]: ");
+    if configure_advanced.to_lowercase() == "y" {
+        configure_advanced_options(&mut config);
+    }
+    println!();
+
+    // 显示配置摘要
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  配置确认");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+    println!("  扫描目标:     {}", targets.join(", "));
+    println!("  扫描类型:     {}", format_scan_type(&scan_type));
+    println!("  扫描预设:     {}", format_preset(&config));
+    println!("  服务探测:     {}", if config.service_detection { "启用" } else { "禁用" });
+    println!("  主机扫描方式: {}", config.host_scan_method.display_name());
+    println!("  端口扫描方式: {}", config.port_scan_method.display_name());
+    println!();
+
+    let confirm = InteractiveMenu::read_input("确认开始扫描? [Y/n]: ");
+    if confirm.to_lowercase() == "n" {
+        print_info("已取消扫描");
+        return Ok(());
+    }
+
+    println!();
+    print_info("开始扫描...");
+    println!();
+
+    // 执行扫描
+    match scan_type.as_str() {
+        "host" => run_host_scan(targets, ScanPreset::Standard, None, output),
+        "port" => run_port_scan_from_config(targets, config, output),
+        "comprehensive" => run_comprehensive_scan_from_config(targets, config, output),
+        _ => run_port_scan_from_config(targets, config, output),
+    }
+}
+
+/// 配置高级选项（向导式）
+fn configure_advanced_options(config: &mut ScanConfig) {
+    println!();
+    println!("  ┌─ 主机扫描方式");
+    println!("  │");
+    println!("  │  1. TCP SYN    - TCP SYN 扫描（默认，兼容性最好）");
+    println!("  │  2. ICMP       - ICMP Ping 扫描（需要 ICMP 权限）");
+    println!("  │  3. ARP        - ARP 扫描（仅本地网络，速度快）");
+    println!("  │  4. 混合模式   - TCP SYN + ICMP，提高发现率");
+    println!();
+
+    let skip = InteractiveMenu::read_input("  按 Enter 跳过 [使用默认: TCP SYN] 或选择 [1-4]: ");
+    if !skip.is_empty() {
+        if let Ok(method) = skip.parse::<usize>() {
+            if method >= 1 && method <= 4 {
+                config.host_scan_method = match method {
+                    1 => HostScanMethod::TcpSyn,
+                    2 => HostScanMethod::Icmp,
+                    3 => HostScanMethod::Arp,
+                    4 => HostScanMethod::Hybrid,
+                    _ => HostScanMethod::TcpSyn,
+                };
+                print_success(&format!("  已设置: {}", config.host_scan_method.display_name()));
+            }
+        }
+    } else {
+        print_info("  使用默认: TCP SYN");
+    }
+    println!();
+
+    println!("  ┌─ 端口扫描方式");
+    println!("  │");
+    println!("  │  1. TCP Connect - TCP Connect 扫描（默认，兼容性最好）");
+    println!("  │  2. TCP SYN     - TCP SYN 扫描（需要管理员权限）");
+    println!("  │  3. UDP         - UDP 扫描（速度较慢）");
+    println!();
+
+    let skip = InteractiveMenu::read_input("  按 Enter 跳过 [使用默认: TCP Connect] 或选择 [1-3]: ");
+    if !skip.is_empty() {
+        if let Ok(method) = skip.parse::<usize>() {
+            if method >= 1 && method <= 3 {
+                config.port_scan_method = match method {
+                    1 => PortScanMethod::TcpConnect,
+                    2 => PortScanMethod::TcpSyn,
+                    3 => PortScanMethod::Udp,
+                    _ => PortScanMethod::TcpConnect,
+                };
+                print_success(&format!("  已设置: {}", config.port_scan_method.display_name()));
+            }
+        }
+    } else {
+        print_info("  使用默认: TCP Connect");
+    }
+    println!();
+
+    println!("  ┌─ 其他选项");
+    println!();
+    print_info(&format!("  当前服务探测超时: {}ms", config.service_timeout_ms));
+
+    let timeout_input = InteractiveMenu::read_input("  按 Enter 跳过或输入新的超时时间 (毫秒): ");
+    if !timeout_input.is_empty() {
+        if let Ok(t) = timeout_input.parse::<u64>() {
+            config.service_timeout_ms = t;
+            print_success(&format!("  已设置超时: {}ms", t));
+        }
+    } else {
+        print_info("  保持不变");
+    }
+    println!();
+}
+
+/// 格式化扫描类型
+fn format_scan_type(ty: &str) -> String {
+    match ty {
+        "port" => "端口扫描".to_string(),
+        "host" => "主机扫描".to_string(),
+        "comprehensive" => "综合扫描".to_string(),
+        _ => ty.to_string(),
+    }
+}
+
+/// 格式化预设
+fn format_preset(config: &ScanConfig) -> String {
+    // 根据配置判断预设类型
+    if config.max_concurrent_ports >= 5000 {
+        "Fast (快速)".to_string()
+    } else if config.max_concurrent_ports >= 3000 {
+        "Standard (标准)".to_string()
+    } else if config.service_detection {
+        "Deep (深度)".to_string()
+    } else {
+        "Stealth (隐蔽)".to_string()
+    }
+}
+
+/// 打印 Banner
+fn print_banner() {
+    println!();
+    println!(".___        __                  _________                             ");
+    println!("|   | _____/  |_____________   /   _____/_  _  __ ____   ____ ______  ");
+    println!("|   |/    \\   __\\_  __ \\__  \\  \\_____  \\\\ \\/ \\/ // __ \\_/ __ \\\\____ \\ ");
+    println!("|   |   |  \\  |  |  | \\// __ \\_/        \\\\     /\\  ___/\\  ___/|  |_> >");
+    println!("|___|___|  /__|  |__|  (____  /_______  / \\/\\_/  \\___  >\\___  >   __/ ");
+    println!("         \\/                 \\/        \\/             \\/     \\/|__|    ");
+    println!();
+    println!("                       IntraSweep - 内网渗透辅助工具 v0.2.0");
+    println!();
 }
 
 /// 运行全量系统信息收集
@@ -446,8 +904,7 @@ fn convert_to_recent_files(paths: Vec<PathBuf>) -> Vec<collector::models::Recent
                 path: p.to_string_lossy().to_string(),
                 name,
                 size: metadata.len(),
-                modified: chrono::DateTime::<chrono::Utc>::from(modified)
-                    .to_rfc3339(),
+                modified: chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339(),
                 is_sensitive: false,
             })
         })
@@ -457,26 +914,46 @@ fn convert_to_recent_files(paths: Vec<PathBuf>) -> Vec<collector::models::Recent
 /// 打印基础系统信息
 fn print_basic_system_info(system: &SystemInfo) {
     println!("╔════════════════════════════════════════════════════════════════════════════╗");
-    println!("║  {}", colorize("基础系统信息收集完成", Color::BrightGreen));
+    println!(
+        "║  {}",
+        colorize("基础系统信息收集完成", Color::BrightGreen)
+    );
     println!("╠════════════════════════════════════════════════════════════════════════════╣");
     println!("║  系统信息");
     println!("╠────────────────────────────────────────────────────────────────────────────╣");
-    println!("║  操作系统:   {:<60}║", format!("{} {}", system.os_info.os_type, system.os_info.os_version));
+    println!(
+        "║  操作系统:   {:<60}║",
+        format!("{} {}", system.os_info.os_type, system.os_info.os_version)
+    );
     println!("║  主机名:     {:<60}║", system.hostname);
     println!("║  架构:       {:<60}║", system.os_info.arch);
     println!("╠════════════════════════════════════════════════════════════════════════════╣");
     println!("║  用户信息");
     println!("╠────────────────────────────────────────────────────────────────────────────╣");
     println!("║  当前用户:   {:<60}║", system.current_user.username);
-    println!("║  权限级别:   {:<60}║", format!("{:?}", system.current_user.privileges));
+    println!(
+        "║  权限级别:   {:<60}║",
+        format!("{:?}", system.current_user.privileges)
+    );
     println!("╠════════════════════════════════════════════════════════════════════════════╣");
     println!("║  硬件资源");
     println!("╠────────────────────────────────────────────────────────────────────────────╣");
     println!("║  CPU核心数:  {:<60}║", system.cpu_info.cpu_count);
-    println!("║  总内存:     {:<60}║", format!("{:.2} GB", system.memory_info.total_memory as f64 / 1024.0 / 1024.0 / 1024.0));
-    println!("║  内存使用:   {:<60}║", format!("{:.2} GB ({:.1}%)",
-        system.memory_info.used_memory as f64 / 1024.0 / 1024.0 / 1024.0,
-        system.memory_info.usage_percent));
+    println!(
+        "║  总内存:     {:<60}║",
+        format!(
+            "{:.2} GB",
+            system.memory_info.total_memory as f64 / 1024.0 / 1024.0 / 1024.0
+        )
+    );
+    println!(
+        "║  内存使用:   {:<60}║",
+        format!(
+            "{:.2} GB ({:.1}%)",
+            system.memory_info.used_memory as f64 / 1024.0 / 1024.0 / 1024.0,
+            system.memory_info.usage_percent
+        )
+    );
     println!("╚════════════════════════════════════════════════════════════════════════════╝");
     println!();
 }
@@ -515,8 +992,13 @@ fn print_process_info(process: &ProcessReport) {
     println!("║  进程列表 (前10个)");
     println!("╠────────────────────────────────────────────────────────────────────────────╣");
     for proc in process.processes.iter().take(10) {
-        println!("║  {:<30} PID:{:<10} CPU:{:>6.1}% MEM:{:<12}║",
-            proc.name, proc.pid, proc.cpu_usage, format_bytes(proc.memory_usage));
+        println!(
+            "║  {:<30} PID:{:<10} CPU:{:>6.1}% MEM:{:<12}║",
+            proc.name,
+            proc.pid,
+            proc.cpu_usage,
+            format_bytes(proc.memory_usage)
+        );
     }
     println!("╚════════════════════════════════════════════════════════════════════════════╝");
     println!();
@@ -558,7 +1040,12 @@ fn print_file_info(file: &FileReport) {
 }
 
 /// 运行主机存活扫描
-fn run_host_scan(targets: Vec<String>, preset: ScanPreset, host_method: Option<HostScanMethod>, output: Option<PathBuf>) -> Result<()> {
+fn run_host_scan(
+    targets: Vec<String>,
+    preset: ScanPreset,
+    host_method: Option<HostScanMethod>,
+    output: Option<PathBuf>,
+) -> Result<()> {
     let mut config = preset_to_config(preset);
 
     // 应用用户指定的扫描方式
@@ -570,7 +1057,10 @@ fn run_host_scan(targets: Vec<String>, preset: ScanPreset, host_method: Option<H
     print_info(&format!("开始主机存活扫描"));
     print_info(&format!("目标: {}", targets.join(", ")));
     print_info(&format!("预设: {:?}", preset));
-    print_info(&format!("扫描方式: {}", config.host_scan_method.display_name()));
+    print_info(&format!(
+        "扫描方式: {}",
+        config.host_scan_method.display_name()
+    ));
     println!();
 
     let rt = tokio::runtime::Runtime::new()?;
@@ -588,7 +1078,15 @@ fn run_host_scan(targets: Vec<String>, preset: ScanPreset, host_method: Option<H
 }
 
 /// 运行端口扫描
-fn run_port_scan(targets: Vec<String>, preset: ScanPreset, port_method: Option<PortScanMethod>, output: Option<PathBuf>) -> Result<()> {
+fn run_port_scan(
+    targets: Vec<String>,
+    preset: ScanPreset,
+    port_method: Option<PortScanMethod>,
+    service_detection: bool,
+    service_all_ports: bool,
+    service_timeout: u64,
+    output: Option<PathBuf>,
+) -> Result<()> {
     let mut config = preset_to_config(preset);
 
     // 应用用户指定的扫描方式
@@ -596,16 +1094,41 @@ fn run_port_scan(targets: Vec<String>, preset: ScanPreset, port_method: Option<P
         config.port_scan_method = method;
     }
 
+    // 应用服务探测配置
+    config.service_detection = service_detection;
+    config.service_common_only = !service_all_ports;
+    config.service_timeout_ms = service_timeout;
+
     println!();
     print_info(&format!("开始端口扫描"));
     print_info(&format!("目标: {}", targets.join(", ")));
     print_info(&format!("预设: {:?}", preset));
-    print_info(&format!("扫描方式: {}", config.port_scan_method.display_name()));
+    print_info(&format!(
+        "扫描方式: {}",
+        config.port_scan_method.display_name()
+    ));
+    if config.service_detection {
+        print_info(&format!(
+            "服务探测: 启用 (超时: {}ms)",
+            config.service_timeout_ms
+        ));
+    }
     println!();
 
+    // 创建进度条
+    let progress = Arc::new(ScanProgress::new(100, true));
+    let progress_clone = progress.clone();
+
     let rt = tokio::runtime::Runtime::new()?;
-    let scanner = Scanner::new(config);
+    let scanner = Scanner::new(config).with_progress_callback(Arc::new(move |current, total| {
+        let percent = (current as f64 / total as f64 * 100.0) as u64;
+        progress_clone.set_position(percent as usize);
+    }));
+
     let result = rt.block_on(scanner.port_scan(targets));
+
+    progress.finish_with_message("扫描完成!");
+    println!();
 
     print_scan_results(&result);
 
@@ -642,6 +1165,9 @@ fn run_comprehensive_scan(
     preset: ScanPreset,
     host_method: Option<HostScanMethod>,
     port_method: Option<PortScanMethod>,
+    service_detection: bool,
+    service_all_ports: bool,
+    service_timeout: u64,
     output: Option<PathBuf>,
 ) -> Result<()> {
     let mut config = preset_to_config(preset);
@@ -654,17 +1180,45 @@ fn run_comprehensive_scan(
         config.port_scan_method = method;
     }
 
+    // 应用服务探测配置
+    config.service_detection = service_detection;
+    config.service_common_only = !service_all_ports;
+    config.service_timeout_ms = service_timeout;
+
     println!();
     print_info(&format!("开始综合扫描"));
     print_info(&format!("目标: {}", targets.join(", ")));
     print_info(&format!("预设: {:?}", preset));
-    print_info(&format!("主机扫描: {}", config.host_scan_method.display_name()));
-    print_info(&format!("端口扫描: {}", config.port_scan_method.display_name()));
+    print_info(&format!(
+        "主机扫描: {}",
+        config.host_scan_method.display_name()
+    ));
+    print_info(&format!(
+        "端口扫描: {}",
+        config.port_scan_method.display_name()
+    ));
+    if config.service_detection {
+        print_info(&format!(
+            "服务探测: 启用 (超时: {}ms)",
+            config.service_timeout_ms
+        ));
+    }
     println!();
 
+    // 创建进度条
+    let progress = Arc::new(ScanProgress::new(100, true));
+    let progress_clone = progress.clone();
+
     let rt = tokio::runtime::Runtime::new()?;
-    let scanner = Scanner::new(config);
+    let scanner = Scanner::new(config).with_progress_callback(Arc::new(move |current, total| {
+        let percent = (current as f64 / total as f64 * 100.0) as u64;
+        progress_clone.set_position(percent as usize);
+    }));
+
     let result = rt.block_on(scanner.comprehensive_scan(targets));
+
+    progress.finish_with_message("扫描完成!");
+    println!();
 
     print_scan_results(&result);
 
@@ -684,6 +1238,175 @@ fn preset_to_config(preset: ScanPreset) -> ScanConfig {
         ScanPreset::Deep => ScanConfig::deep_scan(),
         ScanPreset::Stealth => ScanConfig::stealth_scan(),
     }
+}
+
+/// 简化的端口扫描（使用默认配置）
+fn run_port_scan_simple(
+    targets: Vec<String>,
+    preset: ScanPreset,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let config = preset_to_config(preset);
+
+    println!();
+    print_info(&format!("开始端口扫描"));
+    print_info(&format!("目标: {}", targets.join(", ")));
+    print_info(&format!("预设: {:?}", preset));
+    println!();
+
+    // 创建进度条
+    let progress = Arc::new(ScanProgress::new(100, true));
+    let progress_clone = progress.clone();
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let scanner = Scanner::new(config).with_progress_callback(Arc::new(move |current, total| {
+        let percent = (current as f64 / total as f64 * 100.0) as u64;
+        progress_clone.set_position(percent as usize);
+    }));
+    let result = rt.block_on(scanner.port_scan(targets));
+
+    progress.finish_with_message("扫描完成!");
+    println!();
+
+    print_scan_results(&result);
+
+    if let Ok(path) = scanner.save_result(&result, output) {
+        println!();
+        print_success(&format!("结果已保存到: {}", path.display()));
+    }
+
+    Ok(())
+}
+
+/// 简化的综合扫描（使用默认配置）
+fn run_comprehensive_scan_simple(
+    targets: Vec<String>,
+    preset: ScanPreset,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let config = preset_to_config(preset);
+
+    println!();
+    print_info(&format!("开始综合扫描"));
+    print_info(&format!("目标: {}", targets.join(", ")));
+    print_info(&format!("预设: {:?}", preset));
+    println!();
+
+    // 创建进度条
+    let progress = Arc::new(ScanProgress::new(100, true));
+    let progress_clone = progress.clone();
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let scanner = Scanner::new(config).with_progress_callback(Arc::new(move |current, total| {
+        let percent = (current as f64 / total as f64 * 100.0) as u64;
+        progress_clone.set_position(percent as usize);
+    }));
+    let result = rt.block_on(scanner.comprehensive_scan(targets));
+
+    progress.finish_with_message("扫描完成!");
+    println!();
+
+    print_scan_results(&result);
+
+    if let Ok(path) = scanner.save_result(&result, output) {
+        println!();
+        print_success(&format!("结果已保存到: {}", path.display()));
+    }
+
+    Ok(())
+}
+
+/// 使用配置进行端口扫描（交互式模式）
+fn run_port_scan_from_config(
+    targets: Vec<String>,
+    config: ScanConfig,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    println!();
+    print_info(&format!("开始端口扫描"));
+    print_info(&format!("目标: {}", targets.join(", ")));
+    print_info(&format!("预设: {}", format_preset(&config)));
+    print_info(&format!(
+        "扫描方式: {}",
+        config.port_scan_method.display_name()
+    ));
+    if config.service_detection {
+        print_success("服务探测: 启用");
+    }
+    println!();
+
+    // 创建进度条
+    let progress = Arc::new(ScanProgress::new(100, true));
+    let progress_clone = progress.clone();
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let scanner = Scanner::new(config).with_progress_callback(Arc::new(move |current, total| {
+        let percent = (current as f64 / total as f64 * 100.0) as u64;
+        progress_clone.set_position(percent as usize);
+    }));
+    let result = rt.block_on(scanner.port_scan(targets));
+
+    progress.finish_with_message("扫描完成!");
+    println!();
+
+    print_scan_results(&result);
+
+    if let Ok(path) = scanner.save_result(&result, output) {
+        println!();
+        print_success(&format!("结果已保存到: {}", path.display()));
+    }
+
+    Ok(())
+}
+
+/// 使用配置进行综合扫描（交互式模式）
+fn run_comprehensive_scan_from_config(
+    targets: Vec<String>,
+    config: ScanConfig,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    println!();
+    print_info(&format!("开始综合扫描"));
+    print_info(&format!("目标: {}", targets.join(", ")));
+    print_info(&format!("预设: {}", format_preset(&config)));
+    print_info(&format!(
+        "主机扫描: {}",
+        config.host_scan_method.display_name()
+    ));
+    print_info(&format!(
+        "端口扫描: {}",
+        config.port_scan_method.display_name()
+    ));
+    if config.service_detection {
+        print_success(&format!(
+            "服务探测: 启用 (超时: {}ms)",
+            config.service_timeout_ms
+        ));
+    }
+    println!();
+
+    // 创建进度条
+    let progress = Arc::new(ScanProgress::new(100, true));
+    let progress_clone = progress.clone();
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let scanner = Scanner::new(config).with_progress_callback(Arc::new(move |current, total| {
+        let percent = (current as f64 / total as f64 * 100.0) as u64;
+        progress_clone.set_position(percent as usize);
+    }));
+    let result = rt.block_on(scanner.comprehensive_scan(targets));
+
+    progress.finish_with_message("扫描完成!");
+    println!();
+
+    print_scan_results(&result);
+
+    if let Ok(path) = scanner.save_result(&result, output) {
+        println!();
+        print_success(&format!("结果已保存到: {}", path.display()));
+    }
+
+    Ok(())
 }
 
 /// 将域扫描结果转换为扫描结果

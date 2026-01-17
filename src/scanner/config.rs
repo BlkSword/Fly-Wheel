@@ -137,6 +137,14 @@ pub struct ScanConfig {
     pub save_json: bool,
     /// 输出目录
     pub output_dir: Option<String>,
+
+    // 服务探测
+    /// 启用服务版本探测
+    pub service_detection: bool,
+    /// 服务探测超时（毫秒）
+    pub service_timeout_ms: u64,
+    /// 仅探测常见端口的服务
+    pub service_common_only: bool,
 }
 
 /// 默认主机扫描方式
@@ -168,6 +176,9 @@ impl Default for ScanConfig {
             verbose: false,
             save_json: true,
             output_dir: None,
+            service_detection: false,
+            service_timeout_ms: 5000,
+            service_common_only: true,
         }
     }
 }

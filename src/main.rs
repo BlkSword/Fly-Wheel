@@ -77,7 +77,7 @@ impl InteractiveMenu {
 #[command(
     name = "intrasweep",
     author = "BlkSword",
-    version = "0.2.0",
+    version = "0.3.0",
     long_about = None,
 )]
 struct Cli {
@@ -652,7 +652,7 @@ fn print_banner() {
     println!("|___|___|  /__|  |__|  (____  /_______  / \\/\\_/  \\___  >\\___  >   __/ ");
     println!("         \\/                 \\/        \\/             \\/     \\/|__|    ");
     println!();
-    println!("                       IntraSweep - 内网渗透辅助工具 v0.2.0");
+    println!("                       IntraSweep - 内网渗透辅助工具 v0.3.0");
     println!();
 }
 

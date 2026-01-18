@@ -2,6 +2,8 @@
 //!
 //! 搜索敏感文件、配置文件、关键词等
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;

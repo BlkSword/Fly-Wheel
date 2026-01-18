@@ -2,6 +2,8 @@
 //!
 //! 提供扫描进度显示功能
 
+#![allow(dead_code)]
+
 use comfy_table::presets::UTF8_FULL;
 use comfy_table::Table;
 use indicatif::{ProgressBar, ProgressStyle};

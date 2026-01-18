@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 # 异步运行时
 tokio = { version = "1.0", features = ["full"] }
+tokio-util = { version = "0.7", features = ["compat"] }
 
 # 命令行解析
 clap = { version = "4.0", features = ["derive"] }
@@ -42,6 +43,15 @@ anyhow = "1.0"
 # 网络和扫描
 ipnet = "2.9"
 futures = "0.3"
+
+# 爆破模块相关
+ssh2 = "0.9"
+redis = "0.25"
+mongodb = "3.0"
+tokio-postgres = "0.7"
+tiberius = "0.12"
+mysql_async = "0.34"
+async-trait = "0.1"
 
 # 平台特定依赖
 [target.'cfg(windows)'.dependencies]

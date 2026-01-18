@@ -2,6 +2,8 @@
 //!
 //! 定义了整个项目使用的错误类型
 
+#![allow(dead_code)]
+
 use std::io;
 use thiserror::Error;
 

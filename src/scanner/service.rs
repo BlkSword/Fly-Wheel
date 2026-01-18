@@ -2,6 +2,8 @@
 //!
 //! 提供端口服务识别和Banner抓取功能
 
+#![allow(dead_code)]
+
 use crate::scanner::models::ServiceInfo;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;

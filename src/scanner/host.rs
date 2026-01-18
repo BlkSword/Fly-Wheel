@@ -2,6 +2,8 @@
 //!
 //! 提供ICMP、TCP SYN、ARP等多种方式的主机发现功能
 
+#![allow(dead_code)]
+
 use crate::core::Result;
 use crate::scanner::config::ScanConfig;
 use crate::scanner::models::HostResult;

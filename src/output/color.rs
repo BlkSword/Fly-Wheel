@@ -2,6 +2,8 @@
 //!
 //! 提供终端颜色输出功能
 
+#![allow(dead_code)]
+
 use std::fmt::{self, Display};
 
 /// 终端颜色枚举

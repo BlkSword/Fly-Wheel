@@ -2,9 +2,10 @@
 //!
 //! 提供Active Directory域环境信息收集功能
 
+#![allow(dead_code)]
+
 use crate::scanner::config::ScanConfig;
 use crate::scanner::models::{DomainTrust, DomainUser, ServicePrincipalName};
-use std::collections::HashMap;
 
 /// 域扫描器
 pub struct DomainScanner {
@@ -313,7 +314,7 @@ impl DomainScanner {
         {
             use std::process::Command;
 
-            let mut trusts = Vec::new();
+            let trusts = Vec::new();
 
             if let Ok(output) = Command::new("nltest")
                 .args(&["/domain_trusts"])
@@ -393,7 +394,7 @@ impl DomainScanner {
         {
             use std::process::Command;
 
-            let mut policy = PasswordPolicy::default();
+            let policy = PasswordPolicy::default();
 
             if let Ok(output) = Command::new("net")
                 .args(&["accounts"])

@@ -2,6 +2,8 @@
 //!
 //! 提供高性能端口扫描功能
 
+#![allow(dead_code)]
+
 use crate::scanner::config::ScanConfig;
 use crate::scanner::models::{HostResult, PortInfo, PortState, ServiceInfo};
 use crate::scanner::service::ServiceIdentifier;
@@ -130,7 +132,7 @@ impl PortScanner {
         // 批量探测服务
         let results = self.service_identifier.identify_batch(host, ports_to_scan).await;
 
-        for (port, service_info) in results {
+        for (_port, service_info) in results {
             if let Some(info) = service_info {
                 // 只保存有额外信息的服务
                 if !info.product.is_empty() || !info.version.is_empty() || !info.extra_info.is_empty() {

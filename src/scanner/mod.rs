@@ -2,6 +2,8 @@
 //!
 //! 提供高性能的主机扫描、端口扫描和域环境扫描功能
 
+#![allow(dead_code)]
+
 pub mod config;
 pub mod domain;
 pub mod host;
@@ -11,10 +13,7 @@ pub mod service;
 
 pub use config::{ScanConfig, ScanPreset, HostScanMethod, PortScanMethod};
 pub use host::HostScanner;
-pub use models::{
-    DomainTrust, DomainUser, HostResult, PortInfo, PortState, ScanResult, ScanStats, ScanType,
-    ServiceInfo, ServicePrincipalName,
-};
+pub use models::{ScanResult, ScanStats, ScanType};
 pub use port::{PortScanner, ProgressCallback};
 
 use chrono::Utc;

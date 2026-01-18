@@ -4,6 +4,3 @@
 
 pub mod progress;
 pub mod color;
-
-pub use progress::{ScanProgress, LayeredProgress};
-pub use color::Color;

@@ -2,6 +2,8 @@
 //!
 //! 收集网络接口、路由、ARP 表、网络连接等信息
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 
 /// 网络信息收集器

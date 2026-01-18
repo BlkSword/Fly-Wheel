@@ -2,6 +2,8 @@
 //!
 //! 定义扫描器使用的所有数据结构
 
+#![allow(dead_code)]
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 

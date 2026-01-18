@@ -2,6 +2,8 @@
 //!
 //! 提供一键收集所有系统信息的功能
 
+#![allow(dead_code)]
+
 pub mod models;
 pub use models::SystemReport;
 

@@ -2,8 +2,10 @@
 //!
 //! 定义扫描器的配置选项和默认值
 
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
-use clap::{ValueEnum, Parser};
+use clap::ValueEnum;
 
 /// 主机扫描方式
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]

@@ -6,6 +6,7 @@ mod cracker;
 mod modules;
 mod output;
 mod scanner;
+mod tunnel;
 
 use clap::{Parser, Subcommand};
 use collector::models::{CredentialReport, FileReport, NetworkReport, ProcessReport};
@@ -23,6 +24,7 @@ use scanner::{HostScanMethod, PortScanMethod, ScanConfig, ScanPreset, Scanner};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
+use tunnel::{TunnelConfig, TunnelManager, TunnelType};
 
 /// 格式化字节数
 fn format_bytes(bytes: u64) -> String {
@@ -159,6 +161,45 @@ enum Commands {
         #[arg(short, long)]
         delay: Option<u64>,
     },
+
+    /// 隧道功能 (缩写: tu)
+    Tunnel {
+        /// 隧道类型: forward, reverse, socks5, chain
+        #[arg(value_name = "TYPE")]
+        tunnel_type: Option<String>,
+
+        /// 目标地址 (host:port)
+        #[arg(short, long)]
+        target: Option<String>,
+
+        /// 本地监听端口
+        #[arg(short = 'L', long)]
+        local_port: Option<u16>,
+
+        /// 远程监听端口
+        #[arg(short = 'R', long)]
+        remote_port: Option<u16>,
+
+        /// 跳板主机 (host:port，可多次指定)
+        #[arg(short = 'H', long)]
+        hop: Option<Vec<String>>,
+
+        /// SOCKS5 认证用户名
+        #[arg(long)]
+        socks5_username: Option<String>,
+
+        /// SOCKS5 认证密码
+        #[arg(long)]
+        socks5_password: Option<String>,
+
+        /// 最大并发连接
+        #[arg(short, long, default_value = "100")]
+        max_connections: usize,
+
+        /// 超时时间(秒)
+        #[arg(short, long, default_value = "30")]
+        timeout: u64,
+    },
 }
 
 // ============================================================
@@ -177,10 +218,14 @@ const SYSTEM_ITEMS: &[(&str, &str)] = &[
 ];
 
 /// scan 子命令映射 (完整名称, 缩写)
-const SCAN_TYPES: &[(&str, &str)] = &[
-    ("host", "h"),
-    ("port", "po"),
-    ("comprehensive", "c"),
+const SCAN_TYPES: &[(&str, &str)] = &[("host", "h"), ("port", "po"), ("comprehensive", "c")];
+
+/// tunnel 子命令映射 (完整名称, 缩写)
+const TUNNEL_TYPES: &[(&str, &str)] = &[
+    ("forward", "fo"),
+    ("reverse", "re"),
+    ("socks5", "so"),
+    ("chain", "ch"),
 ];
 
 // ============================================================
@@ -332,6 +377,45 @@ fn main() {
                     concurrency,
                     timeout,
                     delay,
+                )
+            }
+        }
+
+        Commands::Tunnel {
+            tunnel_type,
+            target,
+            local_port,
+            remote_port,
+            hop,
+            socks5_username,
+            socks5_password,
+            max_connections,
+            timeout,
+        } => {
+            // 如果没有提供隧道类型，进入交互式模式
+            if tunnel_type.is_none() {
+                run_interactive_tunnel(
+                    tunnel_type,
+                    target,
+                    local_port,
+                    remote_port,
+                    hop,
+                    socks5_username,
+                    socks5_password,
+                    max_connections,
+                    timeout,
+                )
+            } else {
+                run_tunnel(
+                    tunnel_type.unwrap(),
+                    target,
+                    local_port,
+                    remote_port,
+                    hop,
+                    socks5_username,
+                    socks5_password,
+                    max_connections,
+                    timeout,
                 )
             }
         }
@@ -684,9 +768,11 @@ fn run_system_collect_basic(output: Option<PathBuf>, _quiet: bool) -> Result<()>
     use std::time::Duration;
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner()
-        .template("{spinner:.green} {msg}")
-        .expect("创建进度条样式失败"));
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .expect("创建进度条样式失败"),
+    );
     pb.set_message("正在收集系统信息...");
     pb.enable_steady_tick(Duration::from_millis(100));
 
@@ -720,9 +806,11 @@ fn run_system_collect_network(output: Option<PathBuf>, _quiet: bool) -> Result<(
     use std::time::Duration;
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner()
-        .template("{spinner:.green} {msg}")
-        .expect("创建进度条样式失败"));
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .expect("创建进度条样式失败"),
+    );
     pb.enable_steady_tick(Duration::from_millis(100));
 
     let collector = NetworkCollector::new();
@@ -770,9 +858,11 @@ fn run_system_collect_process(output: Option<PathBuf>, _quiet: bool) -> Result<(
     use std::time::Duration;
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner()
-        .template("{spinner:.green} {msg}")
-        .expect("创建进度条样式失败"));
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .expect("创建进度条样式失败"),
+    );
     pb.enable_steady_tick(Duration::from_millis(100));
 
     pb.set_message("正在枚举系统进程...");
@@ -813,9 +903,11 @@ fn run_system_collect_credential(output: Option<PathBuf>, _quiet: bool) -> Resul
     use std::time::Duration;
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner()
-        .template("{spinner:.green} {msg}")
-        .expect("创建进度条样式失败"));
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .expect("创建进度条样式失败"),
+    );
     pb.enable_steady_tick(Duration::from_millis(100));
 
     let collector = CredentialCollector::new();
@@ -863,9 +955,11 @@ fn run_system_collect_file(output: Option<PathBuf>, _quiet: bool) -> Result<()> 
     use std::time::Duration;
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner()
-        .template("{spinner:.green} {msg}")
-        .expect("创建进度条样式失败"));
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .expect("创建进度条样式失败"),
+    );
     pb.enable_steady_tick(Duration::from_millis(100));
 
     let collector = FileCollector::new();
@@ -1145,9 +1239,11 @@ fn run_domain_scan(output: Option<PathBuf>) -> Result<()> {
     use std::time::Duration;
 
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner()
-        .template("{spinner:.green} {msg}")
-        .expect("创建进度条样式失败"));
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .expect("创建进度条样式失败"),
+    );
     pb.enable_steady_tick(Duration::from_millis(100));
 
     pb.set_message("正在检测域环境...");
@@ -1846,9 +1942,11 @@ fn run_crack(
     // 创建进度条
     use indicatif::{ProgressBar, ProgressStyle};
     let pb = ProgressBar::new_spinner();
-    pb.set_style(ProgressStyle::default_spinner()
-        .template("{spinner:.green} {msg}")
-        .expect("创建进度条样式失败"));
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .expect("创建进度条样式失败"),
+    );
     pb.set_message("正在爆破...");
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
@@ -2222,4 +2320,370 @@ fn print_domain_scan_results(result: &scanner::domain::DomainScanResult) {
 
     println!("╚════════════════════════════════════════════════════════════════════════════╝");
     println!();
+}
+
+// ============================================================
+// 隧道功能函数
+// ============================================================
+
+/// 运行隧道（直接模式）
+fn run_tunnel(
+    tunnel_type: String,
+    target: Option<String>,
+    local_port: Option<u16>,
+    _remote_port: Option<u16>,
+    hop: Option<Vec<String>>,
+    socks5_username: Option<String>,
+    socks5_password: Option<String>,
+    max_connections: usize,
+    timeout: u64,
+) -> Result<()> {
+    // 解析隧道类型
+    let tunnel_type_enum = match TunnelType::from_str(&tunnel_type) {
+        Some(t) => t,
+        None => {
+            print_error(&format!("未知的隧道类型: {}", tunnel_type));
+            print_tunnel_types();
+            std::process::exit(1);
+        }
+    };
+
+    // 确定本地端口
+    let local_port = local_port.unwrap_or(match tunnel_type_enum {
+        TunnelType::Forward => 8080,
+        TunnelType::Reverse => 8080,
+        TunnelType::Socks5 => 1080,
+        TunnelType::Chain => 8080,
+    });
+
+    let local_addr =
+        format!("127.0.0.1:{}", local_port)
+            .parse()
+            .map_err(|_| FlyWheelError::Other {
+                message: format!("无效的本地端口: {}", local_port),
+            })?;
+
+    // 创建配置
+    let mut config = TunnelConfig::new(tunnel_type_enum, local_addr)
+        .with_max_connections(max_connections)
+        .with_timeout(timeout);
+
+    // 设置远程目标
+    if let Some(t) = target {
+        config = config.with_remote_target(t);
+    }
+
+    // 设置跳板
+    if let Some(h) = hop {
+        config = config.with_hops(h);
+    }
+
+    // 设置 SOCKS5 认证
+    if let (Some(username), Some(password)) = (socks5_username, socks5_password) {
+        config = config.with_socks5_auth(username, password);
+    }
+
+    // 验证配置
+    config
+        .validate()
+        .map_err(|e| FlyWheelError::Other { message: e })?;
+
+    // 创建隧道管理器
+    let manager = TunnelManager::new();
+
+    // 启动隧道
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match tunnel_type_enum {
+        TunnelType::Forward => {
+            let tunnel = manager.create_forward_tunnel(config);
+            rt.block_on(tunnel.start())?;
+        }
+        TunnelType::Reverse => {
+            let tunnel = manager.create_reverse_tunnel(config);
+            // 默认使用客户端模式
+            rt.block_on(tunnel.start_client())?;
+        }
+        TunnelType::Socks5 => {
+            let server = manager.create_socks5_server(config);
+            rt.block_on(server.start())?;
+        }
+        TunnelType::Chain => {
+            let tunnel = manager.create_chain_tunnel(config);
+            rt.block_on(tunnel.start())?;
+        }
+    }
+
+    Ok(())
+}
+
+/// 运行交互式隧道向导
+fn run_interactive_tunnel(
+    initial_tunnel_type: Option<String>,
+    initial_target: Option<String>,
+    initial_local_port: Option<u16>,
+    _initial_remote_port: Option<u16>,
+    initial_hop: Option<Vec<String>>,
+    _initial_socks5_username: Option<String>,
+    _initial_socks5_password: Option<String>,
+    initial_max_connections: usize,
+    initial_timeout: u64,
+) -> Result<()> {
+    print_banner();
+    println!();
+    print_info("IntraSweep 交互式隧道配置向导");
+    println!();
+
+    // 步骤 1: 隧道类型
+    let tunnel_type = if let Some(tt) = initial_tunnel_type {
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  [1/5] 隧道类型");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!();
+        println!("已指定: {}", tt);
+        println!();
+        tt
+    } else {
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!("  [1/5] 隧道类型");
+        println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+        println!();
+        println!("  1. 正向隧道       - 本地端口转发到远程目标");
+        println!("  2. 反向隧道       - 从内网建立连接回外网");
+        println!("  3. SOCKS5 代理    - 动态端口转发代理");
+        println!("  4. 链式隧道       - 多级跳板连接");
+        println!();
+
+        let choice = InteractiveMenu::read_number("请选择隧道类型 [1-4]: ", 1, 4);
+        let tunnel_type = match choice {
+            1 => "forward".to_string(),
+            2 => "reverse".to_string(),
+            3 => "socks5".to_string(),
+            4 => "chain".to_string(),
+            _ => "forward".to_string(),
+        };
+        println!();
+        print_success(&format!("已选择: {}", format_tunnel_type(&tunnel_type)));
+        println!();
+        tunnel_type
+    };
+
+    let tunnel_type_enum = TunnelType::from_str(&tunnel_type).unwrap();
+
+    // 步骤 2: 本地端口
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  [2/5] 本地监听端口");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+
+    let default_port = match tunnel_type_enum {
+        TunnelType::Forward => 8080,
+        TunnelType::Reverse => 8080,
+        TunnelType::Socks5 => 1080,
+        TunnelType::Chain => 8080,
+    };
+
+    let local_port = if let Some(lp) = initial_local_port {
+        println!("已指定端口: {}", lp);
+        println!();
+        lp
+    } else {
+        let port_input = InteractiveMenu::read_input(&format!(
+            "按 Enter 使用默认端口({}) 或输入自定义端口: ",
+            default_port
+        ));
+        println!();
+        if port_input.is_empty() {
+            print_success(&format!("使用默认端口: {}", default_port));
+            println!();
+            default_port
+        } else {
+            let p = port_input.parse::<u16>().unwrap_or(default_port);
+            print_success(&format!("已设置端口: {}", p));
+            println!();
+            p
+        }
+    };
+
+    // 步骤 3: 远程目标/跳板
+    let mut config = TunnelConfig::new(
+        tunnel_type_enum,
+        format!("127.0.0.1:{}", local_port).parse().unwrap(),
+    );
+
+    match tunnel_type_enum {
+        TunnelType::Forward | TunnelType::Reverse => {
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!("  [3/5] 目标地址");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!();
+
+            let target = if let Some(t) = &initial_target {
+                println!("已指定目标: {}", t);
+                println!();
+                t.clone()
+            } else {
+                loop {
+                    let input = InteractiveMenu::read_input("请输入目标地址 (host:port): ");
+                    println!();
+                    if !input.is_empty() {
+                        break input;
+                    }
+                    print_error("目标不能为空，请重新输入");
+                }
+            };
+
+            config = config.with_remote_target(target);
+        }
+        TunnelType::Chain => {
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!("  [3/5] 跳板和目标");
+            println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            println!();
+
+            let hops = if let Some(h) = &initial_hop {
+                println!("已指定跳板: {}", h.join(", "));
+                println!();
+                h.clone()
+            } else {
+                let mut hops = Vec::new();
+                loop {
+                    let input =
+                        InteractiveMenu::read_input("请输入跳板地址 (host:port)，留空结束: ");
+                    if input.is_empty() {
+                        break;
+                    }
+                    hops.push(input);
+                }
+                println!();
+                hops
+            };
+
+            let target = if let Some(t) = &initial_target {
+                println!("已指定目标: {}", t);
+                println!();
+                t.clone()
+            } else {
+                InteractiveMenu::read_input("请输入最终目标地址 (host:port): ")
+            };
+
+            config = config.with_hops(hops).with_remote_target(target);
+            println!();
+        }
+        TunnelType::Socks5 => {
+            // SOCKS5 不需要预先指定目标
+        }
+    }
+
+    // 步骤 4: 高级选项
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  [4/5] 高级选项");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+
+    let max_connections = if initial_max_connections == 100 {
+        let input = InteractiveMenu::read_input("最大并发连接 (默认: 100): ");
+        println!();
+        if input.is_empty() {
+            100
+        } else {
+            input.parse::<usize>().unwrap_or(100)
+        }
+    } else {
+        println!("已指定最大连接: {}", initial_max_connections);
+        println!();
+        initial_max_connections
+    };
+
+    let timeout = if initial_timeout == 30 {
+        let input = InteractiveMenu::read_input("超时时间/秒 (默认: 30): ");
+        println!();
+        if input.is_empty() {
+            30
+        } else {
+            input.parse::<u64>().unwrap_or(30)
+        }
+    } else {
+        println!("已指定超时: {} 秒", initial_timeout);
+        println!();
+        initial_timeout
+    };
+
+    config = config
+        .with_max_connections(max_connections)
+        .with_timeout(timeout);
+
+    // 步骤 5: 确认
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  [5/5] 配置确认");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+    println!(
+        "  隧道类型:     {}",
+        format_tunnel_type(tunnel_type_enum.as_str())
+    );
+    println!("  本地端口:     {}", local_port);
+    if let Some(ref target) = config.remote_target {
+        println!("  目标:         {}", target);
+    }
+    if !config.hops.is_empty() {
+        println!("  跳板:         {}", config.hops.join(", "));
+    }
+    println!("  最大连接:     {}", max_connections);
+    println!("  超时:         {} 秒", timeout);
+    println!();
+
+    let confirm = InteractiveMenu::read_input("确认启动隧道? [Y/n]: ");
+    if confirm.to_lowercase() == "n" {
+        print_info("已取消隧道");
+        return Ok(());
+    }
+
+    println!();
+    print_info("启动隧道...");
+    println!();
+
+    // 启动隧道
+    let manager = TunnelManager::new();
+    let rt = tokio::runtime::Runtime::new()?;
+
+    match tunnel_type_enum {
+        TunnelType::Forward => {
+            let tunnel = manager.create_forward_tunnel(config);
+            rt.block_on(tunnel.start())?;
+        }
+        TunnelType::Reverse => {
+            let tunnel = manager.create_reverse_tunnel(config);
+            rt.block_on(tunnel.start_client())?;
+        }
+        TunnelType::Socks5 => {
+            let server = manager.create_socks5_server(config);
+            rt.block_on(server.start())?;
+        }
+        TunnelType::Chain => {
+            let tunnel = manager.create_chain_tunnel(config);
+            rt.block_on(tunnel.start())?;
+        }
+    }
+
+    Ok(())
+}
+
+/// 格式化隧道类型
+fn format_tunnel_type(ty: &str) -> String {
+    match ty {
+        "forward" => "正向隧道".to_string(),
+        "reverse" => "反向隧道".to_string(),
+        "socks5" => "SOCKS5代理".to_string(),
+        "chain" => "链式隧道".to_string(),
+        _ => ty.to_string(),
+    }
+}
+
+/// 打印可用的隧道类型
+fn print_tunnel_types() {
+    println!("可用的隧道类型:");
+    for (full, abbr) in TUNNEL_TYPES {
+        println!("  {} ({})", full, abbr);
+    }
 }

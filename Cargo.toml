@@ -44,6 +44,9 @@ anyhow = "1.0"
 ipnet = "2.9"
 futures = "0.3"
 
+# UUID 生成
+uuid = { version = "1.0", features = ["v4"] }
+
 # 爆破模块相关
 ssh2 = "0.9"
 redis = "0.25"

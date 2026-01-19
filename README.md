@@ -1,6 +1,6 @@
 # IntraSweep - 内网渗透辅助工具
 
-IntraSweep 是一个基于 Rust 开发的高性能内网渗透辅助工具，提供扫描、信息收集和密码爆破功能。
+IntraSweep 是一个基于 Rust 开发的高性能内网渗透辅助工具，提供扫描、信息收集、密码爆破和内网穿透功能。
 
 ## 特性
 
@@ -8,6 +8,7 @@ IntraSweep 是一个基于 Rust 开发的高性能内网渗透辅助工具，提
 - **交互式向导** - 无需记忆复杂参数
 - **实时进度** - 可视化进度反馈
 - **密码爆破** - 支持多种服务
+- **内网穿透** - 正向/反向隧道、SOCKS5 代理、链式跳板
 
 ## 安装
 
@@ -54,6 +55,25 @@ intrasweep crack              # 交互式向导
 intrasweep crack 192.168.1.1 --service ssh -u root -P passwords.txt
 ```
 
+### 内网穿透
+
+```bash
+# 交互式向导（推荐）
+intrasweep tunnel
+
+# 正向隧道 - 本地端口转发到远程目标
+intrasweep tunnel forward -t 192.168.1.100:3389 -L 8080
+
+# 反向隧道 - 从内网建立连接回外网
+intrasweep tunnel reverse -t 10.0.0.1:8888 -L 8080
+
+# SOCKS5 代理 - 动态端口转发
+intrasweep tunnel socks5 -L 1080
+
+# 链式隧道 - 多级跳板连接
+intrasweep tunnel chain -H 10.0.0.1:2222 -H 10.0.0.2:3333 -t 192.168.2.100:80
+```
+
 ## 命令参考
 
 ### System 命令
@@ -89,6 +109,26 @@ intrasweep crack 192.168.1.1 --service ssh -u root -P passwords.txt
 | `-P, --password-file` | 密码字典文件 |
 | `-c, --concurrency` | 并发数（默认: 10） |
 | `-t, --timeout` | 超时秒数（默认: 5） |
+
+### Tunnel 命令
+
+| 类型 | 缩写 | 功能 |
+|-----|------|------|
+| forward | fo | 正向 TCP 端口转发 |
+| reverse | re | 反向 TCP 端口转发 |
+| socks5 | so | SOCKS5 代理服务器 |
+| chain | ch | 链式隧道（多级跳板）|
+
+| 参数 | 说明 |
+|-----|------|
+| `-t, --target` | 目标地址 (host:port) |
+| `-L, --local-port` | 本地监听端口 |
+| `-R, --remote-port` | 远程监听端口 |
+| `-H, --hop` | 跳板主机 (可多次指定) |
+| `--socks5-username` | SOCKS5 认证用户名 |
+| `--socks5-password` | SOCKS5 认证密码 |
+| `-c, --max-connections` | 最大并发连接（默认: 100）|
+| `--timeout` | 超时时间（秒，默认: 30）|
 
 ## 扫描预设
 

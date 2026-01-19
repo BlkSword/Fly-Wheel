@@ -120,13 +120,17 @@ impl HostScanner {
     }
 
     /// 等待任务完成并返回结果
-    async fn wait_for_tasks(&self, tasks: &mut Vec<tokio::task::JoinHandle<HostResult>>) -> Option<HostResult> {
+    async fn wait_for_tasks(
+        &self,
+        tasks: &mut Vec<tokio::task::JoinHandle<HostResult>>,
+    ) -> Option<HostResult> {
         if tasks.is_empty() {
             return None;
         }
 
         // 使用futures::future::select_all等待任意任务完成
-        let (result, _index, _remaining) = futures::future::select_all(tasks.drain(..).collect::<Vec<_>>()).await;
+        let (result, _index, _remaining) =
+            futures::future::select_all(tasks.drain(..).collect::<Vec<_>>()).await;
         result.ok()
     }
 
@@ -156,10 +160,11 @@ impl HostScanner {
     pub async fn scan_cidr(&self, cidr: &str) -> Result<Vec<HostResult>> {
         use ipnet::Ipv4Net;
 
-        let network: Ipv4Net = cidr.parse()
-            .map_err(|_| crate::core::error::FlyWheelError::Other {
-                message: format!("无效的CIDR格式: {}", cidr),
-            })?;
+        let network: Ipv4Net =
+            cidr.parse()
+                .map_err(|_| crate::core::error::FlyWheelError::Other {
+                    message: format!("无效的CIDR格式: {}", cidr),
+                })?;
 
         let targets: Vec<IpAddr> = network.hosts().map(IpAddr::V4).collect();
 
@@ -169,7 +174,8 @@ impl HostScanner {
     /// 获取存活主机列表（仅返回IP）
     pub async fn get_alive_hosts(&self, targets: Vec<IpAddr>) -> Vec<IpAddr> {
         let results = self.discover_hosts(targets).await;
-        results.into_iter()
+        results
+            .into_iter()
             .filter(|r| r.is_alive)
             .filter_map(|r| r.ip.parse().ok())
             .collect()

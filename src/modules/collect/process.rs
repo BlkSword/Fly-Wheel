@@ -2,8 +2,6 @@
 //!
 //! 收集运行中的进程信息
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use sysinfo::System;
 

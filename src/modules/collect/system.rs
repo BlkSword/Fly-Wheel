@@ -364,23 +364,19 @@ impl SystemCollector {
 
     /// 检查权限
     fn check_privileges(&self) -> PrivilegeLevel {
-        if cfg!(windows) {
+        #[cfg(windows)]
+        {
             if self.is_admin_windows() {
                 PrivilegeLevel::Admin
             } else {
                 PrivilegeLevel::User
             }
-        } else {
-            #[cfg(unix)]
-            {
-                if self.is_root_unix() {
-                    PrivilegeLevel::Root
-                } else {
-                    PrivilegeLevel::User
-                }
-            }
-            #[cfg(not(unix))]
-            {
+        }
+        #[cfg(not(windows))]
+        {
+            if self.is_root_unix() {
+                PrivilegeLevel::Root
+            } else {
                 PrivilegeLevel::User
             }
         }
@@ -499,7 +495,7 @@ impl SystemCollector {
     /// 检查 Unix root 权限
     #[cfg(unix)]
     fn is_root_unix(&self) -> bool {
-        unsafe { libc::geteuid() == 0 }
+        nix::unistd::geteuid().is_root()
     }
 }
 

@@ -2,8 +2,6 @@
 //!
 //! 提供Active Directory域环境信息收集功能
 
-#![allow(dead_code)]
-
 use crate::scanner::config::ScanConfig;
 use crate::scanner::models::{DomainTrust, DomainUser, ServicePrincipalName};
 

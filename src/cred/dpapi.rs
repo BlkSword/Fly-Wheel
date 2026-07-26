@@ -240,6 +240,96 @@ pub fn decrypt_master_key_with_ntlm(
     Err("完整DPAPI解密需要Windows CryptoAPI支持".to_string())
 }
 
+// ============================================================
+// DPAPI Blob 解密 (CryptUnprotectData)
+// ============================================================
+
+/// Windows CRYPT_INTEGER_BLOB / DATA_BLOB 结构
+#[cfg(windows)]
+#[repr(C)]
+struct CryptDataBlob {
+    cb_data: u32,
+    pb_data: *mut u8,
+}
+
+#[cfg(windows)]
+#[link(name = "crypt32")]
+extern "system" {
+    fn CryptUnprotectData(
+        p_data_in: *const CryptDataBlob,
+        pp_sz_data_descr: *mut *mut u16,
+        p_optional_entropy: *const CryptDataBlob,
+        pv_reserved: *mut std::ffi::c_void,
+        p_prompt_struct: *const std::ffi::c_void,
+        dw_flags: u32,
+        p_data_out: *mut CryptDataBlob,
+    ) -> i32;
+}
+
+#[cfg(windows)]
+#[link(name = "kernel32")]
+extern "system" {
+    fn LocalFree(h_mem: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
+}
+
+/// 使用Windows DPAPI (`CryptUnprotectData`) 解密数据blob
+///
+/// 在当前用户上下文中直接调用，无需额外凭据。
+/// 适用于浏览器主密钥（Chrome/Edge `os_crypt.encrypted_key`）、
+/// 凭据管理器blob、旧版Chrome v01密码等场景。
+#[cfg(windows)]
+pub fn decrypt_dpapi_blob(encrypted: &[u8]) -> Result<Vec<u8>, String> {
+    use std::ptr;
+
+    let mut data_in_buf = encrypted.to_vec();
+    let data_in = CryptDataBlob {
+        cb_data: data_in_buf.len() as u32,
+        pb_data: data_in_buf.as_mut_ptr(),
+    };
+    let mut data_out = CryptDataBlob {
+        cb_data: 0,
+        pb_data: ptr::null_mut(),
+    };
+
+    let success = unsafe {
+        CryptUnprotectData(
+            &data_in,
+            ptr::null_mut(),   // ppszDataDescr — 不需要描述
+            ptr::null(),       // pOptionalEntropy — 无额外熵
+            ptr::null_mut(),   // pvReserved
+            ptr::null(),       // pPromptStruct — 不弹出UI提示
+            0,                 // dwFlags — 默认（当前用户上下文）
+            &mut data_out,
+        )
+    };
+
+    if success == 0 {
+        let err = std::io::Error::last_os_error();
+        return Err(format!("CryptUnprotectData 失败: {}", err));
+    }
+
+    if data_out.pb_data.is_null() || data_out.cb_data == 0 {
+        return Err("CryptUnprotectData 返回空数据".to_string());
+    }
+
+    let decrypted = unsafe {
+        std::slice::from_raw_parts(data_out.pb_data, data_out.cb_data as usize).to_vec()
+    };
+
+    // 释放CryptUnprotectData分配的内存
+    unsafe {
+        LocalFree(data_out.pb_data as *mut std::ffi::c_void);
+    }
+
+    Ok(decrypted)
+}
+
+/// DPAPI解密（非Windows平台不可用）
+#[cfg(not(windows))]
+pub fn decrypt_dpapi_blob(_encrypted: &[u8]) -> Result<Vec<u8>, String> {
+    Err("DPAPI解密仅支持Windows平台（需要CryptUnprotectData API）".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,5 +369,14 @@ mod tests {
     fn test_collect_dpapi_info() {
         let result = collect_dpapi_info();
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_decrypt_dpapi_blob_invalid_data() {
+        // 无效数据应返回错误而不是panic
+        // Windows: CryptUnprotectData会拒绝非法blob
+        // 非Windows: 直接返回平台不支持错误
+        let result = decrypt_dpapi_blob(b"invalid_dpapi_data_for_testing");
+        assert!(result.is_err());
     }
 }

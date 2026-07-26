@@ -163,11 +163,13 @@ fn get_disk_info() -> Vec<DiskInfo> {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines().skip(1) {
                 let parts: Vec<&str> = line.split(',').collect();
-                if parts.len() >= 4 {
+                // CSV格式: Node,DeviceID,FileSystem,FreeSpace,Size
+                // wmic CSV第一列始终为Node（本地为空），属性按字母序排列
+                if parts.len() >= 5 {
                     let drive = parts[1].trim().to_string();
-                    let total: f64 = parts[3].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
-                    let free: f64 = parts[2].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
-                    let fs = parts[4].trim().to_string();
+                    let fs = parts[2].trim().to_string();
+                    let free: f64 = parts[3].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
+                    let total: f64 = parts[4].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
 
                     if total > 0.0 {
                         disks.push(DiskInfo {

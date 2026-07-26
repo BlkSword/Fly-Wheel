@@ -2,7 +2,7 @@
 //!
 //! 支持 YAML 和 JSON 格式的 PoC 规则文件加载
 
-use crate::core::error::FlyWheelError;
+use crate::core::error::IntraSweepError;
 use crate::core::Result;
 use crate::vuln::poc::PoCRule;
 use std::path::Path;
@@ -21,9 +21,9 @@ fn load_pocs_from_file(path: &Path) -> Result<PoCRule> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
 
     match ext.to_lowercase().as_str() {
-        "yaml" | "yml" => serde_yaml::from_str(&content).map_err(FlyWheelError::Yaml),
-        "json" => serde_json::from_str(&content).map_err(FlyWheelError::Serialization),
-        _ => Err(FlyWheelError::PocRule {
+        "yaml" | "yml" => serde_yaml::from_str(&content).map_err(IntraSweepError::Yaml),
+        "json" => serde_json::from_str(&content).map_err(IntraSweepError::Serialization),
+        _ => Err(IntraSweepError::PocRule {
             message: format!("不支持的PoC文件格式: {}", ext),
         }),
     }
@@ -55,23 +55,23 @@ fn load_pocs_from_directory(dir: &Path) -> Result<Vec<PoCRule>> {
 /// 验证 PoC 规则完整性
 pub fn validate_poc(poc: &PoCRule) -> Result<()> {
     if poc.id.is_empty() {
-        return Err(FlyWheelError::PocRule {
+        return Err(IntraSweepError::PocRule {
             message: "PoC id不能为空".to_string(),
         });
     }
     if poc.info.name.is_empty() {
-        return Err(FlyWheelError::PocRule {
+        return Err(IntraSweepError::PocRule {
             message: format!("PoC {} 的name不能为空", poc.id),
         });
     }
     if poc.rules.is_empty() {
-        return Err(FlyWheelError::PocRule {
+        return Err(IntraSweepError::PocRule {
             message: format!("PoC {} 缺少rules", poc.id),
         });
     }
     for (i, rule) in poc.rules.iter().enumerate() {
         if rule.matchers.is_empty() {
-            return Err(FlyWheelError::PocRule {
+            return Err(IntraSweepError::PocRule {
                 message: format!("PoC {} 的第{}条规则缺少matchers", poc.id, i + 1),
             });
         }

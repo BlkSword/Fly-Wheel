@@ -2,8 +2,6 @@
 //!
 //! 收集网络接口、路由、ARP 表、网络连接等信息
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 
 /// 网络信息收集器
@@ -442,18 +440,6 @@ impl NetworkCollector {
         }
 
         connections
-    }
-
-    // ==================== Unix 通用实现 ====================
-
-    #[cfg(unix)]
-    fn collect_unix_connections(&self) -> Vec<NetworkConnection> {
-        Vec::new()
-    }
-
-    #[cfg(unix)]
-    fn collect_unix_arp(&self) -> Vec<ArpEntry> {
-        Vec::new()
     }
 
     // ==================== 通用实现（回退） ====================

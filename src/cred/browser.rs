@@ -237,7 +237,7 @@ fn decrypt_chromium_password(encrypted: &[u8], key_hex: &str) -> Result<String, 
     }
 
     let prefix = &encrypted[..3];
-    if prefix != b"v10" && prefix != b"v11" {
+    if prefix != b"v10" && prefix != b"v11" && prefix != b"v20" {
         return Err("不支持的加密版本".to_string());
     }
 
@@ -470,11 +470,11 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, String> {
 }
 
 /// DPAPI解密（Windows数据保护API）
-fn dpapi_decrypt(_data: &[u8]) -> Result<Vec<u8>, String> {
-    // DPAPI解密需要调用Windows CryptUnprotectData API
-    // 在当前用户的上下文中，可以直接解密
-    // 简化实现
-    Err("DPAPI解密需要Windows API支持".to_string())
+///
+/// 委托给 `dpapi::decrypt_dpapi_blob`，在Windows上调用
+/// `CryptUnprotectData` 在当前用户上下文中直接解密。
+fn dpapi_decrypt(data: &[u8]) -> Result<Vec<u8>, String> {
+    crate::cred::dpapi::decrypt_dpapi_blob(data)
 }
 
 #[cfg(test)]

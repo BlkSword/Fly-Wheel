@@ -3,7 +3,7 @@
 //! 处理隧道子命令的交互式配置向导和直接模式
 
 use crate::cli::{print_banner, InteractiveMenu, TUNNEL_TYPES};
-use crate::core::error::FlyWheelError;
+use crate::core::error::IntraSweepError;
 use crate::core::Result;
 use crate::output::color::{print_error, print_info, print_success};
 use crate::tunnel::shutdown::Shutdown;
@@ -80,7 +80,7 @@ fn run_tunnel(
 
     let local_addr_str = format!("127.0.0.1:{}", local_port);
     let local_addr = local_addr_str.parse()
-        .map_err(|_| FlyWheelError::Config {
+        .map_err(|_| IntraSweepError::Config {
             message: format!("无效的本地地址: {}", local_addr_str),
         })?;
 

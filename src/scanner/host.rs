@@ -2,8 +2,6 @@
 //!
 //! 提供ICMP、TCP SYN、ARP等多种方式的主机发现功能
 
-#![allow(dead_code)]
-
 use crate::core::Result;
 use crate::scanner::config::{HostScanMethod, ScanConfig};
 use crate::scanner::models::HostResult;
@@ -104,36 +102,27 @@ impl HostScanner {
 
     /// TCP SYN扫描（最通用方式，适用于所有平台）
     async fn tcp_syn_scan(&self, targets: Vec<IpAddr>) -> Vec<HostResult> {
-        let mut results = Vec::new();
-        let common_ports = vec![80, 443, 22, 23, 3389, 445]; // 常见端口用于探测
+        use futures::stream::{FuturesUnordered, StreamExt};
 
-        // 使用Arc包装信号量以便共享
+        let common_ports = vec![80, 443, 22, 23, 3389, 445]; // 常见端口用于探测
         let semaphore = Arc::new(Semaphore::new(self.config.max_concurrent_hosts));
-        let mut tasks = Vec::new();
+        let mut futures = FuturesUnordered::new();
 
         for target in targets {
             let semaphore = Arc::clone(&semaphore);
             let ports = common_ports.clone();
             let timeout_dur = Duration::from_millis(self.config.host_timeout_ms);
 
-            let task = tokio::spawn(async move {
-                Self::check_host_alive(target, &ports, timeout_dur, semaphore).await
-            });
-
-            tasks.push(task);
-
-            // 控制并发数
-            if tasks.len() >= self.config.max_concurrent_hosts {
-                if let Some(result) = self.wait_for_tasks(&mut tasks).await {
-                    results.push(result);
-                }
-            }
+            futures.push(tokio::spawn(async move {
+                let _permit = semaphore.acquire_owned().await;
+                Self::check_host_alive(target, &ports, timeout_dur).await
+            }));
         }
 
-        // 等待剩余任务完成
-        while !tasks.is_empty() {
-            if let Some(result) = self.wait_for_tasks(&mut tasks).await {
-                results.push(result);
+        let mut results = Vec::new();
+        while let Some(result) = futures.next().await {
+            if let Ok(host_result) = result {
+                results.push(host_result);
             }
         }
 
@@ -145,7 +134,6 @@ impl HostScanner {
         target: IpAddr,
         ports: &[u16],
         timeout_dur: Duration,
-        _semaphore: Arc<Semaphore>,
     ) -> HostResult {
         // 并行探测所有端口，任一成功即判定存活
         let results = futures::future::join_all(
@@ -176,21 +164,6 @@ impl HostScanner {
         }
     }
 
-    /// 等待任务完成并返回结果
-    async fn wait_for_tasks(
-        &self,
-        tasks: &mut Vec<tokio::task::JoinHandle<HostResult>>,
-    ) -> Option<HostResult> {
-        if tasks.is_empty() {
-            return None;
-        }
-
-        // 使用futures::future::select_all等待任意任务完成
-        let (result, _index, _remaining) =
-            futures::future::select_all(std::mem::take(tasks)).await;
-        result.ok()
-    }
-
     /// 扫描IP范围
     pub async fn scan_ip_range(&self, start: IpAddr, end: IpAddr) -> Vec<HostResult> {
         let mut targets = Vec::new();
@@ -219,7 +192,7 @@ impl HostScanner {
 
         let network: Ipv4Net =
             cidr.parse()
-                .map_err(|_| crate::core::error::FlyWheelError::Other {
+                .map_err(|_| crate::core::error::IntraSweepError::Other {
                     message: format!("无效的CIDR格式: {}", cidr),
                 })?;
 
@@ -286,5 +259,45 @@ mod tests {
 
         let stealth_config = ScanConfig::stealth_scan();
         assert_eq!(stealth_config.max_concurrent_hosts, 10);
+    }
+
+    /// 验证主机发现返回的结果数量与目标数量一致（P0-1 回归测试）
+    ///
+    /// 修复前 select_all 只回收第一个完成的任务，/24 网段仅返回 ~3 个结果。
+    /// 修复后 FuturesUnordered 正确回收全部任务。
+    #[tokio::test]
+    async fn test_discover_hosts_returns_all_results() {
+        use tokio::net::TcpListener;
+
+        // 在 localhost 上启动 5 个监听端口，确保探测成功
+        let mut _listeners = Vec::new();
+        for _ in 0..5 {
+            if let Ok(l) = TcpListener::bind("127.0.0.1:0").await {
+                _listeners.push(l);
+            }
+        }
+
+        let scanner = HostScanner::default();
+        // 扫描 5 个不同的 127.0.0.x 地址
+        let targets: Vec<IpAddr> = (1..=5)
+            .map(|i| IpAddr::V4(Ipv4Addr::new(127, 0, 0, i)))
+            .collect();
+
+        let results = scanner.discover_hosts(targets.clone()).await;
+
+        // 关键断言：结果数量必须等于目标数量（每个目标都有一个 HostResult）
+        assert_eq!(
+            results.len(),
+            targets.len(),
+            "主机发现应返回与目标数量相同的结果（每个目标一个 HostResult），\
+             期望 {}，实际 {}。如果此测试失败，说明 P0-1（select_all 丢结果）回归。",
+            targets.len(),
+            results.len()
+        );
+
+        // 127.0.0.1 应该是存活的（有监听端口）
+        let localhost = results.iter().find(|r| r.ip == "127.0.0.1");
+        assert!(localhost.is_some(), "结果中应包含 127.0.0.1");
+        assert!(localhost.unwrap().is_alive, "127.0.0.1 应判定为存活");
     }
 }

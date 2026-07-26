@@ -20,6 +20,11 @@ pub fn run_privesc_cmd(
         None => run_interactive_privesc()?,
     };
 
+    // 交互式模式下用户取消时返回空字符串，直接退出
+    if selected.is_empty() {
+        return Ok(());
+    }
+
     print_banner();
     println!();
 
@@ -53,8 +58,15 @@ pub fn run_privesc_cmd(
         ))
     });
 
-    let json = serde_json::to_string_pretty(&result)?;
-    std::fs::write(&path, json)?;
+    match output_fmt {
+        OutputFormat::Json => {
+            let json = serde_json::to_string_pretty(&result)?;
+            std::fs::write(&path, json)?;
+        }
+        OutputFormat::Csv => {
+            export_privesc_csv(&result, &path)?;
+        }
+    }
     print_success(&format!("结果已保存: {}", path.display()));
 
     Ok(())
@@ -105,8 +117,7 @@ fn run_interactive_privesc() -> Result<String> {
         Ok(selected)
     } else {
         print_info("已取消");
-        // Return empty string to indicate cancellation
-        Ok("all".to_string())
+        Ok(String::new())
     }
 }
 
@@ -159,4 +170,30 @@ fn print_privesc_results(result: &crate::privesc::PrivescResult) {
         }
         println!();
     }
+}
+
+fn export_privesc_csv(result: &crate::privesc::PrivescResult, path: &std::path::Path) -> Result<()> {
+    let mut wtr = csv::Writer::from_path(path)?;
+
+    wtr.write_record([
+        "主机名", "系统", "当前用户", "类别", "严重性",
+        "标题", "描述", "详情", "修复建议",
+    ])?;
+
+    for finding in &result.findings {
+        wtr.write_record([
+            &result.hostname,
+            &result.os,
+            &result.current_user,
+            &finding.category,
+            finding.severity.display_name(),
+            &finding.title,
+            &finding.description,
+            &finding.detail,
+            &finding.remediation,
+        ])?;
+    }
+
+    wtr.flush()?;
+    Ok(())
 }

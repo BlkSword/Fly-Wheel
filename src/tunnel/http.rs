@@ -3,7 +3,7 @@
 //! 基于 HTTP CONNECT 方法的正向隧道，支持代理穿透和 TLS 加密传输。
 //! 可穿透仅允许 HTTP/HTTPS 出站的企业防火墙。
 
-use crate::core::error::{FlyWheelError, Result};
+use crate::core::error::{IntraSweepError, Result};
 use crate::tunnel::config::TunnelConfig;
 use crate::tunnel::models::{ConnectionInfo, TunnelEvent, TunnelEventHandler, TunnelStatus};
 use crate::tunnel::relay;
@@ -80,18 +80,18 @@ impl HttpTunnel {
         self.config.validate()?;
 
         let target = self.config.remote_target.clone()
-            .ok_or_else(|| FlyWheelError::Config {
+            .ok_or_else(|| IntraSweepError::Config {
                 message: "HTTP 隧道需要指定远程目标".to_string(),
             })?;
 
         // 解析代理地址（从 hops 取第一个作为代理，或使用 remote_target 作为目标）
         let proxy = self.config.hops.first().cloned()
-            .ok_or_else(|| FlyWheelError::Config {
+            .ok_or_else(|| IntraSweepError::Config {
                 message: "HTTP 隧道需要指定代理地址 (-H/--hop)".to_string(),
             })?;
 
         let listener = TcpListener::bind(&self.config.local_addr).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
 

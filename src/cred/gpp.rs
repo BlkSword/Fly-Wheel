@@ -31,12 +31,13 @@ pub struct GppDecryptedPassword {
     pub policy_name: Option<String>,
 }
 
-/// 微软公开的GPP AES加密密钥
+/// 微软公开的GPP AES加密密钥 (MS-GPPD, AES-256-CBC)
+/// 参考: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gppd
 const GPP_AES_KEY: [u8; 32] = [
     0x4e, 0x99, 0x06, 0xe8, 0xfc, 0xb6, 0x6c, 0xc9,
-    0xfa, 0xf4, 0x10, 0x6d, 0xfe, 0xd2, 0xbb, 0x3f,
-    0x65, 0x0c, 0x3c, 0x45, 0x7f, 0x34, 0x03, 0x30,
-    0x96, 0x68, 0x27, 0x99, 0x0a, 0x9c, 0x23, 0x3e,
+    0xfa, 0xf4, 0x93, 0x10, 0x62, 0x0f, 0xfe, 0xe8,
+    0xf4, 0x96, 0xe8, 0x06, 0xcc, 0x05, 0x79, 0x90,
+    0x20, 0x9b, 0x09, 0xa4, 0x33, 0xb6, 0x6c, 0x1b,
 ];
 
 /// 解密单个cpassword
@@ -55,9 +56,9 @@ pub fn decrypt_cpassword(cpassword: &str) -> Result<String, String> {
     }
 
     // AES-256-CBC解密
-    // IV是加密数据的前16字节，密文是剩余部分
-    let iv = &encrypted[..16];
-    let ciphertext = &encrypted[16..];
+    // GPP 规范: IV 为 16 字节全零，base64 解码后的全部数据即为密文
+    let iv = [0u8; 16];
+    let ciphertext = &encrypted[..];
 
     // 密文长度必须是16的整数倍（PKCS#7填充）
     if ciphertext.len() % 16 != 0 {
@@ -256,8 +257,8 @@ fn parse_gpp_xml(
         match decrypt_cpassword(&cpassword) {
             Ok(password) => {
                 tracing::info!(
-                    "[GPP解密] ✓ {} 密码解密成功: {} -> {}",
-                    source_filename, username, password
+                    "[GPP解密] ✓ {} 密码解密成功: {} -> ***",
+                    source_filename, username
                 );
 
                 let policy_name = file_path
@@ -389,5 +390,95 @@ mod tests {
         };
         assert_eq!(gpp.username, "LocalAdmin");
         assert_eq!(gpp.password, "P@ssw0rd!");
+    }
+
+    #[test]
+    fn test_gpp_key_matches_microsoft_spec() {
+        // MS-GPPD 公开的 AES-256 密钥，前 10 字节 + 后续 22 字节必须完全匹配
+        assert_eq!(&GPP_AES_KEY[..10],
+            &[0x4e, 0x99, 0x06, 0xe8, 0xfc, 0xb6, 0x6c, 0xc9, 0xfa, 0xf4],
+            "GPP 密钥前 10 字节不匹配微软公开密钥");
+        assert_eq!(&GPP_AES_KEY[10..],
+            &[0x93, 0x10, 0x62, 0x0f, 0xfe, 0xe8, 0xf4, 0x96, 0xe8, 0x06,
+              0xcc, 0x05, 0x79, 0x90, 0x20, 0x9b, 0x09, 0xa4, 0x33, 0xb6, 0x6c, 0x1b],
+            "GPP 密钥第 11 字节起不匹配微软公开密钥");
+    }
+
+    #[test]
+    fn test_gpp_decrypt_roundtrip() {
+        // 用正确的密钥和全零 IV 加密一个已知明文，然后验证 decrypt_cpassword 能解出
+        use aes::cipher::{BlockEncrypt, KeyInit};
+
+        let plaintext_utf16: Vec<u8> = "TestP@ss1"
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
+
+        // PKCS#7 填充到 16 的倍数
+        let mut padded = plaintext_utf16.clone();
+        let pad_len = 16 - (padded.len() % 16);
+        padded.extend(std::iter::repeat(pad_len as u8).take(pad_len));
+
+        // AES-256-CBC 加密，IV = 全零
+        let cipher = Aes256::new_from_slice(&GPP_AES_KEY).unwrap();
+        let iv = [0u8; 16];
+        let mut prev = iv;
+        let mut ciphertext = Vec::new();
+        for chunk in padded.chunks(16) {
+            let mut block = [0u8; 16];
+            block.copy_from_slice(chunk);
+            for i in 0..16 { block[i] ^= prev[i]; }
+            let mut enc = block;
+            cipher.encrypt_block((&mut enc).into());
+            ciphertext.extend_from_slice(&enc);
+            prev = enc;
+        }
+
+        // Base64 编码
+        use base64::Engine;
+        let cpassword = base64::engine::general_purpose::STANDARD.encode(&ciphertext);
+
+        // 解密验证
+        let result = decrypt_cpassword(&cpassword);
+        assert!(result.is_ok(), "解密失败: {:?}", result.err());
+        assert_eq!(result.unwrap(), "TestP@ss1");
+    }
+
+    #[test]
+    fn test_gpp_iv_is_all_zeros() {
+        // 验证 decrypt_cpassword 使用全零 IV：
+        // 用全零 IV 加密的密文，前 16 字节解密后应直接是明文首块（无额外 IV 前缀）
+        use aes::cipher::{BlockEncrypt, KeyInit};
+
+        // 单块明文（恰好 16 字节 UTF-16LE = 8 个字符）
+        let plaintext_utf16: Vec<u8> = "Abcd1234"
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
+        assert_eq!(plaintext_utf16.len(), 16);
+
+        // PKCS#7: 需要额外一整块填充
+        let mut padded = plaintext_utf16.clone();
+        padded.extend_from_slice(&[16u8; 16]);
+
+        let cipher = Aes256::new_from_slice(&GPP_AES_KEY).unwrap();
+        let iv = [0u8; 16];
+        let mut ciphertext = Vec::new();
+        let mut prev = iv;
+        for chunk in padded.chunks(16) {
+            let mut block = [0u8; 16];
+            block.copy_from_slice(chunk);
+            for i in 0..16 { block[i] ^= prev[i]; }
+            let mut enc = block;
+            cipher.encrypt_block((&mut enc).into());
+            ciphertext.extend_from_slice(&enc);
+            prev = enc;
+        }
+
+        use base64::Engine;
+        let cpassword = base64::engine::general_purpose::STANDARD.encode(&ciphertext);
+        let result = decrypt_cpassword(&cpassword);
+        assert!(result.is_ok(), "全零 IV 解密失败: {:?}", result.err());
+        assert_eq!(result.unwrap(), "Abcd1234");
     }
 }

@@ -6,7 +6,7 @@
 //! 密钥派生: HMAC-SHA256 萃取器 (与隧道加密一致)
 //! 加密: XChaCha20-Poly1305 AEAD
 
-use crate::core::error::{FlyWheelError, Result};
+use crate::core::error::{IntraSweepError, Result};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
@@ -113,13 +113,13 @@ impl Vault {
     /// 序列化为 JSON
     pub fn to_json(&self) -> Result<String> {
         serde_json::to_string_pretty(self)
-            .map_err(|e| FlyWheelError::Serialization(e))
+            .map_err(|e| IntraSweepError::Serialization(e))
     }
 
     /// 从 JSON 反序列化
     pub fn from_json(json: &str) -> Result<Self> {
         serde_json::from_str(json)
-            .map_err(|e| FlyWheelError::Serialization(e))
+            .map_err(|e| IntraSweepError::Serialization(e))
     }
 
     /// 加密并保存到文件
@@ -127,17 +127,17 @@ impl Vault {
         let json = self.to_json()?;
         let encrypted = encrypt_data(&json.into_bytes(), password)?;
         std::fs::write(path, &encrypted)
-            .map_err(|e| FlyWheelError::Io(e))?;
+            .map_err(|e| IntraSweepError::Io(e))?;
         Ok(())
     }
 
     /// 从加密文件加载
     pub fn load_encrypted(path: &std::path::Path, password: &str) -> Result<Self> {
         let encrypted = std::fs::read(path)
-            .map_err(|e| FlyWheelError::Io(e))?;
+            .map_err(|e| IntraSweepError::Io(e))?;
         let decrypted = decrypt_data(&encrypted, password)?;
         let json = String::from_utf8(decrypted)
-            .map_err(|e| FlyWheelError::Other {
+            .map_err(|e| IntraSweepError::Other {
                 message: format!("UTF-8 解码失败: {}", e),
             })?;
         Self::from_json(&json)
@@ -160,7 +160,7 @@ fn encrypt_data(data: &[u8], password: &str) -> Result<Vec<u8>> {
     let key = derive_vault_key(password, &salt);
     let crypto = crate::tunnel::crypto::CryptoLayer::new(&key);
     let frame = crypto.encrypt(data)
-        .map_err(|e| FlyWheelError::Other { message: format!("加密失败: {}", e) })?;
+        .map_err(|e| IntraSweepError::Other { message: format!("加密失败: {}", e) })?;
 
     // frame: [4B len][24B nonce][ciphertext+tag]
     // vault: magic(24) || salt(32) || frame
@@ -175,20 +175,20 @@ fn encrypt_data(data: &[u8], password: &str) -> Result<Vec<u8>> {
 /// 解密数据
 fn decrypt_data(encrypted: &[u8], password: &str) -> Result<Vec<u8>> {
     if encrypted.len() < 60 {
-        return Err(FlyWheelError::Other {
+        return Err(IntraSweepError::Other {
             message: "加密数据格式无效：数据太短".to_string(),
         });
     }
 
     let magic = &encrypted[..24];
     if !magic.starts_with(b"INTRASWEEP_VAULT_V1") {
-        return Err(FlyWheelError::Other {
+        return Err(IntraSweepError::Other {
             message: "加密数据格式无效：未知的头部标记".to_string(),
         });
     }
 
     let salt: [u8; 32] = encrypted[24..56].try_into()
-        .map_err(|_| FlyWheelError::Other { message: "数据格式错误".to_string() })?;
+        .map_err(|_| IntraSweepError::Other { message: "数据格式错误".to_string() })?;
     let frame = &encrypted[56..];
 
     let key = derive_vault_key(password, &salt);
@@ -196,11 +196,11 @@ fn decrypt_data(encrypted: &[u8], password: &str) -> Result<Vec<u8>> {
 
     // frame: [4B len][24B nonce][ciphertext+tag]
     if frame.len() < 4 {
-        return Err(FlyWheelError::Other { message: "加密数据损坏".to_string() });
+        return Err(IntraSweepError::Other { message: "加密数据损坏".to_string() });
     }
     let nonce_and_ct = &frame[4..];
     let plaintext = crypto.decrypt_frame(nonce_and_ct)
-        .map_err(|e| FlyWheelError::Other { message: format!("解密失败: {}", e) })?;
+        .map_err(|e| IntraSweepError::Other { message: format!("解密失败: {}", e) })?;
 
     Ok(plaintext)
 }

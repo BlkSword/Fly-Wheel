@@ -29,30 +29,14 @@ impl Cracker for MongodbCracker {
         let port = config.port;
 
         base::run_crack(config, CrackService::Mongodb, "MongoDB", move |_username, password, _, _, timeout| {
-            let connection_string = format!(
-                "mongodb://:{}@{}:{}/admin",
-                password, target, port
-            );
-
-            // 使用 tokio runtime 执行异步连接
+            let target = target.clone();
             let rt = match tokio::runtime::Runtime::new() {
                 Ok(rt) => rt,
                 Err(_) => return false,
             };
 
             rt.block_on(async {
-                match tokio::time::timeout(timeout, async {
-                    match ClientOptions::parse(&connection_string).await {
-                        Ok(opts) => {
-                            Client::with_options(opts).is_ok()
-                        }
-                        Err(_) => false,
-                    }
-                }).await
-                {
-                    Ok(success) => success,
-                    Err(_) => false,
-                }
+                Self::try_connect_async(&target, port, &password, timeout).await
             })
         }).await
     }
@@ -63,16 +47,32 @@ impl Cracker for MongodbCracker {
 }
 
 impl MongodbCracker {
+    /// 真正验证 MongoDB 连接：Client::with_options 是惰性的，必须执行 ping 才能确认认证结果
     async fn try_connect_async(target: &str, port: u16, password: &str, timeout: Duration) -> bool {
         let connection_string = format!(
-            "mongodb://:{}@{}:{}/admin",
-            password, target, port
+            "mongodb://:{}@{}:{}/admin?serverSelectionTimeoutMS={}&connectTimeoutMS={}",
+            password,
+            target,
+            port,
+            timeout.as_millis(),
+            timeout.as_millis()
         );
 
-        match tokio::time::timeout(timeout, async {
+        match tokio::time::timeout(timeout + Duration::from_secs(2), async {
             match ClientOptions::parse(&connection_string).await {
                 Ok(opts) => {
-                    Client::with_options(opts).is_ok()
+                    match Client::with_options(opts) {
+                        Ok(client) => {
+                            // 必须执行 ping 才能真正验证连接和认证
+                            use mongodb::bson::doc;
+                            client
+                                .database("admin")
+                                .run_command(doc! { "ping": 1 })
+                                .await
+                                .is_ok()
+                        }
+                        Err(_) => false,
+                    }
                 }
                 Err(_) => false,
             }

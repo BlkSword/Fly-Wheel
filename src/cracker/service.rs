@@ -1,7 +1,5 @@
 //! 服务定义和通用接口
 
-#![allow(dead_code)]
-
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

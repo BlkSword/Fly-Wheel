@@ -94,13 +94,18 @@ pub async fn run_crack(
 
             let username = attempt.username.clone();
             let password = attempt.password.clone();
-            let result = try_connect_owned(
-                username.clone(),
-                password.clone(),
-                target.clone(),
-                port,
-                timeout,
-            );
+            let target_clone = target.clone();
+            let try_connect_blocking = try_connect_owned.clone();
+            let username_for_log = username.clone();
+            let result = tokio::task::spawn_blocking(move || {
+                try_connect_blocking(
+                    username,
+                    password,
+                    target_clone,
+                    port,
+                    timeout,
+                )
+            }).await.unwrap_or(false);
 
             // 延迟
             if let Some(delay_ms) = delay {
@@ -111,7 +116,7 @@ pub async fn run_crack(
                 tracing::info!(
                     "找到有效凭据 - {}: {}@{}:{}",
                     service.name(),
-                    username.as_deref().unwrap_or("-"),
+                    username_for_log.as_deref().unwrap_or("-"),
                     target, port
                 );
                 found.store(true, Ordering::Relaxed);

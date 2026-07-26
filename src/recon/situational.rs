@@ -61,12 +61,14 @@ fn get_os_info() -> String {
 
 fn get_os_version() -> String {
     if cfg!(windows) {
-        // 使用ver命令获取版本
-        if let Ok(output) = std::process::Command::new("ver").output() {
-            String::from_utf8_lossy(&output.stdout).trim().to_string()
-        } else {
-            "未知".to_string()
+        // ver是cmd.exe内置命令，必须通过cmd /c调用
+        if let Ok(output) = std::process::Command::new("cmd").args(["/c", "ver"]).output() {
+            let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if !ver.is_empty() {
+                return ver;
+            }
         }
+        "未知".to_string()
     } else {
         whoami::distro()
     }
@@ -471,9 +473,14 @@ fn list_installed_patches() -> Vec<String> {
     patches
 }
 
-/// 检查缺失的关键补丁
+/// 检查缺失的关键补丁（仅Windows平台）
 fn check_missing_patches(installed: &[String]) -> Vec<PotentialVuln> {
     let mut vulns = Vec::new();
+
+    // KB补丁检查仅适用于Windows
+    if !cfg!(windows) {
+        return vulns;
+    }
 
     // 关键漏洞与对应KB号
     let critical_patches = [
@@ -522,6 +529,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn test_check_missing_patches() {
         let installed = vec!["KB4012212".to_string()];
         let vulns = check_missing_patches(&installed);

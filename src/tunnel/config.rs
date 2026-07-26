@@ -132,30 +132,30 @@ impl TunnelConfig {
     }
 
     /// 验证配置
-    pub fn validate(&self) -> Result<(), super::super::core::error::FlyWheelError> {
+    pub fn validate(&self) -> Result<(), super::super::core::error::IntraSweepError> {
         match self.tunnel_type {
             TunnelType::Forward => {
                 if self.remote_target.is_none() {
-                    return Err(crate::core::error::FlyWheelError::Config {
+                    return Err(crate::core::error::IntraSweepError::Config {
                         message: "正向隧道需要指定远程目标 (-t/--target)".to_string(),
                     });
                 }
             }
             TunnelType::Reverse => {
                 if self.remote_target.is_none() {
-                    return Err(crate::core::error::FlyWheelError::Config {
+                    return Err(crate::core::error::IntraSweepError::Config {
                         message: "反向隧道需要指定控制端地址 (-t/--target)".to_string(),
                     });
                 }
             }
             TunnelType::Chain => {
                 if self.hops.is_empty() {
-                    return Err(crate::core::error::FlyWheelError::Config {
+                    return Err(crate::core::error::IntraSweepError::Config {
                         message: "链式隧道需要至少一个跳板 (-H/--hop)".to_string(),
                     });
                 }
                 if self.remote_target.is_none() {
-                    return Err(crate::core::error::FlyWheelError::Config {
+                    return Err(crate::core::error::IntraSweepError::Config {
                         message: "链式隧道需要指定最终目标 (-t/--target)".to_string(),
                     });
                 }

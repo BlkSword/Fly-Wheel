@@ -336,9 +336,20 @@ fn scan_local_sensitive_paths() -> Result<Vec<ShareFinding>, String> {
     ];
 
     for dir in &sensitive_dirs {
-        let path = std::path::Path::new(dir);
-        if path.exists() {
-            let _ = scan_share_recursive(dir, 2, &mut findings);
+        if dir.contains('*') {
+            // 通配符路径需要用glob展开，Path::exists无法匹配字面量'*'
+            if let Ok(paths) = glob::glob(dir) {
+                for entry in paths.flatten() {
+                    if entry.is_dir() {
+                        let _ = scan_share_recursive(&entry.to_string_lossy(), 2, &mut findings);
+                    }
+                }
+            }
+        } else {
+            let path = std::path::Path::new(dir);
+            if path.exists() {
+                let _ = scan_share_recursive(dir, 2, &mut findings);
+            }
         }
     }
 

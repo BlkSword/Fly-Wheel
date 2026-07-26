@@ -34,6 +34,9 @@ pub fn run_checks() -> PrivescResult {
     // 补丁
     findings.extend(check_patches());
 
+    // DLL 劫持
+    findings.extend(check_dll_hijacking());
+
     let stats = compute_stats(&findings);
 
     PrivescResult {
@@ -69,7 +72,7 @@ pub fn run_category(category: &str) -> Vec<PrivescFinding> {
         "tokens" => check_token_privileges(),
         "files" => check_sensitive_files(),
         "patches" => check_patches(),
-        "dll" => Vec::new(), // TODO: DLL 劫持检查
+        "dll" => check_dll_hijacking(),
         _ => Vec::new(),
     }
 }
@@ -102,35 +105,70 @@ fn run_cmd(cmd: &str, args: &[&str]) -> Option<String> {
     })
 }
 
+/// 通过 PowerShell 执行命令（替代已弃用的 wmic）
+fn run_powershell(command: &str) -> Option<String> {
+    run_cmd("powershell", &["-NoProfile", "-NonInteractive", "-Command", command])
+}
+
+/// 解析 CSV 行（处理引号内的逗号和转义引号）
+fn parse_csv_line(line: &str) -> Vec<String> {
+    let mut fields = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut chars = line.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        match c {
+            '"' if in_quotes => {
+                if chars.peek() == Some(&'"') {
+                    current.push('"');
+                    chars.next();
+                } else {
+                    in_quotes = false;
+                }
+            }
+            '"' => in_quotes = true,
+            ',' if !in_quotes => {
+                fields.push(std::mem::take(&mut current));
+            }
+            _ => current.push(c),
+        }
+    }
+    fields.push(current);
+    fields
+}
+
 // ============================================================
 // 服务相关检查
 // ============================================================
 
 fn check_unquoted_service_paths() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
-    let Some(output) = run_cmd("wmic", &["service", "get", "name,pathname,startmode"]) else {
+    let Some(output) = run_powershell(
+        "Get-CimInstance Win32_Service | Select-Object Name,PathName,StartMode | ConvertTo-Csv -NoTypeInformation",
+    ) else {
         return findings;
     };
 
-    for line in output.lines() {
+    for line in output.lines().skip(1) {
         let line = line.trim();
-        if line.is_empty() || line.contains("DisplayName") || line.contains("PathName") {
+        if line.is_empty() {
             continue;
         }
 
-        let parts: Vec<&str> = line.splitn(3, char::is_whitespace).collect();
-        if parts.len() < 2 {
+        let fields = parse_csv_line(line);
+        if fields.len() < 2 {
             continue;
         }
 
-        let path = parts[1..].join(" ").trim().to_string();
+        let service_name = fields[0].trim().to_string();
+        let path = fields[1].trim().to_string();
         if path.is_empty() || !path.contains(' ') || !path.contains(':') {
             continue;
         }
 
         // 检查是否未加引号且路径含空格
         if !path.starts_with('"') && path.contains(' ') {
-            let service_name = parts[0].to_string();
             findings.push(PrivescFinding {
                 category: "服务".to_string(),
                 severity: PrivescSeverity::High,
@@ -200,20 +238,33 @@ fn check_weak_service_permissions() -> Vec<PrivescFinding> {
 
 fn check_writable_service_binaries() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
-    let Some(output) = run_cmd("wmic", &["service", "get", "name,pathname"]) else {
+    let Some(output) = run_powershell(
+        "Get-CimInstance Win32_Service | Select-Object Name,PathName | ConvertTo-Csv -NoTypeInformation",
+    ) else {
         return findings;
     };
 
-    for line in output.lines() {
+    for line in output.lines().skip(1) {
         let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with("Name") {
+        if trimmed.is_empty() {
             continue;
         }
 
-        let path = if trimmed.contains('"') {
-            trimmed.split('"').nth(1).unwrap_or("").to_string()
+        let fields = parse_csv_line(trimmed);
+        if fields.len() < 2 {
+            continue;
+        }
+
+        let raw_path = fields[1].trim().to_string();
+        if raw_path.is_empty() || !raw_path.contains(':') {
+            continue;
+        }
+
+        // 提取可执行文件路径（去除可能的参数和引号）
+        let path = if raw_path.starts_with('"') {
+            raw_path.split('"').nth(1).unwrap_or("").to_string()
         } else {
-            trimmed.split_whitespace().next().unwrap_or("").to_string()
+            raw_path.split_whitespace().next().unwrap_or("").to_string()
         };
 
         if path.is_empty() || !path.contains(':') {
@@ -430,7 +481,9 @@ fn check_sensitive_files() -> Vec<PrivescFinding> {
 fn check_patches() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
 
-    if let Some(output) = run_cmd("wmic", &["qfe", "list", "brief"]) {
+    if let Some(output) = run_powershell(
+        "Get-CimInstance Win32_QuickFixEngineering | Select-Object HotFixID,InstalledOn | ConvertTo-Csv -NoTypeInformation",
+    ) {
         // 检查已知高危漏洞对应的补丁
         let critical_patches = [
             ("KB4534271", "CVE-2020-0796 (SMBv3压缩RCE)"),
@@ -449,6 +502,229 @@ fn check_patches() -> Vec<PrivescFinding> {
                     detail: format!("建议安装 {} 以修复安全漏洞", kb),
                     remediation: format!("安装 Windows Update 补丁 {}", kb),
                 });
+            }
+        }
+    }
+
+    findings
+}
+
+// ============================================================
+// DLL 劫持检查
+// ============================================================
+
+/// 检查目录是否可写（通过尝试创建临时文件）
+fn is_dir_writable(dir: &str) -> bool {
+    let test_file = std::path::Path::new(dir).join(format!(".intrasweep_probe_{}", std::process::id()));
+    if std::fs::write(&test_file, b"probe").is_ok() {
+        let _ = std::fs::remove_file(&test_file);
+        true
+    } else {
+        false
+    }
+}
+
+/// 获取所有服务的 (Name, PathName) 列表
+fn get_service_paths() -> Vec<(String, String)> {
+    let Some(output) = run_powershell(
+        "Get-CimInstance Win32_Service | Select-Object Name,PathName | ConvertTo-Csv -NoTypeInformation",
+    ) else {
+        return Vec::new();
+    };
+
+    let mut services = Vec::new();
+    for line in output.lines().skip(1) {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let fields = parse_csv_line(line);
+        if fields.len() >= 2 {
+            let name = fields[0].trim().to_string();
+            let path = fields[1].trim().to_string();
+            if !name.is_empty() && !path.is_empty() {
+                services.push((name, path));
+            }
+        }
+    }
+    services
+}
+
+/// 从服务 PathName 中提取可执行文件路径
+fn extract_exe_path(raw_path: &str) -> String {
+    let p = raw_path.trim();
+    if p.starts_with('"') {
+        p.split('"').nth(1).unwrap_or("").to_string()
+    } else {
+        // 无引号时取第一个空格前的部分（可能是 exe 路径）
+        // 但如果路径含空格且无引号，取到 .exe 为止
+        if let Some(idx) = p.to_lowercase().find(".exe") {
+            p[..idx + 4].to_string()
+        } else {
+            p.split_whitespace().next().unwrap_or("").to_string()
+        }
+    }
+}
+
+/// DLL 劫持综合检查
+fn check_dll_hijacking() -> Vec<PrivescFinding> {
+    let mut findings = Vec::new();
+    findings.extend(check_dll_unquoted_service_paths());
+    findings.extend(check_writable_path_dirs());
+    findings.extend(check_missing_service_dlls());
+    findings
+}
+
+/// 检查服务未引用路径（DLL 劫持视角）
+fn check_dll_unquoted_service_paths() -> Vec<PrivescFinding> {
+    let mut findings = Vec::new();
+
+    for (name, raw_path) in get_service_paths() {
+        let path = extract_exe_path(&raw_path);
+        if path.is_empty() || !path.contains(':') {
+            continue;
+        }
+
+        // 未加引号且路径含空格 → DLL 搜索路径可能被劫持
+        if !raw_path.starts_with('"') && path.contains(' ') {
+            // 检查路径中的目录是否存在且可写
+            if let Some(parent) = std::path::Path::new(&path).parent() {
+                if let Some(dir_str) = parent.to_str() {
+                    if is_dir_writable(dir_str) {
+                        findings.push(PrivescFinding {
+                            category: "DLL 劫持".to_string(),
+                            severity: PrivescSeverity::High,
+                            title: "服务未引用路径可被 DLL 劫持".to_string(),
+                            description: format!(
+                                "服务 '{}' 的路径含空格且未加引号，其目录可写，攻击者可放置恶意 DLL",
+                                name
+                            ),
+                            detail: format!("路径: {}\n目录: {}", raw_path, dir_str),
+                            remediation: "为服务路径添加引号，并限制目录写入权限".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    findings
+}
+
+/// 检查 %PATH% 中可写的目录
+fn check_writable_path_dirs() -> Vec<PrivescFinding> {
+    let mut findings = Vec::new();
+
+    let Ok(path_var) = std::env::var("PATH") else {
+        return findings;
+    };
+
+    for dir in path_var.split(';') {
+        let dir = dir.trim();
+        if dir.is_empty() {
+            continue;
+        }
+
+        let Ok(metadata) = std::fs::metadata(dir) else {
+            continue;
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+
+        // 跳过系统保护目录
+        let lower = dir.to_lowercase();
+        if lower.starts_with("c:\\windows\\")
+            || lower.starts_with("c:\\program files\\")
+            || lower.starts_with("c:\\program files (x86)\\")
+        {
+            continue;
+        }
+
+        if is_dir_writable(dir) {
+            findings.push(PrivescFinding {
+                category: "DLL 劫持".to_string(),
+                severity: PrivescSeverity::High,
+                title: "PATH 中存在可写目录".to_string(),
+                description: format!(
+                    "目录 '{}' 在系统 PATH 中且当前用户可写，攻击者可放置恶意 DLL 被其他程序加载",
+                    dir
+                ),
+                detail: format!("可写 PATH 目录: {}", dir),
+                remediation: "移除 PATH 中不必要的目录，或限制目录写入权限".to_string(),
+            });
+        }
+    }
+
+    findings
+}
+
+/// 检查服务目录中缺失或可写的 DLL
+fn check_missing_service_dlls() -> Vec<PrivescFinding> {
+    let mut findings = Vec::new();
+
+    // 常见可被劫持的 DLL 名称
+    let common_dlls = [
+        "version.dll", "winmm.dll", "dwmapi.dll", "wbemcomn.dll",
+        "profapi.dll", "cryptbase.dll", "amsi.dll", "uxtheme.dll",
+        "dxva2.dll", "msftedit.dll", "propsys.dll", "secur32.dll",
+    ];
+
+    for (name, raw_path) in get_service_paths() {
+        let exe_path = extract_exe_path(&raw_path);
+        if exe_path.is_empty() || !exe_path.contains(':') {
+            continue;
+        }
+
+        let Some(parent) = std::path::Path::new(&exe_path).parent() else {
+            continue;
+        };
+        let Some(dir_str) = parent.to_str() else {
+            continue;
+        };
+
+        // 跳过系统目录（系统 DLL 受 SFP 保护）
+        let lower_dir = dir_str.to_lowercase();
+        if lower_dir.starts_with("c:\\windows\\system32")
+            || lower_dir.starts_with("c:\\windows\\syswow64")
+        {
+            continue;
+        }
+
+        for dll_name in &common_dlls {
+            let dll_path = parent.join(dll_name);
+            if dll_path.exists() {
+                // DLL 存在 — 检查是否可写
+                if let Ok(metadata) = std::fs::metadata(&dll_path) {
+                    if !metadata.permissions().readonly() {
+                        findings.push(PrivescFinding {
+                            category: "DLL 劫持".to_string(),
+                            severity: PrivescSeverity::High,
+                            title: "服务目录中 DLL 可写".to_string(),
+                            description: format!(
+                                "服务 '{}' 目录中的 {} 文件可写，可被替换为恶意 DLL",
+                                name, dll_name
+                            ),
+                            detail: format!("DLL 路径: {}", dll_path.display()),
+                            remediation: "限制 DLL 文件权限，确保只有管理员可写".to_string(),
+                        });
+                    }
+                }
+            } else {
+                // DLL 不存在 — 如果目录可写，攻击者可放置恶意 DLL
+                if is_dir_writable(dir_str) {
+                    findings.push(PrivescFinding {
+                        category: "DLL 劫持".to_string(),
+                        severity: PrivescSeverity::Medium,
+                        title: "服务目录缺少常见 DLL".to_string(),
+                        description: format!(
+                            "服务 '{}' 目录中不存在 {}，若服务加载该 DLL 则可被劫持",
+                            name, dll_name
+                        ),
+                        detail: format!("目录: {}\n缺失 DLL: {}", dir_str, dll_name),
+                        remediation: "确认服务是否加载该 DLL，限制目录写入权限".to_string(),
+                    });
+                }
             }
         }
     }

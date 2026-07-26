@@ -2,8 +2,6 @@
 //!
 //! 提供高性能的主机扫描、端口扫描和域环境扫描功能
 
-#![allow(dead_code)]
-
 pub mod config;
 pub mod domain;
 pub mod host;
@@ -64,7 +62,8 @@ impl Scanner {
         let host_scanner = HostScanner::new(self.config.clone());
 
         // 解析目标为IP地址
-        let ip_targets = self.parse_targets(targets);
+        let ip_targets = self.parse_targets(targets.clone());
+        let total_targets = ip_targets.len();
 
         // 执行扫描
         let hosts = host_scanner.discover_hosts(ip_targets).await;
@@ -75,13 +74,13 @@ impl Scanner {
 
         ScanResult {
             scan_type: ScanType::HostDiscovery,
-            targets: vec![],
+            targets,
             start_time,
             end_time,
             duration_secs: duration,
             hosts,
             stats: ScanStats {
-                total_targets: 0,
+                total_targets,
                 alive_hosts: alive_count,
                 total_open_ports: 0,
                 services_found: 0,
@@ -101,7 +100,8 @@ impl Scanner {
         }
 
         // 解析目标为IP地址
-        let ip_targets = self.parse_targets(targets);
+        let ip_targets = self.parse_targets(targets.clone());
+        let total_targets = ip_targets.len();
         let ports = self.config.get_ports_to_scan();
 
         // 执行扫描
@@ -114,13 +114,13 @@ impl Scanner {
 
         ScanResult {
             scan_type: ScanType::PortScan,
-            targets: vec![],
+            targets,
             start_time,
             end_time,
             duration_secs: duration,
             hosts,
             stats: ScanStats {
-                total_targets: 0,
+                total_targets,
                 alive_hosts: alive_hosts_count,
                 total_open_ports: open_ports_count,
                 services_found: 0,
@@ -162,16 +162,17 @@ impl Scanner {
 
         let open_ports_count: usize = hosts.iter().map(|h| h.open_ports.len()).sum();
         let alive_hosts_count = hosts.len();
+        let total_targets = targets.len();
 
         ScanResult {
             scan_type: ScanType::Comprehensive,
-            targets: vec![],
+            targets,
             start_time,
             end_time,
             duration_secs: duration,
             hosts,
             stats: ScanStats {
-                total_targets: 0,
+                total_targets,
                 alive_hosts: alive_hosts_count,
                 total_open_ports: open_ports_count,
                 services_found: 0,
@@ -189,7 +190,7 @@ impl Scanner {
     /// 解析目标列表为IP地址
     fn parse_targets(&self, targets: Vec<String>) -> Vec<std::net::IpAddr> {
         use ipnet::Ipv4Net;
-        use std::net::IpAddr;
+        use std::net::{IpAddr, ToSocketAddrs};
 
         let mut ips = Vec::new();
 
@@ -228,7 +229,12 @@ impl Scanner {
                 }
             }
 
-            // DNS解析（暂略）
+            // DNS解析域名
+            if let Ok(addrs) = (target.as_str(), 0u16).to_socket_addrs() {
+                for addr in addrs {
+                    ips.push(addr.ip());
+                }
+            }
         }
 
         ips

@@ -2,7 +2,7 @@
 //!
 //! 实现从内网主机建立反向连接到控制端
 
-use crate::core::error::{FlyWheelError, Result};
+use crate::core::error::{IntraSweepError, Result};
 use crate::tunnel::config::TunnelConfig;
 use crate::tunnel::models::{ConnectionInfo, TunnelEvent, TunnelEventHandler, TunnelStatus};
 use crate::tunnel::shutdown::Shutdown;
@@ -39,7 +39,7 @@ impl ReverseTunnel {
         self.config.validate()?;
 
         let control_addr = self.config.remote_target.clone()
-            .ok_or_else(|| FlyWheelError::Config {
+            .ok_or_else(|| IntraSweepError::Config {
                 message: "反向隧道需要指定控制端地址".to_string(),
             })?;
 
@@ -89,15 +89,15 @@ impl ReverseTunnel {
             timeout_dur,
             TcpStream::connect(control_addr)
         ).await
-        .map_err(|_| FlyWheelError::Timeout {
+        .map_err(|_| IntraSweepError::Timeout {
             operation: format!("连接超时: {}", control_addr),
         })?
-        .map_err(|e| FlyWheelError::Network {
+        .map_err(|e| IntraSweepError::Network {
             message: format!("无法连接到 {}: {}", control_addr, e),
         })?;
 
         let local_addr = control_stream.local_addr()
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("获取本地地址失败: {}", e),
             })?;
 
@@ -151,10 +151,10 @@ impl ReverseTunnel {
                 Duration::from_secs(60),
                 control_stream.read(&mut buf)
             ).await
-            .map_err(|_| FlyWheelError::Timeout {
+            .map_err(|_| IntraSweepError::Timeout {
                 operation: "读取控制端指令超时".to_string(),
             })?
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("读取控制端指令失败: {}", e),
             })?;
 
@@ -210,13 +210,13 @@ impl ReverseTunnel {
         let local_target = format!("127.0.0.1:{}", port);
 
         let mut local_stream = TcpStream::connect(&local_target).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("连接本地 {} 失败: {}", local_target, e),
             })?;
 
         // 发送数据
         local_stream.write_all(data).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("写入本地端口失败: {}", e),
             })?;
 
@@ -227,10 +227,10 @@ impl ReverseTunnel {
                 Duration::from_secs(30),
                 local_stream.read(&mut response_buf)
             ).await
-            .map_err(|_| FlyWheelError::Timeout {
+            .map_err(|_| IntraSweepError::Timeout {
                 operation: "读取本地端口响应超时".to_string(),
             })?
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("读取本地端口响应失败: {}", e),
             })?;
 
@@ -244,7 +244,7 @@ impl ReverseTunnel {
             packet[1..].copy_from_slice(&response_buf[..n]);
 
             control_stream.write_all(&packet).await
-                .map_err(|e| FlyWheelError::Network {
+                .map_err(|e| IntraSweepError::Network {
                     message: format!("发送响应到控制端失败: {}", e),
                 })?;
         }
@@ -258,7 +258,7 @@ impl ReverseTunnel {
         use tokio::net::TcpListener;
 
         let listener = TcpListener::bind(&self.config.local_addr).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
 
@@ -338,7 +338,7 @@ impl ReverseTunnel {
         self.config.validate()?;
 
         let control_addr = self.config.remote_target.clone()
-            .ok_or_else(|| FlyWheelError::Config {
+            .ok_or_else(|| IntraSweepError::Config {
                 message: "反向隧道需要指定控制端地址".to_string(),
             })?;
 

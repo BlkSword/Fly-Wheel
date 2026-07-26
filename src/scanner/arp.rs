@@ -2,8 +2,6 @@
 //!
 //! 使用 Windows SendARP API 进行局域网主机发现
 
-#![allow(dead_code)]
-
 #[cfg(windows)]
 use std::net::{IpAddr, Ipv4Addr};
 

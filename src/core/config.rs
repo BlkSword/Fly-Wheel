@@ -61,13 +61,13 @@ pub struct TunnelProfile {
 /// 从 YAML 文件加载配置
 pub fn load_config(path: &Path) -> crate::core::Result<AppConfig> {
     let content = std::fs::read_to_string(path).map_err(|e| {
-        crate::core::error::FlyWheelError::Config {
+        crate::core::error::IntraSweepError::Config {
             message: format!("读取配置文件 {} 失败: {}", path.display(), e),
         }
     })?;
 
     let config: AppConfig = serde_yaml::from_str(&content).map_err(|e| {
-        crate::core::error::FlyWheelError::Config {
+        crate::core::error::IntraSweepError::Config {
             message: format!("解析配置文件失败: {}", e),
         }
     })?;

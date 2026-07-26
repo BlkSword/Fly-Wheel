@@ -3,7 +3,7 @@
 //! 处理密码爆破子命令的交互式配置向导和直接模式
 
 use crate::cli::{colorize, print_banner, InteractiveMenu};
-use crate::core::error::FlyWheelError;
+use crate::core::error::IntraSweepError;
 use crate::core::Result;
 use crate::cracker::service::Cracker;
 use crate::cracker::{CrackConfig, CrackService, DictManager};
@@ -93,7 +93,7 @@ fn run_spray(
     if let Some(uf) = username_file {
         if let Err(e) = dict.load_usernames_from_file(&uf) {
             print_error(&format!("加载用户名字典失败: {}", e));
-            return Err(FlyWheelError::Other {
+            return Err(IntraSweepError::Other {
                 message: "加载用户名字典失败".to_string(),
             });
         }
@@ -538,7 +538,7 @@ fn run_crack(
                 }
                 Err(e) => {
                     print_error(&format!("加载用户名字典失败: {}", e));
-                    return Err(FlyWheelError::Other {
+                    return Err(IntraSweepError::Other {
                         message: "加载用户名字典失败".to_string(),
                     });
                 }
@@ -565,7 +565,7 @@ fn run_crack(
             }
             Err(e) => {
                 print_error(&format!("加载密码字典失败: {}", e));
-                return Err(FlyWheelError::Other {
+                return Err(IntraSweepError::Other {
                     message: "加载密码字典失败".to_string(),
                 });
             }

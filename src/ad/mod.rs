@@ -64,6 +64,7 @@ pub struct AdGroup {
     pub description: Option<String>,
     pub members: Vec<String>,
     pub admin_count: bool,
+    pub sid: Option<String>,
 }
 
 /// AD 计算机
@@ -76,6 +77,7 @@ pub struct AdComputer {
     pub os_version: Option<String>,
     pub enabled: bool,
     pub last_logon: Option<String>,
+    pub sid: Option<String>,
 }
 
 /// Kerberoasting 目标
@@ -158,6 +160,7 @@ mod tests {
             description: Some("测试组".to_string()),
             members: vec!["CN=Administrator,CN=Users,DC=corp,DC=local".to_string()],
             admin_count: name.contains("Admin"),
+            sid: None,
         }
     }
 
@@ -170,6 +173,7 @@ mod tests {
             os_version: Some("10.0 (20348)".to_string()),
             enabled: true,
             last_logon: Some("2024-01-01T00:00:00Z".to_string()),
+            sid: None,
         }
     }
 

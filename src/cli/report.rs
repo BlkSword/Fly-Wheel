@@ -196,6 +196,157 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
                 }
             }
 
+            // ==================== 扫描结果聚合 ====================
+            if let Some(hosts) = obj.get("hosts").and_then(|v| v.as_array()) {
+                let alive: Vec<_> = hosts.iter()
+                    .filter(|h| h.get("is_alive").and_then(|a| a.as_bool()).unwrap_or(false))
+                    .collect();
+
+                if !alive.is_empty() {
+                    report.timeline.push(crate::output::report::TimelineEntry {
+                        timestamp: chrono::Utc::now().format("%H:%M").to_string(),
+                        event: format!("主机发现: {} 台存活（共 {} 台目标）", alive.len(), hosts.len()),
+                        phase: "侦察".to_string(),
+                        host: None,
+                    });
+                }
+
+                // 提取开放端口和服务
+                for host in &alive {
+                    let ip = host.get("ip").and_then(|i| i.as_str()).unwrap_or("unknown");
+                    if let Some(ports) = host.get("open_ports").and_then(|p| p.as_array()) {
+                        for port_info in ports {
+                            let port = port_info.get("port").and_then(|p| p.as_u64()).unwrap_or(0);
+                            let service = port_info.get("service").and_then(|s| s.as_str()).unwrap_or("");
+                            if !service.is_empty() {
+                                report.timeline.push(crate::output::report::TimelineEntry {
+                                    timestamp: chrono::Utc::now().format("%H:%M").to_string(),
+                                    event: format!("发现服务 {}:{}/{}", ip, port, service),
+                                    phase: "服务探测".to_string(),
+                                    host: Some(ip.to_string()),
+                                });
+                            }
+                        }
+                    }
+                }
+
+                // 扫描统计
+                if let Some(scan_stats) = obj.get("stats") {
+                    if let Some(total_targets) = scan_stats.get("total_targets").and_then(|t| t.as_u64()) {
+                        report.steps.push(crate::output::report::ReportStep {
+                            step_number: report.steps.len() + 1,
+                            phase: "侦察".to_string(),
+                            title: "网络扫描".to_string(),
+                            description: format!("扫描 {} 个目标，发现 {} 台存活主机", total_targets, alive.len()),
+                            source_host: "攻击机".to_string(),
+                            target_host: None,
+                            technique: "T1046 - Network Service Discovery".to_string(),
+                            mitre_id: Some("T1046".to_string()),
+                            success: !alive.is_empty(),
+                            evidence: Some(format!("{} 台存活主机", alive.len())),
+                        });
+                    }
+                }
+            }
+
+            // ==================== 爆破结果聚合 ====================
+            if let Some(crack_success) = obj.get("is_success").and_then(|s| s.as_bool()) {
+                if crack_success {
+                    let target = obj.get("target").and_then(|t| t.as_str()).unwrap_or("unknown");
+                    let port = obj.get("port").and_then(|p| p.as_u64()).unwrap_or(0);
+                    let service = obj.get("service").and_then(|s| s.as_str()).unwrap_or("");
+                    let username = obj.get("username").and_then(|u| u.as_str()).unwrap_or("");
+
+                    report.findings.push(crate::output::report::ReportFinding {
+                        id: format!("F-CRACK-{}", target),
+                        title: format!("弱口令: {}:{} ({})", target, port, service),
+                        description: format!("服务 {}:{} 存在弱口令，用户名: {}", target, port, username),
+                        severity: crate::output::report::FindingSeverity::Critical,
+                        affected_hosts: vec![target.to_string()],
+                        recommendation: "立即修改弱口令，启用账户锁定策略，限制远程访问".to_string(),
+                        cvss_score: Some(9.8),
+                    });
+                    report.stolen_credentials += 1;
+                    report.risk_score += 25;
+                }
+            }
+
+            // 多组爆破结果（数组格式）
+            if let Some(results) = obj.get("crack_results").and_then(|v| v.as_array()) {
+                for res in results {
+                    if res.get("is_success").and_then(|s| s.as_bool()).unwrap_or(false) {
+                        let target = res.get("target").and_then(|t| t.as_str()).unwrap_or("unknown");
+                        report.stolen_credentials += 1;
+                        report.findings.push(crate::output::report::ReportFinding {
+                            id: format!("F-CRACK-{}", target),
+                            title: format!("弱口令: {}", target),
+                            description: "发现有效凭据".to_string(),
+                            severity: crate::output::report::FindingSeverity::Critical,
+                            affected_hosts: vec![target.to_string()],
+                            recommendation: "修改密码并审查账户活动".to_string(),
+                            cvss_score: Some(9.8),
+                        });
+                    }
+                }
+            }
+
+            // ==================== 提权检测结果聚合 ====================
+            if let Some(findings) = obj.get("findings").and_then(|v| v.as_array()) {
+                for finding in findings {
+                    let title = finding.get("title").and_then(|t| t.as_str()).unwrap_or("未知提权风险");
+                    let category = finding.get("category").and_then(|c| c.as_str()).unwrap_or("");
+                    let severity_str = finding.get("severity").and_then(|s| s.as_str()).unwrap_or("medium");
+                    let description = finding.get("description").and_then(|d| d.as_str()).unwrap_or("");
+                    let remediation = finding.get("remediation").and_then(|r| r.as_str()).unwrap_or("");
+
+                    let severity = match severity_str {
+                        "critical" => crate::output::report::FindingSeverity::Critical,
+                        "high" => crate::output::report::FindingSeverity::High,
+                        "medium" => crate::output::report::FindingSeverity::Medium,
+                        "low" => crate::output::report::FindingSeverity::Low,
+                        _ => crate::output::report::FindingSeverity::Info,
+                    };
+
+                    report.findings.push(crate::output::report::ReportFinding {
+                        id: format!("F-PRIVESC-{}", category),
+                        title: format!("[提权] {}", title),
+                        description: description.to_string(),
+                        severity,
+                        affected_hosts: vec![obj.get("hostname").and_then(|h| h.as_str()).unwrap_or("localhost").to_string()],
+                        recommendation: remediation.to_string(),
+                        cvss_score: None,
+                    });
+                }
+            }
+
+            // ==================== 漏洞扫描结果聚合 ====================
+            if let Some(vuln_findings) = obj.get("vuln_findings").or_else(|| obj.get("vulnerabilities")).and_then(|v| v.as_array()) {
+                for vf in vuln_findings {
+                    let vuln_id = vf.get("vuln_id").and_then(|v| v.as_str()).unwrap_or("unknown");
+                    let vuln_name = vf.get("vuln_name").and_then(|v| v.as_str()).unwrap_or("未知漏洞");
+                    let target = vf.get("target").and_then(|t| t.as_str()).unwrap_or("unknown");
+                    let sev = vf.get("severity").and_then(|s| s.as_str()).unwrap_or("medium");
+
+                    let severity = match sev {
+                        "critical" => crate::output::report::FindingSeverity::Critical,
+                        "high" => crate::output::report::FindingSeverity::High,
+                        "medium" => crate::output::report::FindingSeverity::Medium,
+                        "low" => crate::output::report::FindingSeverity::Low,
+                        _ => crate::output::report::FindingSeverity::Info,
+                    };
+
+                    report.findings.push(crate::output::report::ReportFinding {
+                        id: format!("F-VULN-{}", vuln_id),
+                        title: format!("[漏洞] {}", vuln_name),
+                        description: vf.get("description").and_then(|d| d.as_str()).unwrap_or("").to_string(),
+                        severity,
+                        affected_hosts: vec![target.to_string()],
+                        recommendation: vf.get("remediation").and_then(|r| r.as_str()).unwrap_or("修复漏洞").to_string(),
+                        cvss_score: None,
+                    });
+                }
+            }
+
             // 计算风险评分
             let critical: usize = report.findings.iter().filter(|f| f.severity == crate::output::report::FindingSeverity::Critical).count();
             let high: usize = report.findings.iter().filter(|f| f.severity == crate::output::report::FindingSeverity::High).count();

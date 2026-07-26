@@ -102,17 +102,17 @@ impl SprayConfig {
     /// 验证配置
     pub fn validate(&self) -> Result<()> {
         if self.target.is_empty() {
-            return Err(crate::core::error::FlyWheelError::Config {
+            return Err(crate::core::error::IntraSweepError::Config {
                 message: "喷射目标不能为空".to_string(),
             });
         }
         if self.usernames.is_empty() {
-            return Err(crate::core::error::FlyWheelError::Config {
+            return Err(crate::core::error::IntraSweepError::Config {
                 message: "用户名列表不能为空".to_string(),
             });
         }
         if self.passwords.is_empty() {
-            return Err(crate::core::error::FlyWheelError::Config {
+            return Err(crate::core::error::IntraSweepError::Config {
                 message: "密码列表不能为空".to_string(),
             });
         }
@@ -188,9 +188,9 @@ impl SprayEngine {
             }
 
             tracing::info!(
-                "[Spray] 第 {} 轮: 尝试密码 '{}' 对 {} 个用户名",
+                "[Spray] 第 {} 轮: 尝试密码 '{}***' 对 {} 个用户名",
                 round + 1,
-                password,
+                password.chars().next().unwrap_or('*'),
                 self.config.usernames.len()
             );
 
@@ -228,7 +228,7 @@ impl SprayEngine {
             for handle in handles {
                 match handle.await {
                     Ok((username, password, Ok(true))) => {
-                        tracing::info!("[Spray] 成功! {}:{}", username, password);
+                        tracing::info!("[Spray] 成功! {}:***", username);
                         credentials.push((username, password));
                     }
                     Ok((_username, _password, Ok(false))) => {

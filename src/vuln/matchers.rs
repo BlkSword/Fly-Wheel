@@ -3,6 +3,21 @@
 //! 实现 word, regex, status, binary 四种匹配器
 
 use crate::vuln::poc::{Matcher, MatcherType};
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+/// 全局正则表达式缓存 (Regex 内部基于 Arc，clone 开销极低)
+fn get_or_compile_regex(pattern: &str) -> Option<regex::Regex> {
+    static CACHE: OnceLock<Mutex<HashMap<String, regex::Regex>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut map = cache.lock().unwrap();
+    if let Some(re) = map.get(pattern) {
+        return Some(re.clone());
+    }
+    let re = regex::Regex::new(pattern).ok()?;
+    map.insert(pattern.to_string(), re.clone());
+    Some(re)
+}
 
 /// HTTP 响应匹配上下文
 pub struct HttpResponseContext {
@@ -38,12 +53,18 @@ fn match_http_matcher(m: &Matcher, ctx: &HttpResponseContext) -> bool {
                 _ => &ctx.body,
             };
             m.regex.iter().any(|pattern| {
-                regex::Regex::new(pattern)
+                get_or_compile_regex(pattern)
                     .map(|re| re.is_match(target))
                     .unwrap_or(false)
             })
         }
-        MatcherType::Binary => false,
+        MatcherType::Binary => {
+            // HTTP Binary 匹配：在响应 body 的原始字节中搜索十六进制模式
+            let body_bytes = ctx.body.as_bytes();
+            m.binary
+                .iter()
+                .any(|hex| hex_decode(hex).map(|bytes| find_subsequence(body_bytes, &bytes)).unwrap_or(false))
+        }
     };
 
     if m.negative {
@@ -76,12 +97,13 @@ fn match_tcp_matcher(m: &Matcher, data: &[u8]) -> bool {
         MatcherType::Regex => {
             let data_str = String::from_utf8_lossy(data);
             m.regex.iter().any(|pattern| {
-                regex::Regex::new(pattern)
+                get_or_compile_regex(pattern)
                     .map(|re| re.is_match(&data_str))
                     .unwrap_or(false)
             })
         }
-        MatcherType::Status => true,
+        // TCP 无 HTTP 状态码概念，Status 匹配器在 TCP 上下文中不适用
+        MatcherType::Status => false,
     };
 
     if m.negative {

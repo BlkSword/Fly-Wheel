@@ -147,12 +147,17 @@ fn fastjson_detect() -> PoCRule {
                     binary: vec![],
                     negative: false,
                 },
+                // 匹配 Fastjson 特有的错误信息，而非泛化的 HTTP 500
                 Matcher {
-                    matcher_type: MatcherType::Status,
-                    part: "status_code".to_string(),
-                    words: vec![],
+                    matcher_type: MatcherType::Word,
+                    part: "body".to_string(),
+                    words: vec![
+                        "com.alibaba.fastjson".to_string(),
+                        "fastjson".to_string(),
+                        "JSONException".to_string(),
+                    ],
                     regex: vec![],
-                    status: vec![500],
+                    status: vec![],
                     binary: vec![],
                     negative: false,
                 },
@@ -1052,13 +1057,20 @@ fn smb_null_session() -> PoCRule {
             data: Some(smb_negotiate_packet()),
             read_size: Some(4096),
             matchers_condition: "and".to_string(),
+            // NOTE: 仅检查 Negotiate 响应无法确认空会话是否真正建立。
+            // 完整修复需要: 发送 Session Setup AndX (空用户名/密码)，
+            // 检查响应 Status = STATUS_SUCCESS (0x00000000) 且 UID 非零，
+            // 然后尝试 Tree Connect IPC$ 验证空会话可枚举共享。
+            // 目前收紧为匹配 SMB1 Negotiate 响应 (\xffSMB + Command 0x72)，
+            // 至少确认目标响应了 Negotiate 而非任意 SMB 数据包。
             matchers: vec![Matcher {
                 matcher_type: MatcherType::Binary,
                 part: String::new(),
                 words: vec![],
                 regex: vec![],
                 status: vec![],
-                binary: vec!["ff534d42".to_string()], // \xffSMB
+                // \xffSMB + Command 0x72 (Negotiate) = SMB1 Negotiate 响应
+                binary: vec!["ff534d4272".to_string()],
                 negative: false,
             }],
             extractors: vec![],
@@ -1185,14 +1197,19 @@ fn mssql_blank_sa() -> PoCRule {
             data: Some(mssql_prelogin_packet()),
             read_size: Some(4096),
             matchers_condition: "and".to_string(),
+            // NOTE: 当前仅发送 Pre-Login 包，无法真正验证 SA 空密码。
+            // 完整修复需要: 发送 TDS Login7 包 (SA + 空密码)，
+            // 然后检查响应中的 LOGINACK token (0xAD) 表示登录成功。
+            // 目前收紧为匹配 TDS 响应头 (type=0x04 Tabular Result + status=0x01 EOM)，
+            // 至少确认目标是有效的 TDS 服务而非任意 TCP 响应。
             matchers: vec![Matcher {
                 matcher_type: MatcherType::Binary,
                 part: String::new(),
                 words: vec![],
                 regex: vec![],
                 status: vec![],
-                // TDS response header starts with 0x04 (response)
-                binary: vec!["04".to_string(), "00".to_string()],
+                // TDS response: type 0x04 (Tabular Result) + status 0x01 (EOM)
+                binary: vec!["0401".to_string()],
                 negative: false,
             }],
             extractors: vec![],
@@ -1362,10 +1379,18 @@ fn mysql_blank_root() -> PoCRule {
             data: Some(mysql_greeting_check()),
             read_size: Some(4096),
             matchers_condition: "and".to_string(),
+            // NOTE: 当前仅接收 MySQL Greeting，未发送认证包，无法验证 root 空密码。
+            // 完整修复需要: 解析 Greeting 中的 salt，构造 HandshakeResponse41
+            // (root + 空密码)，发送后检查 OK packet (首字节 0x00) 确认认证成功。
+            // 目前收紧为匹配 MySQL 认证插件名 (仅出现在 MySQL Greeting 中)，
+            // 避免将任意包含 "mysql" 字符串的 banner 误报为漏洞。
             matchers: vec![Matcher {
                 matcher_type: MatcherType::Word,
                 part: String::new(),
-                words: vec!["mysql".to_string()],
+                words: vec![
+                    "mysql_native_password".to_string(),
+                    "caching_sha2_password".to_string(),
+                ],
                 regex: vec![],
                 status: vec![],
                 binary: vec![],
@@ -1377,7 +1402,8 @@ fn mysql_blank_root() -> PoCRule {
     }
 }
 
-/// MySQL Greeting 检测 (发送一个简化的 handshake)
+/// MySQL Greeting 检测 (发送空 payload，等待服务端 Handshake)
+/// TODO: 完整实现应解析 Greeting 并发送 HandshakeResponse41 进行空密码认证
 fn mysql_greeting_check() -> String {
     // MySQL 协议: 服务端先发送 greeting，客户端只需连接即可
     // 这里我们发送一个空 payload 等待服务端 greeting
@@ -1405,13 +1431,21 @@ fn smb_signing_disabled() -> PoCRule {
             data: Some(smb_negotiate_packet()),
             read_size: Some(4096),
             matchers_condition: "and".to_string(),
+            // NOTE: 仅检查 Negotiate 响应存在无法判断签名是否启用。
+            // 完整修复需要: 解析 SMB1 Negotiate 响应中 SecurityMode 字段
+            // (SMB 头偏移 36 字节处)，检查 bit 2 (SECURITY_SIGNATURES_REQUIRED)
+            // 和 bit 3 (SECURITY_SIGNATURES_ENABLED)。若 bit 2 = 0 则签名非必需。
+            // 对 SMB2/3 (0xFE 'SMB')，需解析 Negotiate 响应 SecurityMode 字段
+            // (偏移 70)，值 0x0002 表示要求签名。
+            // 目前收紧为匹配 SMB1 Negotiate 响应，减少非 SMB 服务的误报。
             matchers: vec![Matcher {
                 matcher_type: MatcherType::Binary,
                 part: String::new(),
                 words: vec![],
                 regex: vec![],
                 status: vec![],
-                binary: vec!["ff534d42".to_string()],
+                // \xffSMB + Command 0x72 (Negotiate) = SMB1 Negotiate 响应
+                binary: vec!["ff534d4272".to_string()],
                 negative: false,
             }],
             extractors: vec![],
@@ -1424,12 +1458,12 @@ fn rdp_open() -> PoCRule {
     PoCRule {
         id: "rdp-open".to_string(),
         info: PoCInfo {
-            name: "RDP 开放检测".to_string(),
-            severity: Severity::Medium,
+            name: "RDP 服务检测 (信息)".to_string(),
+            severity: Severity::Info,
             category: "服务检测".to_string(),
-            description: "RDP 远程桌面服务开放，可能被暴力破解".to_string(),
-            tags: vec!["rdp".to_string()],
-            remediation: "限制 RDP 访问来源，启用网络级别认证(NLA)".to_string(),
+            description: "检测到 RDP 远程桌面服务开放 (仅信息收集，非漏洞)。可关注是否启用 NLA。".to_string(),
+            tags: vec!["rdp".to_string(), "info".to_string()],
+            remediation: "如非必要可关闭 RDP，否则限制访问来源并启用网络级别认证(NLA)".to_string(),
         },
         transport: Transport::Tcp,
         default_port: Some(3389),
@@ -1441,16 +1475,30 @@ fn rdp_open() -> PoCRule {
             data: Some(rdp_negotiation_packet()),
             read_size: Some(1024),
             matchers_condition: "and".to_string(),
-            matchers: vec![Matcher {
-                matcher_type: MatcherType::Binary,
-                part: String::new(),
-                words: vec![],
-                regex: vec![],
-                status: vec![],
-                // RDP response: 0x03 0x00 (MCS Connect-Response or similar)
-                binary: vec!["0300".to_string()],
-                negative: false,
-            }],
+            // 匹配 TPKT 头 (0x03 0x00) + X.224 Connection Confirm (0xD0)，
+            // 确认目标是 RDP/X.224 服务而非任意开放端口。
+            matchers: vec![
+                Matcher {
+                    matcher_type: MatcherType::Binary,
+                    part: String::new(),
+                    words: vec![],
+                    regex: vec![],
+                    status: vec![],
+                    // TPKT header: version 3, reserved 0
+                    binary: vec!["0300".to_string()],
+                    negative: false,
+                },
+                Matcher {
+                    matcher_type: MatcherType::Binary,
+                    part: String::new(),
+                    words: vec![],
+                    regex: vec![],
+                    status: vec![],
+                    // X.224 Connection Confirm PDU type (0xD0)
+                    binary: vec!["d0".to_string()],
+                    negative: false,
+                },
+            ],
             extractors: vec![],
         }],
         script: None,

@@ -6,8 +6,22 @@ use crate::core::Result;
 use crate::vuln::matchers::HttpResponseContext;
 use crate::vuln::poc::{substitute_vars, Extractor, PoCRequest};
 use std::collections::HashMap;
+use std::sync::OnceLock;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+/// 全局共享的 HTTP 客户端 (避免每次请求都创建新 Client)
+fn global_http_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .danger_accept_invalid_certs(true)
+            .redirect(reqwest::redirect::Policy::limited(3))
+            .no_proxy()
+            .build()
+            .expect("构建HTTP客户端失败")
+    })
+}
 
 /// 执行 HTTP PoC 请求 (支持变量替换)
 pub async fn execute_http_request(
@@ -25,15 +39,7 @@ pub async fn execute_http_request(
         .collect();
     let body = request.body.as_ref().map(|b| substitute_vars(b, vars));
 
-    let client = reqwest::Client::builder()
-        .timeout(timeout)
-        .danger_accept_invalid_certs(true)
-        .redirect(reqwest::redirect::Policy::limited(3))
-        .no_proxy()
-        .build()
-        .map_err(|e| crate::core::error::FlyWheelError::Other {
-            message: format!("构建HTTP客户端失败: {}", e),
-        })?;
+    let client = global_http_client();
 
     let scheme = if matches!(port, 443 | 8443 | 9443) {
         "https"
@@ -52,6 +58,8 @@ pub async fn execute_http_request(
         _ => client.get(&url),
     };
 
+    builder = builder.timeout(timeout);
+
     builder = builder.header(
         "User-Agent",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -66,7 +74,7 @@ pub async fn execute_http_request(
     }
 
     let resp = builder.send().await.map_err(|e| {
-        crate::core::error::FlyWheelError::Other {
+        crate::core::error::IntraSweepError::Other {
             message: format!("HTTP请求失败: {}", e),
         }
     })?;
@@ -100,7 +108,7 @@ pub async fn execute_tcp_request(
     timeout: Duration,
     vars: &HashMap<String, String>,
 ) -> Result<TcpResponseData> {
-    use crate::core::error::FlyWheelError;
+    use crate::core::error::IntraSweepError;
 
     let data = request
         .data
@@ -111,14 +119,14 @@ pub async fn execute_tcp_request(
     let addr = format!("{}:{}", target, port);
     let mut stream = tokio::time::timeout(timeout, tokio::net::TcpStream::connect(&addr))
         .await
-        .map_err(|_| FlyWheelError::Other {
+        .map_err(|_| IntraSweepError::Other {
             message: format!("TCP连接超时: {}", addr),
         })??;
 
     if !data.is_empty() {
         tokio::time::timeout(timeout, stream.write_all(data.as_bytes()))
             .await
-            .map_err(|_| FlyWheelError::Other {
+            .map_err(|_| IntraSweepError::Other {
                 message: "TCP写入超时".to_string(),
             })??;
     }
@@ -127,7 +135,7 @@ pub async fn execute_tcp_request(
     let mut buf = vec![0u8; read_size];
     let n = tokio::time::timeout(timeout, stream.read(&mut buf))
         .await
-        .map_err(|_| FlyWheelError::Other {
+        .map_err(|_| IntraSweepError::Other {
             message: "TCP读取超时".to_string(),
         })??;
     buf.truncate(n);

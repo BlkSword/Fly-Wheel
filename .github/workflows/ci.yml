@@ -10,9 +10,25 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  fmt:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain with rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all --check
+
   test:
-    name: Test (Windows)
-    runs-on: windows-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -34,7 +50,7 @@ jobs:
         run: cargo test --verbose
 
   clippy:
-    name: Clippy
+    name: Clippy (deny warnings)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -55,12 +71,16 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-cp-
 
-      - name: Run Clippy
-        run: cargo clippy --all-targets
+      - name: Run Clippy (deny warnings)
+        run: cargo clippy --all-targets -- -D warnings
 
   build:
-    name: Build (Release)
-    runs-on: windows-latest
+    name: Build Release (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -81,8 +101,16 @@ jobs:
       - name: Build release
         run: cargo build --release
 
-      - name: Upload artifact
+      - name: Upload artifact (Windows)
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: intrasweep-release
+          name: intrasweep-windows
           path: target/release/intrasweep.exe
+
+      - name: Upload artifact (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: intrasweep-linux
+          path: target/release/intrasweep

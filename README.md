@@ -3,9 +3,46 @@
 [![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)]()
-[![Release](https://img.shields.io/badge/release-v0.5.0-green.svg)]()
+[![Release](https://img.shields.io/badge/release-v0.4.0-green.svg)]()
 
 > 高性能 · 内网渗透侦察与打击工具
+
+---
+
+## 功能状态
+
+> v0.4.0 基于代码审查报告进行了系统性修复，以下为各模块真实状态。
+
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| 端口扫描 / 主机发现 | ✅ 可用 | TCP Connect，自适应超时，FuturesUnordered 正确回收结果 |
+| 服务探测 / Banner 抓取 | ✅ 可用 | 多协议识别 |
+| Web 指纹识别 | ✅ 可用 | 33 条规则 |
+| SSH / Redis / WinRM-Basic 爆破 | ✅ 可用 | 并发引擎 + 命中即停 |
+| PostgreSQL / MySQL / MSSQL 爆破 | ✅ 已修复 | spawn_blocking 消除嵌套 runtime panic |
+| MongoDB 爆破 | ✅ 已修复 | 强制 ping 验证，消除惰性连接误报 |
+| RDP 爆破 | ⚠️ 有限 | CredSSP 协议实现不完整，成功判定不可靠 |
+| NTLM 认证核心 | ✅ 已修复 | 安全缓冲 offset u32、Type2 flags 偏移修正、密码学随机 client challenge |
+| SOCKS5 代理 | ✅ 已修复 | RFC 1929 认证缓冲区修正、域名解析修正、0xFF 拒绝 |
+| 正向 / 反向 / 链式隧道 | ✅ 可用 | 基础 TCP 转发 |
+| 加密隧道 (--encryption-key) | ❌ 未接线 | 显式报错退出，禁止静默明文 |
+| HTTP / DNS 隧道 | ❌ 未接线 | CLI 已移除入口 |
+| GPP 密码解密 | ✅ 已修复 | 正确微软公开密钥 + 全零 IV |
+| DCSync | ❌ 未实现 | 显式报错，推荐 mimikatz / impacket |
+| Golden Ticket / Silver Ticket | ❌ 未实现 | CLI 显式报错，推荐 mimikatz |
+| Kerberoasting / AS-REP Roast | ⚠️ 有限 | 缺 TCP 长度前缀和 TGT/AP-REQ，真实 KDC 可能拒绝 |
+| 漏洞扫描 (PoC 引擎) | ✅ 可用 | 32 条内置 PoC，匹配器已修正 |
+| Web 主动探测 (--web-probe) | ❌ 未实现 | 显式报错退出 |
+| AD LDAP 枚举 | ✅ 可用 | 用户/组/计算机/SPN/信任/GPO |
+| BloodHound 导出 | ⚠️ 有限 | SID 为伪造，ACL 为空 |
+| ADCS 枚举 | ⚠️ 有限 | 仅 ESC1 + ESC3 启发式 |
+| 系统信息收集 | ✅ 可用 | 7 类收集 |
+| 提权检测 (Linux) | ✅ 可用 | 8 类检查 |
+| 提权检测 (Windows) | ⚠️ 有限 | 基于 wmic（Win11 已移除），DLL 类别为空实现 |
+| EDR/AV 检测 | ✅ 可用 | 15+ 厂商签名 |
+| 报告生成 | ⚠️ 有限 | 仅消费 AD 枚举 JSON |
+| 配置文件 (--config) | ⚠️ 部分 | 加载但尚未完整传递到子命令 |
+| 插件系统 | ❌ 未实现 | 无动态加载 |
 
 ---
 
@@ -887,7 +924,7 @@ cargo test -- --test-threads=1 --nocapture  # 单线程运行测试并显示输�
 
 ## 版本
 
-v0.5.0
+v0.4.0
 
 ---
 

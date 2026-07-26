@@ -3,8 +3,6 @@
 //! 实现 CredSSP/NLA (Network Level Authentication) 协议认证。
 //! 协议流程: TCP → TPKT/X.224 协商 → TLS 握手 → CredSSP (NTLMSSP)
 
-#![allow(dead_code)]
-
 use async_trait::async_trait;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};

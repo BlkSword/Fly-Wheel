@@ -118,7 +118,7 @@ impl InteractiveMenu {
 #[command(
     name = "intrasweep",
     author = "BlkSword",
-    version = "0.5.0",
+    version = "0.4.0",
     long_about = None,
 )]
 pub struct Cli {
@@ -412,13 +412,12 @@ pub(crate) const SYSTEM_ITEMS: &[(&str, &str)] = &[
 pub(crate) const SCAN_TYPES: &[(&str, &str)] = &[("host", "h"), ("port", "po"), ("comprehensive", "c")];
 
 /// tunnel 子命令映射 (完整名称, 缩写)
+/// 注: http/dns 隧道尚未接线，暂不列入
 pub(crate) const TUNNEL_TYPES: &[(&str, &str)] = &[
     ("forward", "fo"),
     ("reverse", "re"),
     ("socks5", "so"),
     ("chain", "ch"),
-    ("http", "ht"),
-    ("dns", "dn"),
 ];
 
 // ============================================================

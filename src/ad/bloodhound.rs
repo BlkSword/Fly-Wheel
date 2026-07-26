@@ -226,7 +226,9 @@ fn user_to_bh(user: &AdUser, domain: &str) -> BhUser {
     let has_spn = !user.spn.is_empty();
 
     BhUser {
-        object_identifier: format!("S-1-5-21-{}", user.sam_account_name),
+        // 使用真实 objectSid（来自 LDAP），无 SID 时回退到伪造标识
+        object_identifier: user.sid.clone()
+            .unwrap_or_else(|| format!("S-1-5-21-UNKNOWN-{}", user.sam_account_name)),
         object_type: "User".to_string(),
         Properties: BhUserProps {
             name: format!("{}@{}", user.sam_account_name, domain).to_uppercase(),
@@ -256,7 +258,8 @@ fn user_to_bh(user: &AdUser, domain: &str) -> BhUser {
 
 fn group_to_bh(group: &AdGroup, domain: &str) -> BhGroup {
     BhGroup {
-        object_identifier: format!("S-1-5-21-{}", group.name),
+        object_identifier: group.sid.clone()
+            .unwrap_or_else(|| format!("S-1-5-21-UNKNOWN-{}", group.name)),
         object_type: "Group".to_string(),
         Properties: BhGroupProps {
             name: format!("{}@{}", group.name, domain).to_uppercase(),
@@ -284,7 +287,8 @@ fn group_to_bh(group: &AdGroup, domain: &str) -> BhGroup {
 fn computer_to_bh(computer: &AdComputer, domain: &str) -> BhComputer {
     let name = computer.name.trim_end_matches('$');
     BhComputer {
-        object_identifier: format!("S-1-5-21-{}", computer.name),
+        object_identifier: computer.sid.clone()
+            .unwrap_or_else(|| format!("S-1-5-21-UNKNOWN-{}", computer.name)),
         object_type: "Computer".to_string(),
         Properties: BhComputerProps {
             name: format!("{}.{}", name, domain).to_uppercase(),

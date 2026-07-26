@@ -2,7 +2,7 @@
 //!
 //! 实现 RFC 1928 SOCKS5 协议
 
-use crate::core::error::{FlyWheelError, Result};
+use crate::core::error::{IntraSweepError, Result};
 use crate::tunnel::config::TunnelConfig;
 use crate::tunnel::models::{ConnectionInfo, TunnelEvent, TunnelEventHandler, TunnelStatus};
 use crate::tunnel::relay;
@@ -73,7 +73,7 @@ impl Socks5Server {
     /// 启动 SOCKS5 代理
     pub async fn start(&self) -> Result<()> {
         let listener = TcpListener::bind(&self.config.local_addr).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
 
@@ -273,12 +273,12 @@ impl Socks5Server {
 
         // 读取版本和认证方法
         stream.read_exact(&mut buf[0..2]).await
-            .map_err(|_| FlyWheelError::Protocol {
+            .map_err(|_| IntraSweepError::Protocol {
                 message: "读取握手请求失败".to_string(),
             })?;
 
         if buf[0] != SOCKS5_VERSION {
-            return Err(FlyWheelError::Protocol {
+            return Err(IntraSweepError::Protocol {
                 message: format!("不支持的 SOCKS 版本: {}", buf[0]),
             });
         }
@@ -287,7 +287,7 @@ impl Socks5Server {
 
         // 读取支持的认证方法列表
         stream.read_exact(&mut buf[0..n_methods]).await
-            .map_err(|_| FlyWheelError::Protocol {
+            .map_err(|_| IntraSweepError::Protocol {
                 message: "读取认证方法失败".to_string(),
             })?;
 
@@ -296,7 +296,14 @@ impl Socks5Server {
             if buf[0..n_methods].contains(&AUTH_USERPASS) {
                 AUTH_USERPASS
             } else {
-                AUTH_NONE
+                // RFC 1928: 客户端未提供所需认证方法时返回 0xFF
+                stream.write_all(&[SOCKS5_VERSION, 0xFF]).await
+                    .map_err(|e| IntraSweepError::Protocol {
+                        message: format!("发送认证方法失败: {}", e),
+                    })?;
+                return Err(IntraSweepError::Protocol {
+                    message: "客户端不支持所需的用户名密码认证".to_string(),
+                });
             }
         } else {
             AUTH_NONE
@@ -304,68 +311,72 @@ impl Socks5Server {
 
         // 发送认证方法选择
         stream.write_all(&[SOCKS5_VERSION, auth_method]).await
-            .map_err(|e| FlyWheelError::Protocol {
+            .map_err(|e| IntraSweepError::Protocol {
                 message: format!("发送认证方法失败: {}", e),
             })?;
 
-        // 如果需要用户名密码认证
+        // 如果需要用户名密码认证 (RFC 1929)
         if auth_method == AUTH_USERPASS {
             let username = config.socks5_username.as_deref()
-                .ok_or_else(|| FlyWheelError::Config {
+                .ok_or_else(|| IntraSweepError::Config {
                     message: "SOCKS5 认证配置错误：缺少用户名".to_string(),
                 })?;
             let password = config.socks5_password.as_deref()
-                .ok_or_else(|| FlyWheelError::Config {
+                .ok_or_else(|| IntraSweepError::Config {
                     message: "SOCKS5 认证配置错误：缺少密码".to_string(),
                 })?;
 
-            let mut buf = [0u8; 256];
-            stream.read_exact(&mut buf[0..2]).await
-                .map_err(|_| FlyWheelError::Protocol {
+            // RFC 1929: VER(1) ULEN(1) UNAME(ULEN) PLEN(1) PASSWD(PLEN)
+            let mut auth_hdr = [0u8; 2];
+            stream.read_exact(&mut auth_hdr).await
+                .map_err(|_| IntraSweepError::Protocol {
                     message: "读取认证请求失败".to_string(),
                 })?;
 
-            let ulen = buf[1] as usize;
-            stream.read_exact(&mut buf[0..ulen]).await
-                .map_err(|_| FlyWheelError::Protocol {
+            let ulen = auth_hdr[1] as usize;
+            let mut recv_username_buf = vec![0u8; ulen];
+            stream.read_exact(&mut recv_username_buf).await
+                .map_err(|_| IntraSweepError::Protocol {
                     message: "读取用户名失败".to_string(),
                 })?;
 
-            stream.read_exact(&mut buf[0..1]).await
-                .map_err(|_| FlyWheelError::Protocol {
+            let mut plen_buf = [0u8; 1];
+            stream.read_exact(&mut plen_buf).await
+                .map_err(|_| IntraSweepError::Protocol {
                     message: "读取密码长度失败".to_string(),
                 })?;
 
-            let plen = buf[0] as usize;
-            stream.read_exact(&mut buf[0..plen]).await
-                .map_err(|_| FlyWheelError::Protocol {
+            let plen = plen_buf[0] as usize;
+            let mut recv_password_buf = vec![0u8; plen];
+            stream.read_exact(&mut recv_password_buf).await
+                .map_err(|_| IntraSweepError::Protocol {
                     message: "读取密码失败".to_string(),
                 })?;
 
             // 验证用户名和密码
-            let recv_username = std::str::from_utf8(&buf[0..ulen])
-                .map_err(|_| FlyWheelError::Protocol {
+            let recv_username = std::str::from_utf8(&recv_username_buf)
+                .map_err(|_| IntraSweepError::Protocol {
                     message: "用户名格式错误".to_string(),
                 })?;
 
-            let recv_password = std::str::from_utf8(&buf[ulen + 1..ulen + 1 + plen])
-                .map_err(|_| FlyWheelError::Protocol {
+            let recv_password = std::str::from_utf8(&recv_password_buf)
+                .map_err(|_| IntraSweepError::Protocol {
                     message: "密码格式错误".to_string(),
                 })?;
 
             if recv_username == username && recv_password == password {
                 // 认证成功
                 stream.write_all(&[0x01, 0x00]).await
-                    .map_err(|e| FlyWheelError::Protocol {
+                    .map_err(|e| IntraSweepError::Protocol {
                         message: format!("发送认证响应失败: {}", e),
                     })?;
             } else {
                 // 认证失败
                 stream.write_all(&[0x01, 0x01]).await
-                    .map_err(|e| FlyWheelError::Protocol {
+                    .map_err(|e| IntraSweepError::Protocol {
                         message: format!("发送认证失败响应失败: {}", e),
                     })?;
-                return Err(FlyWheelError::Protocol {
+                return Err(IntraSweepError::Protocol {
                     message: "认证失败".to_string(),
                 });
             }
@@ -373,12 +384,12 @@ impl Socks5Server {
 
         // 读取连接请求
         stream.read_exact(&mut buf[0..4]).await
-            .map_err(|_| FlyWheelError::Protocol {
+            .map_err(|_| IntraSweepError::Protocol {
                 message: "读取连接请求失败".to_string(),
             })?;
 
         if buf[0] != SOCKS5_VERSION {
-            return Err(FlyWheelError::Protocol {
+            return Err(IntraSweepError::Protocol {
                 message: "SOCKS 版本不匹配".to_string(),
             });
         }
@@ -388,10 +399,10 @@ impl Socks5Server {
 
         if cmd != CMD_CONNECT {
             stream.write_all(&[0x05, REP_COMMAND_NOT_SUPPORTED, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00]).await
-                .map_err(|_| FlyWheelError::Protocol {
+                .map_err(|_| IntraSweepError::Protocol {
                     message: "发送错误响应失败".to_string(),
                 })?;
-            return Err(FlyWheelError::Protocol {
+            return Err(IntraSweepError::Protocol {
                 message: "不支持的命令".to_string(),
             });
         }
@@ -400,7 +411,7 @@ impl Socks5Server {
         let target_addr = match addr_type {
             ADDR_IPV4 => {
                 stream.read_exact(&mut buf[0..6]).await
-                    .map_err(|_| FlyWheelError::Protocol {
+                    .map_err(|_| IntraSweepError::Protocol {
                         message: "读取 IPv4 地址失败".to_string(),
                     })?;
 
@@ -409,35 +420,43 @@ impl Socks5Server {
                 format!("{}:{}", ip, port)
             }
             ADDR_DOMAIN => {
-                let domain_len = buf[1] as usize;
-                stream.read_exact(&mut buf[0..domain_len + 2]).await
-                    .map_err(|_| FlyWheelError::Protocol {
+                // RFC 1928: ATYP=0x03 时，后续为 LEN(1) + DOMAIN(LEN) + PORT(2)
+                let mut len_buf = [0u8; 1];
+                stream.read_exact(&mut len_buf).await
+                    .map_err(|_| IntraSweepError::Protocol {
+                        message: "读取域名长度失败".to_string(),
+                    })?;
+                let domain_len = len_buf[0] as usize;
+
+                let mut domain_and_port = vec![0u8; domain_len + 2];
+                stream.read_exact(&mut domain_and_port).await
+                    .map_err(|_| IntraSweepError::Protocol {
                         message: "读取域名地址失败".to_string(),
                     })?;
 
-                let domain = std::str::from_utf8(&buf[0..domain_len])
-                    .map_err(|_| FlyWheelError::Protocol {
+                let domain = std::str::from_utf8(&domain_and_port[0..domain_len])
+                    .map_err(|_| IntraSweepError::Protocol {
                         message: "域名格式错误".to_string(),
                     })?;
 
-                let port = u16::from_be_bytes([buf[domain_len], buf[domain_len + 1]]);
+                let port = u16::from_be_bytes([domain_and_port[domain_len], domain_and_port[domain_len + 1]]);
                 format!("{}:{}", domain, port)
             }
             ADDR_IPV6 => {
                 stream.write_all(&[0x05, REP_ADDRESS_TYPE_NOT_SUPPORTED, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).await
-                    .map_err(|_| FlyWheelError::Protocol {
+                    .map_err(|_| IntraSweepError::Protocol {
                         message: "发送错误响应失败".to_string(),
                     })?;
-                return Err(FlyWheelError::Protocol {
+                return Err(IntraSweepError::Protocol {
                     message: "不支持 IPv6 地址".to_string(),
                 });
             }
             _ => {
                 stream.write_all(&[0x05, REP_ADDRESS_TYPE_NOT_SUPPORTED, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).await
-                    .map_err(|_| FlyWheelError::Protocol {
+                    .map_err(|_| IntraSweepError::Protocol {
                         message: "发送错误响应失败".to_string(),
                     })?;
-                return Err(FlyWheelError::Protocol {
+                return Err(IntraSweepError::Protocol {
                     message: "不支持的地址类型".to_string(),
                 });
             }
@@ -445,7 +464,7 @@ impl Socks5Server {
 
         // 发送成功响应
         stream.write_all(&[0x05, REP_SUCCESS, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).await
-            .map_err(|e| FlyWheelError::Protocol {
+            .map_err(|e| IntraSweepError::Protocol {
                 message: format!("发送成功响应失败: {}", e),
             })?;
 
@@ -455,7 +474,7 @@ impl Socks5Server {
     /// 启动 SOCKS5 代理（支持优雅关闭）
     pub async fn start_with_shutdown(&self, shutdown: &Shutdown) -> Result<()> {
         let listener = TcpListener::bind(&self.config.local_addr).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
 

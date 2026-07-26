@@ -2,8 +2,6 @@
 //!
 //! 定义扫描器的配置选项和默认值
 
-#![allow(dead_code)]
-
 use serde::{Deserialize, Serialize};
 use clap::ValueEnum;
 

@@ -5,6 +5,7 @@
 use crate::ad::{
     AdComputer, AdEnumResult, AdEnumStats, AdGroup, AdTrust, AdUser, AsrepTarget, KerberoastTarget,
 };
+use ldap3::adapters::{Adapter, EntriesOnly, PagedResults as PagedResultsAdapter};
 use std::time::Duration;
 
 /// LDAP 连接配置
@@ -169,10 +170,22 @@ fn search_attrs(
     filter: &str,
     attrs: &[&str],
 ) -> Result<Vec<ldap3::SearchEntry>, String> {
-    let sr = ldap
-        .search(base_dn, ldap3::Scope::Subtree, filter, attrs)
+    let adapters: Vec<Box<dyn Adapter<_, _>>> = vec![
+        Box::new(EntriesOnly::new()),
+        Box::new(PagedResultsAdapter::new(1000)),
+    ];
+    let mut search = ldap
+        .streaming_search_with(adapters, base_dn, ldap3::Scope::Subtree, filter, attrs)
         .map_err(|e| format!("LDAP查询失败: {}", e))?;
-    Ok(sr.0.into_iter().map(ldap3::SearchEntry::construct).collect())
+    let mut entries = Vec::new();
+    while let Some(entry) = search.next().map_err(|e| format!("LDAP查询失败: {}", e))? {
+        entries.push(ldap3::SearchEntry::construct(entry));
+    }
+    search
+        .result()
+        .success()
+        .map_err(|e| format!("LDAP查询失败: {}", e))?;
+    Ok(entries)
 }
 
 fn get_attr(entry: &ldap3::SearchEntry, name: &str) -> Option<String> {
@@ -183,11 +196,63 @@ fn get_attr_multi(entry: &ldap3::SearchEntry, name: &str) -> Vec<String> {
     entry.attrs.get(name).cloned().unwrap_or_default()
 }
 
+/// 从二进制 LDAP 属性中读取 objectSid 并解析为字符串
+fn get_sid_attr(entry: &ldap3::SearchEntry) -> Option<String> {
+    entry
+        .bin_attrs
+        .get("objectSid")
+        .and_then(|v| v.first())
+        .and_then(|bytes| parse_sid(bytes))
+}
+
+/// 将二进制 SID 转换为字符串格式 (S-1-5-21-xxx-xxx-xxx-rid)
+///
+/// SID 二进制格式: Revision(1) + SubAuthorityCount(1) + IdentifierAuthority(6) + SubAuthorities(4×count)
+fn parse_sid(bytes: &[u8]) -> Option<String> {
+    if bytes.len() < 8 {
+        return None;
+    }
+    let revision = bytes[0];
+    let sub_authority_count = bytes[1] as usize;
+
+    // IdentifierAuthority: 6 字节大端序
+    let authority = ((bytes[2] as u64) << 40)
+        | ((bytes[3] as u64) << 32)
+        | ((bytes[4] as u64) << 24)
+        | ((bytes[5] as u64) << 16)
+        | ((bytes[6] as u64) << 8)
+        | (bytes[7] as u64);
+
+    let expected_len = 8 + sub_authority_count * 4;
+    if bytes.len() < expected_len {
+        return None;
+    }
+
+    let mut sid = if authority < 0x1_0000_0000 {
+        format!("S-{}-{}", revision, authority)
+    } else {
+        format!("S-{}-0x{:x}", revision, authority)
+    };
+
+    for i in 0..sub_authority_count {
+        let offset = 8 + i * 4;
+        let sub_authority = u32::from_le_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]);
+        sid.push_str(&format!("-{}", sub_authority));
+    }
+
+    Some(sid)
+}
+
 fn query_users(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdUser>, String> {
     let rs = search_attrs(ldap, base_dn,
         "(&(objectClass=user)(objectCategory=person))",
         &["sAMAccountName","displayName","distinguishedName","description","mail","adminCount",
-          "userAccountControl","memberOf","servicePrincipalName"])?;
+          "userAccountControl","memberOf","servicePrincipalName","objectSid"])?;
 
     Ok(rs.iter().map(|entry| {
         let uac: u32 = get_attr(entry, "userAccountControl").and_then(|v| v.parse().ok()).unwrap_or(512);
@@ -203,14 +268,14 @@ fn query_users(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdUser>,
             last_logon: None,
             member_of: get_attr_multi(entry, "memberOf"),
             spn: get_attr_multi(entry, "servicePrincipalName"),
-            sid: None,
+            sid: get_sid_attr(entry),
         }
     }).collect())
 }
 
 fn query_groups(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdGroup>, String> {
     let rs = search_attrs(ldap, base_dn, "(objectClass=group)",
-        &["cn","distinguishedName","description","member","adminCount"])?;
+        &["cn","distinguishedName","description","member","adminCount","objectSid"])?;
 
     Ok(rs.iter().map(|entry| AdGroup {
         name: get_attr(entry, "cn").unwrap_or_default(),
@@ -218,12 +283,13 @@ fn query_groups(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdGroup
         description: get_attr(entry, "description"),
         members: get_attr_multi(entry, "member"),
         admin_count: get_attr(entry, "adminCount").is_some(),
+        sid: get_sid_attr(entry),
     }).collect())
 }
 
 fn query_computers(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdComputer>, String> {
     let rs = search_attrs(ldap, base_dn, "(objectClass=computer)",
-        &["cn","distinguishedName","dNSHostName","operatingSystem","operatingSystemVersion","userAccountControl"])?;
+        &["cn","distinguishedName","dNSHostName","operatingSystem","operatingSystemVersion","userAccountControl","objectSid"])?;
 
     Ok(rs.iter().map(|entry| {
         let uac: u32 = get_attr(entry, "userAccountControl").and_then(|v| v.parse().ok()).unwrap_or(4096);
@@ -235,6 +301,7 @@ fn query_computers(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdCo
             os_version: get_attr(entry, "operatingSystemVersion"),
             enabled: uac & 2 == 0,
             last_logon: None,
+            sid: get_sid_attr(entry),
         }
     }).collect())
 }
@@ -309,14 +376,35 @@ fn query_trusts(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdTrust
                 "3" => "双向".to_string(),
                 _ => v,
             }).unwrap_or_else(|| "未知".to_string()),
-            trust_attributes: get_attr(entry, "trustAttributes").map(|v| match v.as_str() {
-                "1" => "非传递".to_string(),
-                "2" => "上级".to_string(),
-                "4" => "可传递".to_string(),
-                _ => v,
-            }).unwrap_or_else(|| "未知".to_string()),
+            trust_attributes: get_attr(entry, "trustAttributes")
+                .map(|v| parse_trust_attributes(&v))
+                .unwrap_or_else(|| "未知".to_string()),
         }
     }).collect())
+}
+
+/// 按位掩码解析 trustAttributes (MS-ADTS)
+fn parse_trust_attributes(value: &str) -> String {
+    let flags: u32 = match value.parse() {
+        Ok(v) => v,
+        Err(_) => return value.to_string(),
+    };
+
+    let mut parts = Vec::new();
+    if flags & 0x0000_0001 != 0 { parts.push("NON_TRANSITIVE"); }
+    if flags & 0x0000_0002 != 0 { parts.push("UPLEVEL_ONLY"); }
+    if flags & 0x0000_0004 != 0 { parts.push("QUARANTINED_DOMAIN"); }
+    if flags & 0x0000_0008 != 0 { parts.push("FOREST_TRANSITIVE"); }
+    if flags & 0x0000_0010 != 0 { parts.push("CROSS_ORGANIZATION"); }
+    if flags & 0x0000_0020 != 0 { parts.push("WITHIN_FOREST"); }
+    if flags & 0x0000_0040 != 0 { parts.push("TREAT_AS_EXTERNAL"); }
+    if flags & 0x0000_0080 != 0 { parts.push("USES_RC4_ENCRYPTION"); }
+
+    if parts.is_empty() {
+        format!("0x{:08X}", flags)
+    } else {
+        parts.join(" | ")
+    }
 }
 
 fn query_gpos(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<String>, String> {
@@ -326,6 +414,75 @@ fn query_gpos(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<String>, 
     Ok(rs.iter().map(|entry| {
         get_attr(entry, "displayName").unwrap_or_else(|| get_attr(entry, "cn").unwrap_or_default())
     }).collect())
+}
+
+/// 域密码策略 (通过 LDAP 查询域对象的属性)
+#[derive(Debug, Clone, Default)]
+pub struct LdapPasswordPolicy {
+    /// 密码最长期限 (分钟), None 表示无限制
+    pub max_password_age_mins: Option<u32>,
+    /// 密码最短期限 (分钟)
+    pub min_password_age_mins: Option<u32>,
+    /// 密码最小长度
+    pub min_password_length: Option<u32>,
+    /// 密码历史记录数
+    pub password_history_length: Option<u32>,
+    /// 账户锁定阈值 (0 = 不锁定)
+    pub lockout_threshold: Option<u32>,
+    /// 账户锁定时间 (分钟)
+    pub lockout_duration_mins: Option<u32>,
+    /// 账户锁定观察窗口 (分钟)
+    pub lockout_observation_window_mins: Option<u32>,
+}
+
+/// 将 AD LargeInteger (100ns 间隔, 通常为负值) 转换为分钟
+fn large_integer_to_mins(value: i64) -> Option<u32> {
+    if value == 0 {
+        return None; // 0 表示无限制
+    }
+    let abs_val = value.unsigned_abs();
+    Some((abs_val / 10_000_000 / 60) as u32)
+}
+
+/// 查询域密码策略 (读取域根对象的密码策略属性)
+pub fn query_password_policy(
+    ldap: &mut ldap3::LdapConn,
+    base_dn: &str,
+) -> Result<LdapPasswordPolicy, String> {
+    let rs = search_attrs(
+        ldap,
+        base_dn,
+        "(objectClass=domain)",
+        &[
+            "maxPwdAge",
+            "minPwdAge",
+            "minPwdLength",
+            "pwdHistoryLength",
+            "lockoutThreshold",
+            "lockoutDuration",
+            "lockoutObservationWindow",
+        ],
+    )?;
+
+    let entry = rs.first().ok_or_else(|| "未找到域对象".to_string())?;
+
+    let parse_i64 = |name: &str| -> Option<i64> {
+        get_attr(entry, name).and_then(|v| v.parse().ok())
+    };
+    let parse_u32 = |name: &str| -> Option<u32> {
+        get_attr(entry, name).and_then(|v| v.parse().ok())
+    };
+
+    Ok(LdapPasswordPolicy {
+        max_password_age_mins: parse_i64("maxPwdAge").and_then(large_integer_to_mins),
+        min_password_age_mins: parse_i64("minPwdAge").and_then(large_integer_to_mins),
+        min_password_length: parse_u32("minPwdLength"),
+        password_history_length: parse_u32("pwdHistoryLength"),
+        lockout_threshold: parse_u32("lockoutThreshold"),
+        lockout_duration_mins: parse_i64("lockoutDuration").and_then(large_integer_to_mins),
+        lockout_observation_window_mins: parse_i64("lockoutObservationWindow")
+            .and_then(large_integer_to_mins),
+    })
 }
 
 /// 域名转 DN 格式 (corp.local → DC=corp,DC=local)
@@ -350,5 +507,94 @@ mod tests {
             .use_ssl(true);
         assert_eq!(config.port, 636);
         assert!(config.use_ssl);
+    }
+
+    #[test]
+    fn test_parse_sid_typical_domain_sid() {
+        // S-1-5-21-1004336348-1177238915-682003330-512
+        // Revision=1, Count=5, Authority=5, SubAuthorities: 21, 1004336348, 1177238915, 682003330, 512
+        let bytes: Vec<u8> = vec![
+            0x01, // Revision
+            0x05, // SubAuthorityCount = 5
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x05, // IdentifierAuthority = 5 (big-endian)
+            0x15, 0x00, 0x00, 0x00, // SubAuthority[0] = 21 (little-endian)
+            0xDC, 0xF4, 0xDC, 0x3B, // SubAuthority[1] = 1004336348 (0x3BDCF4DC LE)
+            0x83, 0x3D, 0x2B, 0x46, // SubAuthority[2] = 1177238915 (0x462B3D83 LE)
+            0x82, 0x8B, 0xA6, 0x28, // SubAuthority[3] = 682003330 (0x28A68B82 LE)
+            0x00, 0x02, 0x00, 0x00, // SubAuthority[4] = 512
+        ];
+        assert_eq!(
+            parse_sid(&bytes),
+            Some("S-1-5-21-1004336348-1177238915-682003330-512".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_sid_builtin_administrators() {
+        // S-1-5-32-544 (BUILTIN\Administrators)
+        let bytes: Vec<u8> = vec![
+            0x01, // Revision
+            0x02, // SubAuthorityCount = 2
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x05, // IdentifierAuthority = 5
+            0x20, 0x00, 0x00, 0x00, // SubAuthority[0] = 32
+            0x20, 0x02, 0x00, 0x00, // SubAuthority[1] = 544
+        ];
+        assert_eq!(parse_sid(&bytes), Some("S-1-5-32-544".to_string()));
+    }
+
+    #[test]
+    fn test_parse_sid_too_short() {
+        assert_eq!(parse_sid(&[0x01, 0x00]), None);
+        assert_eq!(parse_sid(&[]), None);
+    }
+
+    #[test]
+    fn test_parse_sid_truncated_sub_authorities() {
+        // Claims 2 sub-authorities but only has room for 1
+        let bytes: Vec<u8> = vec![
+            0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05, 0x20, 0x00, 0x00, 0x00,
+        ];
+        assert_eq!(parse_sid(&bytes), None);
+    }
+
+    #[test]
+    fn test_parse_trust_attributes_single_flag() {
+        assert_eq!(parse_trust_attributes("1"), "NON_TRANSITIVE");
+        assert_eq!(parse_trust_attributes("4"), "QUARANTINED_DOMAIN");
+        assert_eq!(parse_trust_attributes("8"), "FOREST_TRANSITIVE");
+    }
+
+    #[test]
+    fn test_parse_trust_attributes_bitmask() {
+        // 0x00000028 = WITHIN_FOREST | FOREST_TRANSITIVE
+        assert_eq!(
+            parse_trust_attributes("40"),
+            "FOREST_TRANSITIVE | WITHIN_FOREST"
+        );
+        // 0x00000018 = FOREST_TRANSITIVE | CROSS_ORGANIZATION
+        assert_eq!(
+            parse_trust_attributes("24"),
+            "FOREST_TRANSITIVE | CROSS_ORGANIZATION"
+        );
+    }
+
+    #[test]
+    fn test_parse_trust_attributes_zero() {
+        assert_eq!(parse_trust_attributes("0"), "0x00000000");
+    }
+
+    #[test]
+    fn test_parse_trust_attributes_non_numeric() {
+        assert_eq!(parse_trust_attributes("abc"), "abc");
+    }
+
+    #[test]
+    fn test_large_integer_to_mins() {
+        // -36288000000000 = -42 days in 100ns intervals → 60480 mins
+        assert_eq!(large_integer_to_mins(-36_288_000_000_000), Some(60480));
+        // 0 means no limit
+        assert_eq!(large_integer_to_mins(0), None);
+        // -18000000000 = -30 mins
+        assert_eq!(large_integer_to_mins(-1_800_000_000), Some(3));
     }
 }

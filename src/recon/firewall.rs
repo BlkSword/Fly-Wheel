@@ -193,15 +193,17 @@ fn collect_iptables_rules() -> Result<Vec<FirewallRule>, String> {
                 continue;
             }
             let parts: Vec<&str> = line.split_whitespace().collect();
-            if parts.len() >= 4 {
+            // iptables -L -n -v --line-numbers 列序:
+            // num pkts bytes target prot opt in out source destination
+            if parts.len() >= 5 {
                 rules.push(FirewallRule {
                     name: format!("iptables-{}", parts[0]),
                     direction: FirewallDirection::Inbound,
-                    action: if parts[1] == "ACCEPT" { FirewallAction::Allow } else { FirewallAction::Block },
-                    protocol: parts[3].to_string(),
+                    action: if parts[3] == "ACCEPT" { FirewallAction::Allow } else { FirewallAction::Block },
+                    protocol: parts[4].to_string(),
                     local_port: String::new(),
                     remote_port: String::new(),
-                    remote_address: parts.get(5).unwrap_or(&"anywhere").to_string(),
+                    remote_address: parts.get(9).unwrap_or(&"anywhere").to_string(),
                     enabled: true,
                     program: None,
                     group: Some("iptables".to_string()),

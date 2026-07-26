@@ -133,24 +133,11 @@ fn get_nt_timestamp() -> u64 {
         + duration.subsec_nanos() as u64 / 100
 }
 
-/// 生成 8 字节 Client Challenge（使用简单随机数）
+/// 生成 8 字节 Client Challenge（密码学安全随机数）
 fn generate_client_challenge() -> [u8; 8] {
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    // 使用时间戳和计数器作为简易随机源
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
+    use rand::RngCore;
     let mut challenge = [0u8; 8];
-    challenge[0..8].copy_from_slice(&ts.to_le_bytes()[0..8]);
-    // 混入一些变化
-    challenge[0] ^= challenge[4];
-    challenge[1] ^= challenge[5];
-    challenge[2] ^= challenge[6];
-    challenge[3] ^= challenge[7];
-
+    rand::thread_rng().fill_bytes(&mut challenge);
     challenge
 }
 
@@ -175,9 +162,13 @@ pub fn build_type1(hostname: &str, domain: &str) -> Vec<u8> {
         .flat_map(|c| c.to_le_bytes())
         .collect();
 
-    // 消息结构: 签名(8) + 类型(4) + 标志(4) + 域名安全缓冲(8) + 主机名安全缓冲(8) + 数据
-    let data_offset = 32 + domain_bytes.len() + hostname_bytes.len();
-    let mut msg = Vec::with_capacity(data_offset);
+    // 消息结构: 签名(8) + 类型(4) + 标志(4) + 域名安全缓冲(8) + 主机名安全缓冲(8) = 32 字节头
+    // 安全缓冲格式: Len(u16) + MaxLen(u16) + Offset(u32) = 8 字节
+    let header_len = 32u32;
+    let domain_offset = header_len;
+    let host_offset = header_len + domain_bytes.len() as u32;
+
+    let mut msg = Vec::with_capacity(host_offset as usize + hostname_bytes.len());
 
     // 签名
     msg.extend_from_slice(NTLMSSP_SIGNATURE);
@@ -186,14 +177,12 @@ pub fn build_type1(hostname: &str, domain: &str) -> Vec<u8> {
     // 标志
     msg.extend_from_slice(&flags.to_le_bytes());
 
-    // 域名安全缓冲 (length, allocated, offset)
-    let domain_offset = 32u16;
+    // 域名安全缓冲 (Len u16, MaxLen u16, Offset u32)
     msg.extend_from_slice(&(domain_bytes.len() as u16).to_le_bytes());
     msg.extend_from_slice(&(domain_bytes.len() as u16).to_le_bytes());
     msg.extend_from_slice(&domain_offset.to_le_bytes());
 
-    // 主机名安全缓冲
-    let host_offset = (32 + domain_bytes.len()) as u16;
+    // 主机名安全缓冲 (Len u16, MaxLen u16, Offset u32)
     msg.extend_from_slice(&(hostname_bytes.len() as u16).to_le_bytes());
     msg.extend_from_slice(&(hostname_bytes.len() as u16).to_le_bytes());
     msg.extend_from_slice(&host_offset.to_le_bytes());
@@ -222,8 +211,9 @@ pub fn parse_type2(data: &[u8]) -> Result<NtlmChallenge, String> {
         return Err(format!("期望 Type 2 消息，收到类型 {}", msg_type));
     }
 
-    // 读取协商标志
-    let negotiate_flags = u32::from_le_bytes(data[12..16].try_into().unwrap_or([0; 4]));
+    // 读取协商标志 (offset 20, 4 字节)
+    // Type 2 布局: Signature(8) + MessageType(4) + TargetNameFields(8) + NegotiateFlags(4) + ServerChallenge(8) + Reserved(8) + TargetInfoFields(8)
+    let negotiate_flags = u32::from_le_bytes(data[20..24].try_into().unwrap_or([0; 4]));
 
     // 读取服务器挑战 (offset 24, 8 字节)
     let mut server_challenge = [0u8; 8];
@@ -286,15 +276,15 @@ pub fn build_type3(
         .collect();
 
     // 消息头部: 签名(8) + 类型(4) + LM缓冲(8) + NT缓冲(8) + 域名缓冲(8) + 用户名缓冲(8) + 主机名缓冲(8) + 会话缓冲(8) + 标志(4) = 64
-    let header_len = 64usize;
+    let header_len = 64u32;
     let data_offset = header_len
-        + lm_response.len()
-        + nt_response.len()
-        + domain_bytes.len()
-        + username_bytes.len()
-        + hostname_bytes.len();
+        + lm_response.len() as u32
+        + nt_response.len() as u32
+        + domain_bytes.len() as u32
+        + username_bytes.len() as u32
+        + hostname_bytes.len() as u32;
 
-    let mut msg = Vec::with_capacity(data_offset);
+    let mut msg = Vec::with_capacity(data_offset as usize);
 
     // 签名
     msg.extend_from_slice(NTLMSSP_SIGNATURE);
@@ -302,7 +292,7 @@ pub fn build_type3(
     msg.extend_from_slice(&MSG_TYPE_AUTHENTICATE.to_le_bytes());
 
     // LM Response 安全缓冲
-    let mut offset = header_len as u16;
+    let mut offset = header_len;
     append_security_buffer(&mut msg, &lm_response, &mut offset);
 
     // NT Response 安全缓冲
@@ -333,12 +323,12 @@ pub fn build_type3(
     msg
 }
 
-/// 附加安全缓冲描述符 (length, allocated, offset) + 数据
-fn append_security_buffer(msg: &mut Vec<u8>, data: &[u8], offset: &mut u16) {
+/// 附加安全缓冲描述符 (Len u16, MaxLen u16, Offset u32)
+fn append_security_buffer(msg: &mut Vec<u8>, data: &[u8], offset: &mut u32) {
     msg.extend_from_slice(&(data.len() as u16).to_le_bytes());
     msg.extend_from_slice(&(data.len() as u16).to_le_bytes());
     msg.extend_from_slice(&offset.to_le_bytes());
-    *offset += data.len() as u16;
+    *offset += data.len() as u32;
 }
 
 // ==================== TSRequest (CredSSP) ASN.1 编解码 ====================
@@ -704,5 +694,187 @@ mod tests {
         // 验证类型
         let msg_type = u32::from_le_bytes(msg[8..12].try_into().unwrap());
         assert_eq!(msg_type, MSG_TYPE_AUTHENTICATE);
+    }
+
+    // ==================== 字节级布局测试（对照 MS-NLMP 规范） ====================
+
+    #[test]
+    fn test_type1_byte_layout() {
+        // MS-NLMP 3.1.5.1.1: Type 1 消息布局
+        // Signature(8) + MessageType(4) + NegotiateFlags(4) + DomainNameFields(8) + WorkstationFields(8) = 32 字节头
+        let msg = build_type1("WS", "DOM");
+
+        // 头部总长 32 字节
+        assert!(msg.len() >= 32, "Type1 消息至少 32 字节头");
+
+        // [0..8] 签名
+        assert_eq!(&msg[0..8], b"NTLMSSP\0", "签名字段错误");
+
+        // [8..12] 消息类型 = 1
+        assert_eq!(u32::from_le_bytes(msg[8..12].try_into().unwrap()), 1, "消息类型应为 1");
+
+        // [12..16] 协商标志 (u32)
+        let flags = u32::from_le_bytes(msg[12..16].try_into().unwrap());
+        assert!(flags & NTLMSSP_NEGOTIATE_UNICODE != 0, "应设置 UNICODE 标志");
+        assert!(flags & NTLMSSP_NEGOTIATE_NTLM != 0, "应设置 NTLM 标志");
+
+        // [16..24] DomainNameFields: Len(u16) + MaxLen(u16) + BufferOffset(u32)
+        let dom_len = u16::from_le_bytes(msg[16..18].try_into().unwrap());
+        let dom_maxlen = u16::from_le_bytes(msg[18..20].try_into().unwrap());
+        let dom_offset = u32::from_le_bytes(msg[20..24].try_into().unwrap());
+        assert_eq!(dom_len, dom_maxlen, "Len 应等于 MaxLen");
+        assert_eq!(dom_offset, 32, "Domain 数据偏移应为 32（头部之后）");
+
+        // [24..32] WorkstationFields: Len(u16) + MaxLen(u16) + BufferOffset(u32)
+        let ws_len = u16::from_le_bytes(msg[24..26].try_into().unwrap());
+        let ws_offset = u32::from_le_bytes(msg[28..32].try_into().unwrap());
+        assert_eq!(ws_offset, 32 + dom_len as u32, "Workstation 偏移应紧跟 Domain 数据");
+
+        // 验证 payload 中的 Domain 数据（UTF-16LE "DOM"）
+        let dom_data = &msg[dom_offset as usize..dom_offset as usize + dom_len as usize];
+        let dom_str: Vec<u16> = dom_data.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        assert_eq!(String::from_utf16(&dom_str).unwrap(), "DOM");
+
+        // 验证 payload 中的 Workstation 数据（UTF-16LE "WS"）
+        let ws_data = &msg[ws_offset as usize..ws_offset as usize + ws_len as usize];
+        let ws_str: Vec<u16> = ws_data.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        assert_eq!(String::from_utf16(&ws_str).unwrap(), "WS");
+    }
+
+    #[test]
+    fn test_type2_byte_layout_flags_at_offset_20() {
+        // MS-NLMP 3.1.5.1.2: Type 2 消息布局
+        // Signature(8) + MessageType(4) + TargetNameFields(8) + NegotiateFlags(4) + ServerChallenge(8) + Reserved(8) + TargetInfoFields(8) = 48
+        // 关键：NegotiateFlags 在偏移 20，不是 12
+        let mut msg = Vec::new();
+        msg.extend_from_slice(b"NTLMSSP\0");                    // [0..8] 签名
+        msg.extend_from_slice(&2u32.to_le_bytes());             // [8..12] 类型 = 2
+        // [12..20] TargetNameFields (Len=0, MaxLen=0, Offset=0)
+        msg.extend_from_slice(&0u16.to_le_bytes());
+        msg.extend_from_slice(&0u16.to_le_bytes());
+        msg.extend_from_slice(&0u32.to_le_bytes());
+        // [20..24] NegotiateFlags — 设置 UNICODE | NTLM | EXTENDED_SESSIONSECURITY
+        let test_flags: u32 = 0x00080201;
+        msg.extend_from_slice(&test_flags.to_le_bytes());
+        // [24..32] ServerChallenge
+        msg.extend_from_slice(&[0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22]);
+        // [32..40] Reserved
+        msg.extend_from_slice(&[0u8; 8]);
+        // [40..48] TargetInfoFields (空)
+        msg.extend_from_slice(&0u16.to_le_bytes());
+        msg.extend_from_slice(&0u16.to_le_bytes());
+        msg.extend_from_slice(&0u32.to_le_bytes());
+
+        let result = parse_type2(&msg).unwrap();
+
+        // 验证 flags 从偏移 20 正确读取
+        assert_eq!(result.negotiate_flags, test_flags,
+            "flags 应从偏移 20 读取，期望 0x{:08X}，实际 0x{:08X}", test_flags, result.negotiate_flags);
+
+        // 验证 challenge 从偏移 24 正确读取
+        assert_eq!(result.server_challenge, [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22]);
+    }
+
+    #[test]
+    fn test_type2_with_target_info() {
+        // 构造含 TargetInfo 的 Type 2 消息
+        let target_info: Vec<u8> = vec![
+            0x02, 0x00, 0x08, 0x00,  // AvId=2 (NetBIOS domain), Len=8
+            0x44, 0x00, 0x4F, 0x00, 0x4D, 0x00, 0x41, 0x00,  // "DOMA"
+            0x00, 0x00, 0x00, 0x00,  // AvPair terminator
+        ];
+
+        let mut msg = Vec::new();
+        msg.extend_from_slice(b"NTLMSSP\0");
+        msg.extend_from_slice(&2u32.to_le_bytes());
+        // TargetNameFields: 指向 payload 中的目标名
+        let target_name: Vec<u8> = "DOMAIN".encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+        let tn_offset = 48u32;
+        msg.extend_from_slice(&(target_name.len() as u16).to_le_bytes());
+        msg.extend_from_slice(&(target_name.len() as u16).to_le_bytes());
+        msg.extend_from_slice(&tn_offset.to_le_bytes());
+        // Flags
+        msg.extend_from_slice(&0x00080201u32.to_le_bytes());
+        // Challenge
+        msg.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7, 8]);
+        // Reserved
+        msg.extend_from_slice(&[0u8; 8]);
+        // TargetInfoFields
+        let ti_offset = 48u32 + target_name.len() as u32;
+        msg.extend_from_slice(&(target_info.len() as u16).to_le_bytes());
+        msg.extend_from_slice(&(target_info.len() as u16).to_le_bytes());
+        msg.extend_from_slice(&ti_offset.to_le_bytes());
+        // Payload
+        msg.extend_from_slice(&target_name);
+        msg.extend_from_slice(&target_info);
+
+        let result = parse_type2(&msg).unwrap();
+        assert_eq!(result.server_challenge, [1, 2, 3, 4, 5, 6, 7, 8]);
+        assert_eq!(result.target_info, target_info, "TargetInfo 应从正确偏移提取");
+    }
+
+    #[test]
+    fn test_type3_byte_layout() {
+        // MS-NLMP 3.1.5.1.3: Type 3 消息布局
+        // Signature(8) + MessageType(4) + LmChallengeResponse(8) + NtChallengeResponse(8)
+        // + DomainName(8) + UserName(8) + Workstation(8) + EncryptedRandomSessionKey(8) + NegotiateFlags(4) = 64 字节头
+        let challenge = NtlmChallenge {
+            server_challenge: [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF],
+            target_info: vec![0x00, 0x00, 0x00, 0x00],
+            negotiate_flags: NTLMSSP_NEGOTIATE_UNICODE | NTLMSSP_NEGOTIATE_NTLM,
+        };
+
+        let msg = build_type3("User", "Password", "Domain", "Workstation", &challenge);
+
+        // 头部至少 64 字节
+        assert!(msg.len() >= 64, "Type3 消息至少 64 字节头，实际 {}", msg.len());
+
+        // [0..8] 签名
+        assert_eq!(&msg[0..8], b"NTLMSSP\0");
+
+        // [8..12] 类型 = 3
+        assert_eq!(u32::from_le_bytes(msg[8..12].try_into().unwrap()), 3);
+
+        // 验证 6 个安全缓冲的偏移字段都是 u32（4 字节）
+        // 每个安全缓冲: Len(u16) + MaxLen(u16) + Offset(u32) = 8 字节
+        // LM: [12..20], NT: [20..28], Domain: [28..36], User: [36..44], WS: [44..52], Session: [52..60]
+        let lm_len = u16::from_le_bytes(msg[12..14].try_into().unwrap());
+        let lm_offset = u32::from_le_bytes(msg[16..20].try_into().unwrap());
+        assert_eq!(lm_offset, 64, "LM 响应偏移应为 64（头部之后）");
+        assert_eq!(lm_len, 24, "LM 响应应为 24 字节");
+
+        let nt_len = u16::from_le_bytes(msg[20..22].try_into().unwrap());
+        let nt_offset = u32::from_le_bytes(msg[24..28].try_into().unwrap());
+        assert_eq!(nt_offset, 64 + lm_len as u32, "NT 响应偏移应紧跟 LM");
+        assert!(nt_len > 24, "NTLMv2 响应应大于 24 字节");
+
+        let dom_len = u16::from_le_bytes(msg[28..30].try_into().unwrap());
+        let dom_offset = u32::from_le_bytes(msg[32..36].try_into().unwrap());
+        assert_eq!(dom_offset, 64 + lm_len as u32 + nt_len as u32);
+
+        let user_len = u16::from_le_bytes(msg[36..38].try_into().unwrap());
+        let user_offset = u32::from_le_bytes(msg[40..44].try_into().unwrap());
+        assert_eq!(user_offset, dom_offset + dom_len as u32);
+
+        // [60..64] 协商标志
+        let flags = u32::from_le_bytes(msg[60..64].try_into().unwrap());
+        assert!(flags & NTLMSSP_NEGOTIATE_UNICODE != 0);
+
+        // 验证用户名 payload（UTF-16LE "User"）
+        let user_data = &msg[user_offset as usize..user_offset as usize + user_len as usize];
+        let user_str: Vec<u16> = user_data.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        assert_eq!(String::from_utf16(&user_str).unwrap(), "User");
+    }
+
+    #[test]
+    fn test_type1_empty_domain_workstation() {
+        // 空域名和工作站名：安全缓冲 Len=0, Offset 仍为 u32
+        let msg = build_type1("", "");
+        assert_eq!(msg.len(), 32, "空 payload 时 Type1 应恰好 32 字节");
+
+        let dom_len = u16::from_le_bytes(msg[16..18].try_into().unwrap());
+        assert_eq!(dom_len, 0);
+        let dom_offset = u32::from_le_bytes(msg[20..24].try_into().unwrap());
+        assert_eq!(dom_offset, 32);
     }
 }

@@ -189,9 +189,9 @@ fn query_computer_sessions(
     let clean_computer = computer.trim_start_matches('\\');
 
     if cfg!(windows) {
-        // quser /server:
+        // quser /server:HOSTNAME（必须作为单个参数传递）
         let output = std::process::Command::new("quser")
-            .args(["/server:", clean_computer])
+            .arg(format!("/server:{}", clean_computer))
             .output();
 
         if let Ok(o) = output {
@@ -223,7 +223,7 @@ fn query_computer_sessions(
         // 如果没有RDP会话，尝试查询网络会话
         if sessions.is_empty() {
             let net_output = std::process::Command::new("net")
-                .args(["session", "\\\\", clean_computer])
+                .args(["session", &format!("\\\\{}", clean_computer)])
                 .output();
 
             if let Ok(o) = net_output {
@@ -315,7 +315,11 @@ mod tests {
     fn test_quick_user_hunt() {
         let admins = vec!["Administrator".to_string()];
         let sessions = quick_user_hunt(&admins);
-        // 在非域环境中可能为空
-        assert!(sessions.is_empty() || !sessions.is_empty());
+        // 在非域环境中可能为空，但匹配到管理员时必须正确标记
+        for s in &sessions {
+            if s.username.eq_ignore_ascii_case("Administrator") {
+                assert!(s.is_domain_admin);
+            }
+        }
     }
 }

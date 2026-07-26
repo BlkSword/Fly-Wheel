@@ -1,7 +1,7 @@
 //! AD 域深度枚举 CLI
 
 use crate::cli::{print_banner, InteractiveMenu};
-use crate::core::error::FlyWheelError;
+use crate::core::error::IntraSweepError;
 use crate::core::Result;
 use crate::output::color::{print_info, print_success};
 use crate::output::format::OutputFormat;
@@ -38,7 +38,7 @@ pub fn run_ad_cmd(
     }
 
     let rt = tokio::runtime::Runtime::new()?;
-    let ad_err = |e: String| -> FlyWheelError { FlyWheelError::Other { message: e } };
+    let ad_err = |e: String| -> IntraSweepError { IntraSweepError::Other { message: e } };
 
     let result = match mode.as_str() {
         "kerberoast" => {
@@ -214,7 +214,7 @@ fn run_interactive_ad(
 
     if !InteractiveMenu::confirm("确认开始 AD 枚举? [Y/n]: ") {
         print_info("已取消");
-        return Err(FlyWheelError::Other { message: "用户取消".to_string() });
+        return Err(IntraSweepError::Other { message: "用户取消".to_string() });
     }
 
     Ok((dc, domain, username, password, ssl, mode, bloodhound_dir))

@@ -2,7 +2,7 @@
 //!
 //! 实现本地端口转发到远程目标
 
-use crate::core::error::{FlyWheelError, Result};
+use crate::core::error::{IntraSweepError, Result};
 use crate::tunnel::config::TunnelConfig;
 use crate::tunnel::models::{ConnectionInfo, TunnelEvent, TunnelEventHandler, TunnelStatus};
 use crate::tunnel::relay;
@@ -39,12 +39,12 @@ impl ForwardTunnel {
         self.config.validate()?;
 
         let target = self.config.remote_target.clone()
-            .ok_or_else(|| FlyWheelError::Config {
+            .ok_or_else(|| IntraSweepError::Config {
                 message: "正向隧道需要指定远程目标".to_string(),
             })?;
 
         let listener = TcpListener::bind(&self.config.local_addr).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
 
@@ -166,12 +166,12 @@ impl ForwardTunnel {
         self.config.validate()?;
 
         let target = self.config.remote_target.clone()
-            .ok_or_else(|| FlyWheelError::Config {
+            .ok_or_else(|| IntraSweepError::Config {
                 message: "正向隧道需要指定远程目标".to_string(),
             })?;
 
         let listener = TcpListener::bind(&self.config.local_addr).await
-            .map_err(|e| FlyWheelError::Network {
+            .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
 

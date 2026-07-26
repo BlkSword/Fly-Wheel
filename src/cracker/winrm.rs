@@ -2,8 +2,6 @@
 //!
 //! 支持 Basic 和 NTLM 两种认证方式
 
-#![allow(dead_code)]
-
 use async_trait::async_trait;
 use std::io::{Read, Write};
 use std::net::{TcpStream, ToSocketAddrs};

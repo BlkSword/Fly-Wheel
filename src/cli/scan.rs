@@ -234,7 +234,7 @@ fn run_interactive_scan(
 
     // 执行扫描
     match scan_type.as_str() {
-        "host" => run_host_scan(targets, ScanPreset::Standard, None, output),
+        "host" => run_host_scan_from_config(targets, config, output),
         "port" => run_port_scan_from_config(targets, config, output_fmt, output),
         "comprehensive" => run_comprehensive_scan_from_config(targets, config, output_fmt, output),
         _ => run_port_scan_from_config(targets, config, output_fmt, output),
@@ -392,6 +392,36 @@ fn preset_to_config(preset: ScanPreset) -> ScanConfig {
         ScanPreset::Deep => ScanConfig::deep_scan(),
         ScanPreset::Stealth => ScanConfig::stealth_scan(),
     }
+}
+
+/// 使用配置进行主机存活扫描（交互式模式）
+fn run_host_scan_from_config(
+    targets: Vec<String>,
+    config: ScanConfig,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    println!();
+    print_info("开始主机存活扫描");
+    print_info(&format!("目标: {}", targets.join(", ")));
+    print_info(&format!("预设: {}", format_preset(&config)));
+    print_info(&format!(
+        "扫描方式: {}",
+        config.host_scan_method.display_name()
+    ));
+    println!();
+
+    let rt = tokio::runtime::Runtime::new()?;
+    let scanner = Scanner::new(config);
+    let result = rt.block_on(scanner.host_discovery(targets));
+
+    print_scan_results(&result);
+
+    if let Ok(path) = save_scan_result(&result, OutputFormat::Json, output) {
+        println!();
+        print_success(&format!("结果已保存到: {}", path.display()));
+    }
+
+    Ok(())
 }
 
 /// 简化的端口扫描（使用默认配置）

@@ -2,8 +2,6 @@
 //!
 //! 提供高性能端口扫描功能
 
-#![allow(dead_code)]
-
 use crate::scanner::config::ScanConfig;
 use crate::scanner::models::{HostResult, PortInfo, PortState, ServiceInfo};
 use crate::scanner::service::ServiceIdentifier;

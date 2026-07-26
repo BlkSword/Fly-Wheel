@@ -2,14 +2,12 @@
 //!
 //! 定义了整个项目使用的错误类型
 
-#![allow(dead_code)]
-
 use std::io;
 use thiserror::Error;
 
-/// Fly-Wheel 统一错误类型
+/// IntraSweep 统一错误类型
 #[derive(Error, Debug)]
-pub enum FlyWheelError {
+pub enum IntraSweepError {
     /// IO 相关错误
     #[error("IO错误: {0}")]
     Io(#[from] io::Error),
@@ -63,20 +61,20 @@ pub enum FlyWheelError {
     Other { message: String },
 }
 
-impl From<String> for FlyWheelError {
+impl From<String> for IntraSweepError {
     fn from(s: String) -> Self {
-        FlyWheelError::Other { message: s }
+        IntraSweepError::Other { message: s }
     }
 }
 
-impl From<&str> for FlyWheelError {
+impl From<&str> for IntraSweepError {
     fn from(s: &str) -> Self {
-        FlyWheelError::Other { message: s.to_string() }
+        IntraSweepError::Other { message: s.to_string() }
     }
 }
 
 /// 项目统一的 Result 类型
-pub type Result<T> = std::result::Result<T, FlyWheelError>;
+pub type Result<T> = std::result::Result<T, IntraSweepError>;
 
 
 #[cfg(test)]
@@ -85,7 +83,7 @@ mod tests {
 
     #[test]
     fn test_error_display() {
-        let err = FlyWheelError::Unsupported {
+        let err = IntraSweepError::Unsupported {
             operation: "test".to_string(),
         };
         assert_eq!(err.to_string(), "不支持的操作: test");
@@ -94,7 +92,7 @@ mod tests {
     #[test]
     fn test_network_error_conversion() {
         let io_err = io::Error::new(io::ErrorKind::ConnectionRefused, "连接被拒绝");
-        let fw_err: FlyWheelError = io_err.into();
-        assert!(matches!(fw_err, FlyWheelError::Io(_)));
+        let fw_err: IntraSweepError = io_err.into();
+        assert!(matches!(fw_err, IntraSweepError::Io(_)));
     }
 }

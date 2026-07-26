@@ -2,8 +2,6 @@
 //!
 //! 检测 Linux 系统上的常见提权向量
 
-#![allow(dead_code)]
-
 use super::{PrivescFinding, PrivescResult, PrivescSeverity, PrivescStats};
 use std::process::Command;
 

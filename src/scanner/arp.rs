@@ -144,6 +144,5 @@ mod tests {
         let result = probe_host(Ipv4Addr::LOCALHOST);
         // 只要不崩溃就算通过
         let _ = result;
-        assert!(true);
     }
 }

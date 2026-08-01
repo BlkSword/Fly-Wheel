@@ -49,7 +49,8 @@ async fn test_relay_echo() {
             if let Ok(target_stream) = TcpStream::connect(&target).await {
                 // 调用库内真实的 relay 函数
                 let stats = relay::relay(client_stream, target_stream).await;
-                assert!(stats.sent > 0 || stats.received > 0 || true);
+                // relay 正常返回即可，统计值在并发下可能为 0
+                let _ = stats;
             }
         }
     });

@@ -962,6 +962,7 @@ mod tests {
         assert!(!routes.is_empty());
     }
 
+    #[cfg(target_os = "linux")]
     #[test]
     fn test_hex_to_ip() {
         assert_eq!(hex_to_ip("0100007F"), "127.0.0.1");

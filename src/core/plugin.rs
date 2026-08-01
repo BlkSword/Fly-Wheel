@@ -235,7 +235,7 @@ impl PluginManager {
                                 lib_ext
                             ));
 
-                            if lib_path.exists() || true {
+                            if lib_path.exists() {
                                 // 读取元数据
                                 if let Ok(content) = std::fs::read_to_string(&path) {
                                     if let Some(meta) = PluginMeta::from_json(&content) {

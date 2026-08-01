@@ -304,41 +304,42 @@ fn extract_ftp_client_credentials() -> Result<Vec<Credential>, String> {
                 let user_re = regex::Regex::new(r"<User>(.+?)</User>").ok();
                 let pass_re = regex::Regex::new(r#"<Pass(?: encoding="base64")?>(.+?)</Pass>"#).ok();
 
-                // 简化：收集所有用户名
-                if let Some(ref re) = user_re {
+                // 每个 RecentServer/Server 条目为一条站点记录，逐条提取
+                let entry_re = regex::Regex::new(r"<(?:RecentServer|Server)>(.*?)</(?:RecentServer|Server)>").ok();
+                if let Some(re) = entry_re {
                     for cap in re.captures_iter(&content) {
-                        let username = cap.get(1).map(|m| m.as_str()).unwrap_or("");
+                        let body = cap.get(1).map(|m| m.as_str()).unwrap_or("");
                         let host = host_re.as_ref()
-                            .and_then(|r| r.captures(&content))
+                            .and_then(|r| r.captures(body))
                             .and_then(|c| c.get(1))
                             .map(|m| m.as_str())
                             .unwrap_or("");
+                        let username = user_re.as_ref()
+                            .and_then(|r| r.captures(body))
+                            .and_then(|c| c.get(1))
+                            .map(|m| m.as_str())
+                            .unwrap_or("");
+                        let password = pass_re.as_ref()
+                            .and_then(|r| r.captures(body))
+                            .and_then(|c| c.get(1))
+                            .and_then(|encoded| base64_decode(encoded.as_str()).ok())
+                            .filter(|decoded| !decoded.is_empty());
 
-                        credentials.push(
-                            Credential::new(CredType::AppCredential, "FileZilla FTP客户端")
-                                .with_username(username)
-                                .with_target(host)
-                                .with_attribute("source_file", xml_file)
-                        );
-                        break;
-                    }
-                }
+                        if username.is_empty() && host.is_empty() && password.is_none() {
+                            continue;
+                        }
 
-                // 尝试Base64解码密码
-                if let Some(ref re) = pass_re {
-                    for cap in re.captures_iter(&content) {
-                        let encoded = cap.get(1).map(|m| m.as_str()).unwrap_or("");
-                        if let Ok(decoded) = base64_decode(encoded) {
-                            let password = String::from_utf8_lossy(&decoded).to_string();
+                        let mut cred = Credential::new(CredType::AppCredential, "FileZilla FTP客户端")
+                            .with_username(username)
+                            .with_target(host)
+                            .with_attribute("source_file", xml_file);
+                        if let Some(decoded) = password {
+                            let password = String::from_utf8_lossy(&decoded);
                             if !password.is_empty() {
-                                // 更新已添加的凭据或添加新的
-                                if let Some(cred) = credentials.last_mut() {
-                                    if cred.password.is_none() {
-                                        let _ = std::mem::replace(&mut cred.password, Some(password));
-                                    }
-                                }
+                                cred = cred.with_password(&password);
                             }
                         }
+                        credentials.push(cred);
                     }
                 }
             }

@@ -194,7 +194,7 @@ fn cidr_to_mask(cidr: u8) -> Ipv4Addr {
 }
 
 /// 快速扫描子网存活主机（ARP方式）
-fn quick_subnet_scan(network: &str, cidr: u8) -> usize {
+fn quick_subnet_scan(_network: &str, _cidr: u8) -> usize {
     let mut count = 0;
 
     // 使用ARP扫描（Windows）

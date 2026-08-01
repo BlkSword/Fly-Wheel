@@ -17,7 +17,7 @@ pub mod tunnel;
 pub mod vuln;
 
 use crate::core::Result;
-use crate::output::color::{print_error, print_info, print_success};
+use crate::output::color::print_error;
 use clap::{Parser, Subcommand};
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -323,14 +323,6 @@ pub enum Commands {
         #[arg(short, long)]
         domain: Option<String>,
 
-        /// 用户名
-        #[arg(short, long)]
-        username: Option<String>,
-
-        /// 密码
-        #[arg(short, long)]
-        password: Option<String>,
-
         /// 输出格式: json, csv (默认: json)
         #[arg(long, default_value = "json")]
         format: String,
@@ -498,17 +490,6 @@ pub(crate) fn parse_scan_type(scan_type: &str) -> Option<&'static str> {
     None
 }
 
-/// 解析 tunnel 子命令
-pub(crate) fn parse_tunnel_type(t: &str) -> Option<&'static str> {
-    let t_lower = t.to_lowercase();
-    for &(full, abbr) in TUNNEL_TYPES {
-        if t_lower == full || t_lower == abbr {
-            return Some(full);
-        }
-    }
-    None
-}
-
 /// 打印所有可用的 system 子命令
 pub(crate) fn print_system_items() {
     println!("可用的收集项目:");
@@ -521,14 +502,6 @@ pub(crate) fn print_system_items() {
 pub(crate) fn print_scan_types() {
     println!("可用的扫描类型:");
     for (full, abbr) in SCAN_TYPES {
-        println!("  {} ({})", full, abbr);
-    }
-}
-
-/// 打印所有可用的 tunnel 类型
-pub(crate) fn print_tunnel_types() {
-    println!("可用的隧道类型:");
-    for (full, abbr) in TUNNEL_TYPES {
         println!("  {} ({})", full, abbr);
     }
 }

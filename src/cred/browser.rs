@@ -434,7 +434,7 @@ fn decrypt_firefox_field(_encrypted: &str) -> Result<String, String> {
 
 /// 提取Internet Explorer密码
 fn extract_ie_passwords() -> Result<Vec<Credential>, String> {
-    let mut credentials = Vec::new();
+    let credentials = Vec::new();
 
     // IE密码存储在Windows凭据管理器中
     // 通过vaultcmd命令导出

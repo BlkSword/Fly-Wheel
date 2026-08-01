@@ -4,27 +4,24 @@
 
 use crate::cli::{print_banner, InteractiveMenu};
 use crate::core::Result;
-use crate::output::color::{print_error, print_info, print_success, Color};
+use crate::output::color::{print_info, print_success, Color};
 use crate::output::format::OutputFormat;
 use std::path::PathBuf;
 
 pub fn run_cred_cmd(
     dc: Option<String>,
     domain: Option<String>,
-    username: Option<String>,
-    password: Option<String>,
     format: &str,
     output: Option<PathBuf>,
 ) -> Result<()> {
     let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
     // 无任何有效参数时进入交互式模式（含 -o 输出，避免仅指定输出误入向导）
-    let interactive = dc.is_none() && domain.is_none() && username.is_none()
-        && password.is_none() && output.is_none();
-    let (dc, domain, username, password) = if interactive {
+    let interactive = dc.is_none() && domain.is_none() && output.is_none();
+    let (dc, domain) = if interactive {
         run_interactive_cred()?
     } else {
-        (dc, domain, username, password)
+        (dc, domain)
     };
 
     let mut manager = crate::cred::CredManager::new(
@@ -65,35 +62,13 @@ pub fn run_cred_cmd(
     Ok(())
 }
 
-fn run_interactive_cred() -> Result<(Option<String>, Option<String>, Option<String>, Option<String>)> {
+fn run_interactive_cred() -> Result<(Option<String>, Option<String>)> {
     print_banner();
     println!();
     print_info("IntraSweep 交互式本地凭据收集向导");
     println!();
 
-    InteractiveMenu::print_step(1, 4, "认证凭据 (可选)");
-    println!("凭据用于域环境 GPP 解密；本机浏览器/WiFi/应用凭据无需凭据即可提取。");
-    println!();
-    let username = {
-        let u = InteractiveMenu::read_input("用户名 (留空=仅本机提取): ");
-        if u.is_empty() {
-            None
-        } else {
-            Some(u)
-        }
-    };
-    let password = if username.is_some() {
-        let p = InteractiveMenu::read_input("密码: ");
-        if p.is_empty() {
-            None
-        } else {
-            Some(p)
-        }
-    } else {
-        None
-    };
-
-    InteractiveMenu::print_step(2, 4, "域信息 (可选)");
+    InteractiveMenu::print_step(1, 3, "域信息 (可选)");
     println!("提供域信息后可尝试从 SYSVOL 解密 GPP 密码 (留空跳过)");
     println!();
     let domain = InteractiveMenu::read_input("域名 (例: corp.local, 留空=跳过): ");
@@ -101,7 +76,7 @@ fn run_interactive_cred() -> Result<(Option<String>, Option<String>, Option<Stri
     let dc = InteractiveMenu::read_input("域控地址 (留空=跳过): ");
     let dc = if dc.is_empty() { None } else { Some(dc) };
 
-    InteractiveMenu::print_step(3, 4, "执行内容确认");
+    InteractiveMenu::print_step(2, 3, "执行内容确认");
     println!("  本机提取: 浏览器 / WiFi / 应用 / SAM / LSASS 凭据");
     if let (Some(ref d), Some(ref c)) = (&domain, &dc) {
         println!("  GPP解密:   域 {} 域控 {}", d, c);
@@ -109,13 +84,13 @@ fn run_interactive_cred() -> Result<(Option<String>, Option<String>, Option<Stri
         println!("  GPP解密:   跳过");
     }
 
-    InteractiveMenu::print_step(4, 4, "确认");
+    InteractiveMenu::print_step(3, 3, "确认");
     if !InteractiveMenu::confirm("确认开始收集? [Y/n]: ") {
         print_info("已取消");
-        return Ok((None, None, None, None));
+        return Ok((None, None));
     }
 
-    Ok((dc, domain, username, password))
+    Ok((dc, domain))
 }
 
 fn print_cred_results(result: &crate::cred::CredHarvestResult) {

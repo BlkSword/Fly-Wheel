@@ -2,7 +2,7 @@
 
 use crate::cli::{print_banner, InteractiveMenu};
 use crate::core::Result;
-use crate::output::color::{print_error, print_info, print_success};
+use crate::output::color::{print_info, print_success};
 use crate::output::color::print_warning;
 use std::path::PathBuf;
 

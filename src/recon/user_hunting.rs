@@ -272,7 +272,7 @@ pub fn quick_user_hunt(domain_admins: &[String]) -> Vec<UserSession> {
                     sessions.push(UserSession {
                         username,
                         domain: String::new(),
-                        computer: whoami::hostname(),
+                        computer: whoami::fallible::hostname().unwrap_or_default(),
                         computer_ip: None,
                         session_id: parts[0].parse().unwrap_or(0),
                         session_type: "Local".to_string(),

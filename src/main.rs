@@ -1,28 +1,14 @@
 //! IntraSweep - 内网渗透辅助工具
+//!
+//! 薄入口：CLI 解析与命令路由，所有实现位于 lib crate。
 
-// 二进制入口有独立的模块树，与 lib.rs 的 API 层分开编译
-#![allow(clippy::too_many_arguments)]
-
-mod ad;
-mod cli;
-mod collector;
-mod core;
-mod cracker;
-mod cred;
-mod modules;
-mod output;
-mod privesc;
-mod recon;
-mod scanner;
-mod tunnel;
-mod vuln;
-
-use cli::Commands;
 use clap::Parser;
-use output::color::{print_error, print_info};
+use intrasweep::cli::{Cli, Commands};
+use intrasweep::core;
+use intrasweep::output::color::{print_error, print_info};
 
 fn main() {
-    let cli = cli::Cli::parse();
+    let cli = Cli::parse();
 
     core::log::init_logging(&core::log::LogConfig {
         verbose: cli.verbose,
@@ -49,7 +35,7 @@ fn main() {
 
     let result = match cli.command {
         Commands::System { item, output, quiet } => {
-            cli::system::run_system(&item, output, quiet)
+            intrasweep::cli::system::run_system(&item, output, quiet)
         }
 
         Commands::Scan { targets, scan_type, fast, webfinger, format, output } => {
@@ -65,8 +51,8 @@ fn main() {
             } else {
                 (targets, scan_type, fast, webfinger)
             };
-            let format = apply_default_format(&cfg, &format);
-            cli::scan::run_scan(targets, scan_type, fast, webfinger, &format, output)
+            let format = core::config::apply_default_format(&cfg, &format);
+            intrasweep::cli::scan::run_scan(targets, scan_type, fast, webfinger, &format, output)
         }
 
         Commands::Crack { target, port, service, usernames, password_file,
@@ -87,9 +73,9 @@ fn main() {
             } else {
                 (password_file, username_file, concurrency, timeout)
             };
-            cli::crack::run_crack_cmd(target, port, service, usernames,
-                                      password_file, username_file,
-                                      concurrency, timeout, delay, spray)
+            intrasweep::cli::crack::run_crack_cmd(target, port, service, usernames,
+                                                  password_file, username_file,
+                                                  concurrency, timeout, delay, spray)
         }
 
         Commands::Tunnel { tunnel_type, target, local_port, remote_port,
@@ -114,10 +100,10 @@ fn main() {
             } else {
                 (max_connections, timeout)
             };
-            cli::tunnel::run_tunnel_cmd(tunnel_type, target, local_port,
-                                       remote_port, hop, socks5_username,
-                                       socks5_password, max_connections, timeout,
-                                       encryption_key)
+            intrasweep::cli::tunnel::run_tunnel_cmd(tunnel_type, target, local_port,
+                                                    remote_port, hop, socks5_username,
+                                                    socks5_password, max_connections, timeout,
+                                                    encryption_key)
         }
 
         Commands::Vuln { targets, poc_file, severity, category,
@@ -138,14 +124,14 @@ fn main() {
             } else {
                 (concurrency, timeout)
             };
-            let format = apply_default_format(&cfg, &format);
-            cli::vuln::run_vuln_cmd(targets, poc_file, severity, category,
-                                    &format, output, concurrency, timeout, web_probe)
+            let format = core::config::apply_default_format(&cfg, &format);
+            intrasweep::cli::vuln::run_vuln_cmd(targets, poc_file, severity, category,
+                                                &format, output, concurrency, timeout, web_probe)
         }
 
-        Commands::Cred { dc, domain, username, password, format, output } => {
-            let format = apply_default_format(&cfg, &format);
-            cli::cred::run_cred_cmd(dc, domain, username, password, &format, output)
+        Commands::Cred { dc, domain, format, output } => {
+            let format = core::config::apply_default_format(&cfg, &format);
+            intrasweep::cli::cred::run_cred_cmd(dc, domain, &format, output)
         }
 
         Commands::Ad { dc, domain, username, password, ssl, mode,
@@ -168,24 +154,24 @@ fn main() {
                 }
                 _ => {}
             }
-            let format = apply_default_format(&cfg, &format);
-            cli::ad::run_ad_cmd(dc, domain, username, password, ssl,
-                               mode, bloodhound_dir, &format, output,
-                               golden_ticket, krbtgt_hash)
+            let format = core::config::apply_default_format(&cfg, &format);
+            intrasweep::cli::ad::run_ad_cmd(dc, domain, username, password, ssl,
+                                            mode, bloodhound_dir, &format, output,
+                                            golden_ticket, krbtgt_hash)
         }
 
         Commands::Recon { dc, domain, mode, format, output } => {
-            let format = apply_default_format(&cfg, &format);
-            cli::recon::run_recon_cmd(dc, domain, mode, &format, output)
+            let format = core::config::apply_default_format(&cfg, &format);
+            intrasweep::cli::recon::run_recon_cmd(dc, domain, mode, &format, output)
         }
 
         Commands::Privesc { check, format, output } => {
-            let format = apply_default_format(&cfg, &format);
-            cli::privesc::run_privesc_cmd(check, &format, output)
+            let format = core::config::apply_default_format(&cfg, &format);
+            intrasweep::cli::privesc::run_privesc_cmd(check, &format, output)
         }
 
         Commands::Report { format, input, mitre, output } => {
-            cli::report::run_report_cmd(format, mitre, output, input)
+            intrasweep::cli::report::run_report_cmd(format, mitre, output, input)
         }
     };
 
@@ -193,14 +179,4 @@ fn main() {
         print_error(&format!("{}", e));
         std::process::exit(1);
     }
-}
-
-/// 配置文件中的 defaults.format 作为 --format 的后备值
-fn apply_default_format(cfg: &Option<core::config::AppConfig>, cli_format: &str) -> String {
-    if cli_format != "json" {
-        return cli_format.to_string();
-    }
-    cfg.as_ref()
-        .and_then(|c| c.defaults.format.clone())
-        .unwrap_or_else(|| cli_format.to_string())
 }

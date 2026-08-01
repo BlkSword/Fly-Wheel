@@ -14,7 +14,7 @@ pub struct ScanProgress {
     bar: ProgressBar,
     total: usize,
     current: AtomicUsize,
-    show_eta: bool,
+    _show_eta: bool,
 }
 
 impl ScanProgress {
@@ -36,7 +36,7 @@ impl ScanProgress {
             bar,
             total,
             current: AtomicUsize::new(0),
-            show_eta,
+            _show_eta: show_eta,
         }
     }
 
@@ -52,7 +52,7 @@ impl ScanProgress {
             bar,
             total: 0,
             current: AtomicUsize::new(0),
-            show_eta: false,
+            _show_eta: false,
         }
     }
 
@@ -218,7 +218,7 @@ impl Drop for SimpleProgress {
 /// 多任务进度跟踪器
 pub struct MultiProgress {
     tasks: Vec<TaskProgress>,
-    total_tasks: usize,
+    _total_tasks: usize,
 }
 
 /// 单个任务进度
@@ -244,7 +244,7 @@ impl MultiProgress {
     pub fn new(total_tasks: usize) -> Self {
         Self {
             tasks: Vec::with_capacity(total_tasks),
-            total_tasks,
+            _total_tasks: total_tasks,
         }
     }
 

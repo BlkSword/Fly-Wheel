@@ -7,7 +7,7 @@ use crate::scanner::models::{DomainTrust, DomainUser, ServicePrincipalName};
 
 /// 域扫描器
 pub struct DomainScanner {
-    config: ScanConfig,
+    _config: ScanConfig,
     /// 当前域名
     domain_name: Option<String>,
     /// 域控制器
@@ -18,7 +18,7 @@ impl DomainScanner {
     /// 创建新的域扫描器
     pub fn new(config: ScanConfig) -> Self {
         Self {
-            config,
+            _config: config,
             domain_name: None,
             domain_controller: None,
         }

@@ -71,7 +71,7 @@ pub struct LocalGroup {
 
 /// 收集主机详细信息
 pub fn collect_host_info() -> Result<HostInfo, String> {
-    let hostname = whoami::hostname();
+    let hostname = whoami::fallible::hostname().unwrap_or_default();
     let os = whoami::distro();
     let arch = std::env::consts::ARCH.to_string();
 

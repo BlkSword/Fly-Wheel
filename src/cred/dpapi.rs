@@ -143,12 +143,6 @@ fn parse_master_key(data: &[u8], guid: &str) -> DpapiMasterKey {
     // [16字节] HMAC (SHA1)
     // [可变] 加密的Master Key (AES-256-CBC?)
 
-    let version = if data.len() >= 4 {
-        u32::from_le_bytes([data[0], data[1], data[2], data[3]])
-    } else {
-        1
-    };
-
     let encrypted_key = if data.len() > 56 {
         data[56..].to_vec()
     } else {
@@ -213,7 +207,7 @@ fn is_guid(s: &str) -> bool {
 
 /// 尝试使用用户密码解密Master Key
 pub fn decrypt_master_key_with_password(
-    master_key: &DpapiMasterKey,
+    _master_key: &DpapiMasterKey,
     password: &str,
     sid: &str,
 ) -> Result<Vec<u8>, String> {
@@ -231,7 +225,7 @@ pub fn decrypt_master_key_with_password(
 
 /// 尝试使用NTLM哈希解密Master Key (适用于域账户)
 pub fn decrypt_master_key_with_ntlm(
-    master_key: &DpapiMasterKey,
+    _master_key: &DpapiMasterKey,
     ntlm_hash: &str,
     sid: &str,
 ) -> Result<Vec<u8>, String> {

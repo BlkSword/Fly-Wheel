@@ -15,7 +15,6 @@
 //! - `plugin_free()` → 释放资源
 
 use serde::{Deserialize, Serialize};
-use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 /// 插件类型

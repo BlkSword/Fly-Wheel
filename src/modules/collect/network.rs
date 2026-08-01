@@ -534,6 +534,7 @@ fn parse_addr_port(addr_str: &str) -> (String, u16) {
 }
 
 /// 将十六进制转换为 IP 地址
+#[cfg(target_os = "linux")]
 fn hex_to_ip(hex: &str) -> String {
     if let Ok(num) = u32::from_str_radix(hex, 16) {
         format!("{}.{}.{}.{}", num & 0xFF, (num >> 8) & 0xFF, (num >> 16) & 0xFF, (num >> 24) & 0xFF)

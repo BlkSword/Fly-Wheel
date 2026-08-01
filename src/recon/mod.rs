@@ -282,7 +282,7 @@ impl ReconReport {
 /// 侦察引擎 — 统一的信息收集入口
 pub struct ReconEngine {
     /// 目标主机名
-    hostname: String,
+    _hostname: String,
     /// 域名
     domain: Option<String>,
     /// 域控制器
@@ -295,7 +295,7 @@ impl ReconEngine {
     /// 创建侦察引擎
     pub fn new(hostname: &str) -> Self {
         Self {
-            hostname: hostname.to_string(),
+            _hostname: hostname.to_string(),
             domain: None,
             domain_controller: None,
             report: ReconReport::new(hostname),

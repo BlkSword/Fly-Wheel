@@ -75,6 +75,18 @@ pub fn load_config(path: &Path) -> crate::core::Result<AppConfig> {
     Ok(config)
 }
 
+/// 配置文件中的 defaults.format 作为 --format 的后备值
+///
+/// CLI 显式指定非默认格式时优先使用 CLI 值；指定 json 或未指定时回退到配置。
+pub fn apply_default_format(cfg: &Option<AppConfig>, cli_format: &str) -> String {
+    if cli_format != "json" {
+        return cli_format.to_string();
+    }
+    cfg.as_ref()
+        .and_then(|c| c.defaults.format.clone())
+        .unwrap_or_else(|| cli_format.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

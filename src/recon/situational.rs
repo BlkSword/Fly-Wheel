@@ -9,7 +9,7 @@ use crate::recon::{NetworkAdapter, PotentialVuln, SituationalInfo, VulnSeverity}
 pub fn collect_situational_awareness() -> Result<SituationalInfo, String> {
     let os = get_os_info();
     let os_version = get_os_version();
-    let hostname = whoami::hostname();
+    let hostname = whoami::fallible::hostname().unwrap_or_default();
     let current_user = whoami::username();
     let privileges = get_current_privileges();
     let (in_domain, domain_name) = check_domain_membership();
@@ -152,7 +152,7 @@ fn check_domain_membership() -> (bool, Option<String>) {
 
         // 备用方法：检查USERDOMAIN
         if let Ok(domain) = std::env::var("USERDOMAIN") {
-            if !domain.is_empty() && domain != whoami::hostname() {
+            if !domain.is_empty() && domain != whoami::fallible::hostname().unwrap_or_default() {
                 return (true, Some(domain));
             }
         }

@@ -9,7 +9,7 @@
 //! - 基于季节/公司名称的弱密码猜测
 
 use crate::core::Result;
-use crate::cracker::{CrackService, DictManager};
+use crate::cracker::CrackService;
 use std::time::Duration;
 
 /// 喷射配置

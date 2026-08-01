@@ -88,12 +88,12 @@ nmap + hydra + chisel + rubeus       intrasweep
 | MongoDB 爆破 | ✅ | — | 强制 ping 验证 |
 | RDP 爆破 | ⚠️ | Hydra `-t rdp` | CredSSP 实现有限 |
 | 密码喷洒 | ✅ | NetExec `--spray` | SSH，轮间冷却防锁定 |
-| GPP 解密 | ✅ | gpp-decrypt | 正确微软密钥 + SYSVOL 搜索 |
-| DPAPI 解密 | ✅ | mimikatz `dpapi` | CryptUnprotectData FFI |
-| 浏览器密码 | ✅ | LaZagne / SharpChrome | Chrome/Edge v10/v11/v20 |
-| WiFi 密码 | ✅ | LaZagne | netsh wlan / NetworkManager |
-| 应用凭据 | ✅ | LaZagne | Git/SSH/FileZilla/OpenVPN/Navicat |
-| SAM/LSASS 导出 | ⚠️ | mimikatz | 导出动作可用，解析为启发式 |
+| GPP 解密 | ✅ | gpp-decrypt | 正确微软密钥 + SYSVOL 搜索（`cred`） |
+| DPAPI 解密 | ✅ | mimikatz `dpapi` | CryptUnprotectData FFI（`cred`） |
+| 浏览器密码 | ✅ | LaZagne / SharpChrome | Chrome/Edge v10/v11/v20（`cred`） |
+| WiFi 密码 | ✅ | LaZagne | netsh wlan / NetworkManager（`cred`） |
+| 应用凭据 | ✅ | LaZagne | Git/SSH/FileZilla/OpenVPN/Navicat（`cred`） |
+| SAM/LSASS 导出 | ⚠️ | mimikatz | 导出动作可用，解析为启发式（`cred`） |
 
 ### AD 域攻击
 
@@ -131,6 +131,8 @@ nmap + hydra + chisel + rubeus       intrasweep
 | 功能 | 状态 | 对标工具 | 说明 |
 |------|:----:|----------|------|
 | 系统信息收集 | ✅ | Seatbelt / sysinfo | 7 类一键收集 |
+| 本地凭据提取 | ✅ | LaZagne | 浏览器/WiFi/应用/SAM/LSASS/GPP 一键（`cred`） |
+| 信息侦察 | ✅ | Seatbelt / WinPEAS | EDR检测/情境感知/共享搜索/防火墙/VLAN（`recon`） |
 | 渗透报告 | ✅ | Pwndoc（轻量版） | 聚合 5 类数据源，Markdown/HTML |
 | YAML 配置 | ✅ | — | CLI > 配置文件 > 默认值 |
 
@@ -186,6 +188,13 @@ intrasweep crack 192.168.1.1 -s ssh -U users.txt --spray
 # 隧道
 intrasweep tunnel socks5 -L 1080
 intrasweep tunnel forward -t 192.168.1.100:3389 -L 8080
+
+# 本地凭据提取（浏览器/WiFi/应用/SAM/LSASS/GPP）
+intrasweep cred -o creds.json
+
+# 信息侦察（EDR检测/情境感知/共享/防火墙/VLAN）
+intrasweep recon --mode full -o recon.json
+intrasweep recon --mode edr
 
 # AD 域枚举
 intrasweep ad --dc 10.0.0.1 -d corp.local -u admin -p password
@@ -277,6 +286,24 @@ intrasweep privesc [-c CATEGORY] [--format json|csv] [-o FILE]
 
 Windows 7 类（PowerShell/CIM，兼容 Win11）+ Linux 8 类。
 
+### cred — 本地凭据提取
+
+```bash
+intrasweep cred [--dc IP] [--domain DOMAIN] [-u USER] [-p PASS]
+                [--format json|csv] [-o FILE]
+```
+
+浏览器（Chrome/Edge/Firefox）、WiFi、应用（Git/SSH/FileZilla/OpenVPN/Navicat）、SAM/LSASS、GPP 一键提取。无参数进入交互式向导；非 Windows 平台自动跳过需 SYSTEM 权限的提取项。
+
+### recon — 信息侦察
+
+```bash
+intrasweep recon [--dc IP] [--domain DOMAIN] [--mode full|edr|situational|host|shares|firewall|vlan]
+                 [--format json|csv] [-o FILE]
+```
+
+EDR/AV 检测、环境态势感知、文件共享搜索、防火墙规则、VLAN/拓扑发现；`--domain` 时附加域管会话猎杀。
+
 ### report — 报告生成
 
 ```bash
@@ -317,14 +344,14 @@ tunnel:
 src/
 ├── main.rs              入口（命令路由、配置回填、未实现功能拦截）
 ├── lib.rs               库入口
-├── cli/                 8 个命令 + 交互式向导
+├── cli/                 10 个命令 + 交互式向导
 ├── scanner/             主机发现 / 端口扫描 / 服务探测 / Web 指纹 / ARP
 ├── cracker/             8 种服务爆破 + 并发引擎 + NTLMv2 + 密码喷洒
 ├── tunnel/              正向 / 反向 / SOCKS5 / 链式 + relay + 加密层
 ├── vuln/                PoC 引擎 / 33 条规则 / 外部加载 / 匹配器
 ├── ad/                  LDAP 枚举 / BloodHound / SID 解析 / 分页查询
-├── cred/                GPP / DPAPI / 浏览器 / WiFi / 应用 / Kerberoast / AS-REP
-├── recon/               EDR 检测 / 用户猎杀 / 共享搜索 / 防火墙 / ADCS
+├── cred/                浏览器 / WiFi / 应用 / SAM / LSASS / GPP 凭据提取
+├── recon/               EDR 检测 / 用户猎杀 / 共享搜索 / 防火墙 / ADCS / VLAN
 ├── privesc/             Windows 7 类 + Linux 8 类
 ├── collector/           7 类系统信息收集
 ├── core/                错误处理 / 配置 / 日志 / 混淆 / 凭据库

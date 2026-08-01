@@ -143,6 +143,11 @@ fn main() {
                                     &format, output, concurrency, timeout, web_probe)
         }
 
+        Commands::Cred { dc, domain, username, password, format, output } => {
+            let format = apply_default_format(&cfg, &format);
+            cli::cred::run_cred_cmd(dc, domain, username, password, &format, output)
+        }
+
         Commands::Ad { dc, domain, username, password, ssl, mode,
                        bloodhound_dir, format, output,
                        golden_ticket, krbtgt_hash } => {
@@ -167,6 +172,11 @@ fn main() {
             cli::ad::run_ad_cmd(dc, domain, username, password, ssl,
                                mode, bloodhound_dir, &format, output,
                                golden_ticket, krbtgt_hash)
+        }
+
+        Commands::Recon { dc, domain, mode, format, output } => {
+            let format = apply_default_format(&cfg, &format);
+            cli::recon::run_recon_cmd(dc, domain, mode, &format, output)
         }
 
         Commands::Privesc { check, format, output } => {

@@ -7,7 +7,9 @@
 
 pub mod ad;
 pub mod crack;
+pub mod cred;
 pub mod privesc;
+pub mod recon;
 pub mod report;
 pub mod scan;
 pub mod system;
@@ -311,6 +313,33 @@ pub enum Commands {
         timeout: u64,
     },
 
+    /// 本地凭据收集 — 浏览器/WiFi/应用/SAM/LSASS/GPP 一键提取 (缩写: crd)
+    Cred {
+        /// 域控 IP 地址（GPP 解密需要）
+        #[arg(short, long)]
+        dc: Option<String>,
+
+        /// 域名 (例: corp.local)（GPP 解密需要）
+        #[arg(short, long)]
+        domain: Option<String>,
+
+        /// 用户名
+        #[arg(short, long)]
+        username: Option<String>,
+
+        /// 密码
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// 输出格式: json, csv (默认: json)
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// 输出文件路径
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
     /// AD域枚举 — LDAP查询/Kerberoasting/AS-REP/GoldenTicket/DCSync/BloodHound/ADCS (缩写: ad)
     Ad {
         /// 域控 IP 地址 - 可选，不填则进入交互式模式
@@ -348,6 +377,29 @@ pub enum Commands {
         /// krbtgt NTLM 哈希（用于 Golden Ticket）
         #[arg(long)]
         krbtgt_hash: Option<String>,
+
+        /// 输出格式: json, csv (默认: json)
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// 输出文件路径
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
+    /// 信息侦察 — EDR检测/情境感知/共享搜索/防火墙/VLAN发现 (缩写: rc)
+    Recon {
+        /// 域控 IP 地址（用户会话猎杀需要）
+        #[arg(short, long)]
+        dc: Option<String>,
+
+        /// 域名 (例: corp.local)（用户会话猎杀需要）
+        #[arg(short, long)]
+        domain: Option<String>,
+
+        /// 侦察模式: full, edr, situational, host, shares, firewall, vlan
+        #[arg(short, long, default_value = "full")]
+        mode: String,
 
         /// 输出格式: json, csv (默认: json)
         #[arg(long, default_value = "json")]

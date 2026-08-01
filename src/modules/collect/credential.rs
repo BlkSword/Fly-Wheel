@@ -383,7 +383,7 @@ impl CredentialCollector {
                         hash_type: "shadow".to_string(),
                         location: "/etc/shadow".to_string(),
                         username: parts[0].to_string(),
-                        hash: if parts[1] != "" && parts[1] != "x" && parts[1] != "*" {
+                        hash: if !parts[1].is_empty() && parts[1] != "x" && parts[1] != "*" {
                             format!("{}:{}", parts[0], parts[1])
                         } else {
                             "[LOCKED]".to_string()

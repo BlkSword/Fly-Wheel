@@ -335,6 +335,12 @@ pub struct LayeredProgress {
     hidden: bool,
 }
 
+impl Default for LayeredProgress {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LayeredProgress {
     /// 创建新的分层进度条
     pub fn new() -> Self {

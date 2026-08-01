@@ -204,7 +204,7 @@ impl DomainScanner {
             use std::process::Command;
 
             if let Ok(output) = Command::new("dig")
-                .args(&["-t", "SRV", &format!("_ldap._tcp.dc._msdcs.{}", domain)])
+                .args(["-t", "SRV", &format!("_ldap._tcp.dc._msdcs.{}", domain)])
                 .output()
             {
                 let content = String::from_utf8_lossy(&output.stdout);

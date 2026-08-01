@@ -56,10 +56,7 @@ impl CrackService {
 
     /// 是否需要用户名
     pub fn requires_username(&self) -> bool {
-        match self {
-            CrackService::Redis | CrackService::Mongodb => false,
-            _ => true,
-        }
+        !matches!(self, CrackService::Redis | CrackService::Mongodb)
     }
 }
 

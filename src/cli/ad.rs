@@ -7,6 +7,9 @@ use crate::output::color::{print_info, print_success};
 use crate::output::format::OutputFormat;
 use std::path::PathBuf;
 
+/// 交互式向导返回参数：dc, domain, username, password, ssl, mode, bloodhound_dir
+type AdWizardArgs = (String, String, Option<String>, Option<String>, bool, String, Option<PathBuf>);
+
 pub fn run_ad_cmd(
     dc: Option<String>,
     domain: Option<String>,
@@ -83,7 +86,7 @@ fn run_interactive_ad(
     initial_ssl: bool,
     initial_mode: String,
     initial_bloodhound_dir: Option<PathBuf>,
-) -> Result<(String, String, Option<String>, Option<String>, bool, String, Option<PathBuf>)> {
+) -> Result<AdWizardArgs> {
     print_banner();
     println!();
     print_info("IntraSweep 交互式 AD 域枚举向导");

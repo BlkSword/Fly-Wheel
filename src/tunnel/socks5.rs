@@ -85,10 +85,10 @@ impl Socks5Server {
         self.event_handler.on_event(TunnelEvent::Started);
         println!();
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", format!("SOCKS5 代理启动"));
-        println!("║  {}", format!("监听地址: {}", self.config.local_addr));
-        println!("║  {}", format!("认证方式: {}", if self.config.socks5_username.is_some() { "用户名/密码" } else { "无需认证" }));
-        println!("║  {}", format!("最大连接: {}", self.config.max_connections));
+        println!("║  SOCKS5 代理启动");
+        println!("║  监听地址: {}", self.config.local_addr);
+        println!("║  认证方式: {}", if self.config.socks5_username.is_some() { "用户名/密码" } else { "无需认证" });
+        println!("║  最大连接: {}", self.config.max_connections);
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 停止代理");
@@ -261,7 +261,7 @@ impl Socks5Server {
             }
         }
         // 循环正常会在上面的 return 退出，兜底
-        Err(std::io::Error::new(std::io::ErrorKind::Other, "重试耗尽"))
+        Err(std::io::Error::other("重试耗尽"))
     }
 
     /// SOCKS5 握手协议
@@ -486,10 +486,10 @@ impl Socks5Server {
         self.event_handler.on_event(TunnelEvent::Started);
         println!();
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", format!("SOCKS5 代理启动"));
-        println!("║  {}", format!("监听地址: {}", self.config.local_addr));
-        println!("║  {}", format!("认证方式: {}", if self.config.socks5_username.is_some() { "用户名/密码" } else { "无需认证" }));
-        println!("║  {}", format!("最大连接: {}", self.config.max_connections));
+        println!("║  SOCKS5 代理启动");
+        println!("║  监听地址: {}", self.config.local_addr);
+        println!("║  认证方式: {}", if self.config.socks5_username.is_some() { "用户名/密码" } else { "无需认证" });
+        println!("║  最大连接: {}", self.config.max_connections);
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 优雅关闭代理");

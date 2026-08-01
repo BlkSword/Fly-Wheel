@@ -245,10 +245,8 @@ impl SprayEngine {
             }
 
             // 估计锁定数：失败的用户在下一轮将被锁定
-            if failure_count > 0 {
-                if self.config.passwords.len() >= self.config.lock_threshold {
-                    estimated_lockouts = failure_count;
-                }
+            if failure_count > 0 && self.config.passwords.len() >= self.config.lock_threshold {
+                estimated_lockouts = failure_count;
             }
         }
 

@@ -345,12 +345,8 @@ fn parse_tgs_rep(
 
     // 策略：查找Ticket [APPLICATION 1] (0x61)，然后在其内部找enc-part [3]
     // 回退：遍历所有0xA3位置，找包含EncryptedData（etype+cipher）的那个
-    let search_start = if let Some(ticket_pos) = data.windows(2).position(|w| w[0] == 0x61) {
-        // 找到Ticket，从Ticket内部开始搜索
-        ticket_pos
-    } else {
-        0
-    };
+    // 找到Ticket则从Ticket内部开始搜索，否则从头遍历
+    let search_start = data.windows(2).position(|w| w[0] == 0x61).unwrap_or_default();
 
     // 遍历所有0xA3位置，找到包含有效EncryptedData的
     let mut offset = search_start;

@@ -58,7 +58,7 @@ impl MongodbCracker {
             timeout.as_millis()
         );
 
-        match tokio::time::timeout(timeout + Duration::from_secs(2), async {
+        tokio::time::timeout(timeout + Duration::from_secs(2), async {
             match ClientOptions::parse(&connection_string).await {
                 Ok(opts) => {
                     match Client::with_options(opts) {
@@ -76,10 +76,8 @@ impl MongodbCracker {
                 }
                 Err(_) => false,
             }
-        }).await
-        {
-            Ok(success) => success,
-            Err(_) => false,
-        }
+        })
+        .await
+        .unwrap_or(false)
     }
 }

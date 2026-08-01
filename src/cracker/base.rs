@@ -58,8 +58,8 @@ pub async fn run_crack(
     let mut tasks = Vec::with_capacity(total.min(config.concurrency * 2));
 
     // 将闭包包装一次，所有任务共享
-    let try_connect_arc: Arc<dyn Fn(Option<String>, String, String, u16, Duration) -> bool + Send + Sync> =
-        Arc::new(try_connect);
+    type TryConnectFn = Arc<dyn Fn(Option<String>, String, String, u16, Duration) -> bool + Send + Sync>;
+    let try_connect_arc: TryConnectFn = Arc::new(try_connect);
 
     for attempt in attempts {
         // 如果已经找到，不再派发新任务

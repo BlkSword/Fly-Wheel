@@ -308,7 +308,7 @@ impl ScanConfig {
             // 根据并发数自动计算
             let base = self.max_concurrent_ports;
             // 限制在合理范围内
-            base.min(5000).max(100)
+            base.clamp(100, 5000)
         } else {
             // 固定批处理大小
             1000

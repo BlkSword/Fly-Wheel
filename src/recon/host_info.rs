@@ -281,7 +281,7 @@ fn get_local_users() -> Vec<LocalUser> {
                 if parts.len() >= 7 {
                     let uid: u32 = parts[2].parse().unwrap_or(65535);
                     // 收集真实用户（UID>=1000）或 root（UID 0），排除系统账户
-                    if uid == 0 || (uid >= 1000 && uid < 65534) {
+                    if uid == 0 || (1000..65534).contains(&uid) {
                         users.push(LocalUser {
                             username: parts[0].to_string(),
                             full_name: Some(parts[4].to_string()),

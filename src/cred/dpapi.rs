@@ -175,7 +175,7 @@ fn parse_credential_blob(data: &[u8]) -> DpapiBlob {
             if c == 0 {
                 break;
             }
-            if c < 32 || c > 127 {
+            if !(32..=127).contains(&c) {
                 break;
             }
             chars.push(c);

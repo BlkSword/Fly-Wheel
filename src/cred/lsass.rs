@@ -290,7 +290,7 @@ fn find_ntlm_hashes(data: &[u8]) -> Vec<(String, String)> {
             let abs_pos = pos + found_pos;
 
             // 在用户名附近搜索32字符十六进制哈希
-            let search_start = if abs_pos > 512 { abs_pos - 512 } else { 0 };
+            let search_start = abs_pos.saturating_sub(512);
             let search_end = std::cmp::min(abs_pos + 512, data.len());
 
             // 寻找十六进制字符序列 (0-9, a-f, A-F)
@@ -331,7 +331,7 @@ fn find_hex_string(data: &[u8], min_len: usize) -> Option<String> {
             if current_hex.len() >= min_len && current_hex.len() <= 64 {
                 // 有效的哈希长度
                 let candidate = current_hex.clone();
-                if best.as_ref().map_or(true, |b: &String| candidate.len() > b.len()) {
+                if best.as_ref().is_none_or(|b: &String| candidate.len() > b.len()) {
                     best = Some(candidate);
                 }
             }
@@ -340,11 +340,10 @@ fn find_hex_string(data: &[u8], min_len: usize) -> Option<String> {
     }
 
     // 检查最后的序列
-    if current_hex.len() >= min_len && current_hex.len() <= 64 {
-        if best.as_ref().map_or(true, |b: &String| current_hex.len() > b.len()) {
+    if current_hex.len() >= min_len && current_hex.len() <= 64
+        && best.as_ref().is_none_or(|b: &String| current_hex.len() > b.len()) {
             best = Some(current_hex);
         }
-    }
 
     best
 }
@@ -383,7 +382,7 @@ fn find_cleartext_passwords(data: &[u8]) -> Vec<(String, String)> {
     for marker in context_markers {
         for found in data.windows(marker.len()).enumerate().filter(|(_, w)| *w == *marker) {
             let pos = found.0;
-            let search_range = if pos > 1024 { pos - 1024 } else { 0 };
+            let search_range = pos.saturating_sub(1024);
             let search_end = std::cmp::min(pos + 1024, data.len());
             let chunk = &data[search_range..search_end];
 
@@ -396,11 +395,10 @@ fn find_cleartext_passwords(data: &[u8]) -> Vec<(String, String)> {
                         i += 1;
                     }
                     let candidate = String::from_utf8_lossy(&chunk[start..i]).to_string();
-                    if candidate.len() >= 6 && candidate.len() <= 64 && is_likely_password(&candidate) {
-                        if !results.iter().any(|(_, p)| p == &candidate) {
+                    if candidate.len() >= 6 && candidate.len() <= 64 && is_likely_password(&candidate)
+                        && !results.iter().any(|(_, p)| p == &candidate) {
                             results.push(("(unknown)".to_string(), candidate));
                         }
-                    }
                 }
                 i += 1;
             }
@@ -421,7 +419,7 @@ fn extract_utf16le_string(data: &[u8], min_len: usize, max_len: usize) -> Option
         if c == 0 {
             break;
         }
-        if c < 32 || c > 127 {
+        if !(32..=127).contains(&c) {
             return None; // 非可打印ASCII
         }
         chars.push(c);
@@ -438,7 +436,7 @@ fn extract_utf16le_string(data: &[u8], min_len: usize, max_len: usize) -> Option
 /// 判断字符串是否像密码
 fn is_likely_password(s: &str) -> bool {
     let len = s.len();
-    if len < 4 || len > 64 {
+    if !(4..=64).contains(&len) {
         return false;
     }
     // 包含至少一个大写字母、小写字母或数字

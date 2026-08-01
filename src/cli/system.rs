@@ -11,7 +11,7 @@ use crate::output::color::*;
 
 use crate::output::format::OutputFormat;
 use crate::scanner::Scanner;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// 系统信息收集命令入口
 pub fn run_system(item: &Option<String>, output: Option<PathBuf>, quiet: bool) -> Result<()> {
@@ -155,6 +155,7 @@ fn run_system_collect_network(output: Option<PathBuf>, _quiet: bool) -> Result<(
 }
 
 /// 运行进程信息收集
+#[allow(clippy::field_reassign_with_default)]
 fn run_system_collect_process(output: Option<PathBuf>, _quiet: bool) -> Result<()> {
     print_info("开始收集进程信息...");
     println!();
@@ -175,6 +176,7 @@ fn run_system_collect_process(output: Option<PathBuf>, _quiet: bool) -> Result<(
     let all_processes = collector.list_processes();
 
     pb.set_message("正在分析进程详情...");
+    #[allow(clippy::field_reassign_with_default)]
     let mut process = ProcessReport::default();
     process.total_count = all_processes.len();
     process.processes = all_processes.into_iter().take(100).collect();
@@ -259,6 +261,7 @@ fn run_system_collect_credential(output: Option<PathBuf>, _quiet: bool) -> Resul
 }
 
 /// 运行文件信息收集
+#[allow(clippy::field_reassign_with_default)]
 fn run_system_collect_file(output: Option<PathBuf>, _quiet: bool) -> Result<()> {
     print_info("开始收集文件信息...");
     println!();
@@ -278,6 +281,7 @@ fn run_system_collect_file(output: Option<PathBuf>, _quiet: bool) -> Result<()> 
     let search_paths = get_default_search_paths();
 
     pb.set_message("正在搜索敏感文件...");
+    #[allow(clippy::field_reassign_with_default)]
     let mut file = FileReport::default();
     file.sensitive_files = collector.find_sensitive_files(&search_paths);
 
@@ -506,7 +510,7 @@ fn print_file_info(file: &FileReport) {
 }
 
 /// 打印信息收集结果
-fn print_collect_results(report: &crate::collector::SystemReport, output_path: &PathBuf) {
+fn print_collect_results(report: &crate::collector::SystemReport, output_path: &Path) {
     println!();
     println!("╔════════════════════════════════════════════════════════════════════════════╗");
     println!("║  {}", colorize("信息收集完成", Color::BrightGreen));

@@ -110,7 +110,7 @@ fn get_domain_admin_users(dc: &str, domain: &str) -> Result<Vec<String>, String>
             if ldap.simple_bind("", "").is_ok() {
                 let base = domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",");
                 let filter = "(&(objectClass=group)(cn=Domain Admins))";
-                if let Ok(sr) = ldap.search(&base, ldap3::Scope::Subtree, filter, &["member"]) {
+                if let Ok(sr) = ldap.search(&base, ldap3::Scope::Subtree, filter, ["member"]) {
                     for entry in &sr.0 {
                         let entry = ldap3::SearchEntry::construct(entry.clone());
                         if let Some(members) = entry.attrs.get("member") {

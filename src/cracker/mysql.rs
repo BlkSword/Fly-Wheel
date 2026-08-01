@@ -43,10 +43,7 @@ impl Cracker for MysqlCracker {
                 Err(_) => return false,
             };
 
-            match rt.block_on(tokio::time::timeout(timeout, pool.get_conn())) {
-                Ok(Ok(_)) => true,
-                _ => false,
-            }
+            matches!(rt.block_on(tokio::time::timeout(timeout, pool.get_conn())), Ok(Ok(_)))
         }).await
     }
 
@@ -59,9 +56,6 @@ impl Cracker for MysqlCracker {
             Err(_) => return false,
         };
 
-        match tokio::time::timeout(Duration::from_secs(5), pool.get_conn()).await {
-            Ok(Ok(_)) => true,
-            _ => false,
-        }
+        matches!(tokio::time::timeout(Duration::from_secs(5), pool.get_conn()).await, Ok(Ok(_)))
     }
 }

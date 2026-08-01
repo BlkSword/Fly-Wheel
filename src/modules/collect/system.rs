@@ -163,7 +163,7 @@ impl SystemCollector {
     pub fn collect_domain(&self) -> Option<String> {
         if cfg!(windows) {
             env::var("USERDNSDOMAIN").ok()
-                .or_else(|| {
+                .or({
                     // 尝试从注册表获取域信息
                     #[cfg(windows)]
                     {
@@ -458,7 +458,7 @@ impl SystemCollector {
             use std::process::Command;
             if let Ok(output) = Command::new("id").arg("-Gn").output() {
                 let content = String::from_utf8_lossy(&output.stdout);
-                groups = content.trim().split_whitespace()
+                groups = content.split_whitespace()
                     .map(|s| s.to_string())
                     .collect();
             }

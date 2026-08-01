@@ -37,6 +37,7 @@ impl InfoCollector {
     }
 
     /// 收集所有信息（带进度显示）
+    #[allow(clippy::field_reassign_with_default)]
     pub fn collect_all_with_progress(&mut self, quiet: bool) -> Result<SystemReport> {
         let start = Instant::now();
 
@@ -58,6 +59,7 @@ impl InfoCollector {
         // 2. 收集网络接口信息
         progress.start_task("收集网络接口信息");
         progress.update_current("扫描网络接口");
+        #[allow(clippy::field_reassign_with_default)]
         let mut network_report = NetworkReport::default();
         network_report.interfaces = self.network.collect_interfaces();
         progress.complete_task(&format!("网络接口收集完成 - 发现{}个接口", network_report.interfaces.len()));
@@ -79,6 +81,7 @@ impl InfoCollector {
         // 4. 收集进程信息
         progress.start_task("收集进程信息");
         progress.update_current("枚举系统进程");
+        #[allow(clippy::field_reassign_with_default)]
         let mut process_report = ProcessReport::default();
         let all_processes = self.process.list_processes();
         process_report.total_count = all_processes.len();

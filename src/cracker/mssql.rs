@@ -54,10 +54,7 @@ impl Cracker for MssqlCracker {
                 config.authentication(AuthMethod::sql_server(&username, &password));
                 config.trust_cert();
 
-                match tokio::time::timeout(timeout, tiberius::Client::connect(config, tcp_connect.compat_write())).await {
-                    Ok(Ok(_conn)) => true,
-                    _ => false,
-                }
+                matches!(tokio::time::timeout(timeout, tiberius::Client::connect(config, tcp_connect.compat_write())).await, Ok(Ok(_conn)))
             })
         }).await
     }
@@ -84,9 +81,6 @@ impl MssqlCracker {
         config.authentication(AuthMethod::sql_server(username, password));
         config.trust_cert();
 
-        match tokio::time::timeout(timeout, tiberius::Client::connect(config, tcp_connect.compat_write())).await {
-            Ok(Ok(_conn)) => true,
-            _ => false,
-        }
+        matches!(tokio::time::timeout(timeout, tiberius::Client::connect(config, tcp_connect.compat_write())).await, Ok(Ok(_conn)))
     }
 }

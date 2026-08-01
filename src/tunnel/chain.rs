@@ -52,13 +52,13 @@ impl ChainTunnel {
         self.event_handler.on_event(TunnelEvent::Started);
         println!();
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", format!("链式隧道启动"));
-        println!("║  {}", format!("监听地址: {}", self.config.local_addr));
-        println!("║  {}", format!("跳板数量: {}", self.config.hops.len()));
+        println!("║  链式隧道启动");
+        println!("║  监听地址: {}", self.config.local_addr);
+        println!("║  跳板数量: {}", self.config.hops.len());
         for (i, hop) in self.config.hops.iter().enumerate() {
-            println!("║  {}", format!("  跳板 {}: {}", i + 1, hop));
+            println!("║    跳板 {}: {}", i + 1, hop);
         }
-        println!("║  {}", format!("最终目标: {}", target));
+        println!("║  最终目标: {}", target);
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 停止隧道");
@@ -295,13 +295,13 @@ impl ChainTunnel {
         self.event_handler.on_event(TunnelEvent::Started);
         println!();
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", format!("链式隧道启动"));
-        println!("║  {}", format!("监听地址: {}", self.config.local_addr));
-        println!("║  {}", format!("跳板数量: {}", self.config.hops.len()));
+        println!("║  链式隧道启动");
+        println!("║  监听地址: {}", self.config.local_addr);
+        println!("║  跳板数量: {}", self.config.hops.len());
         for (i, hop) in self.config.hops.iter().enumerate() {
-            println!("║  {}", format!("  跳板 {}: {}", i + 1, hop));
+            println!("║    跳板 {}: {}", i + 1, hop);
         }
-        println!("║  {}", format!("最终目标: {}", target));
+        println!("║  最终目标: {}", target);
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 优雅关闭隧道");

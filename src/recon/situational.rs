@@ -458,11 +458,10 @@ fn list_installed_patches() -> Vec<String> {
                 for line in stdout.lines() {
                     if line.contains("KB") {
                         for part in line.split_whitespace() {
-                            if part.starts_with("KB") {
-                                if !patches.contains(&part.to_string()) {
+                            if part.starts_with("KB")
+                                && !patches.contains(&part.to_string()) {
                                     patches.push(part.to_string());
                                 }
-                            }
                         }
                     }
                 }

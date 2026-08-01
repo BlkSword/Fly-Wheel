@@ -232,8 +232,8 @@ async fn collect_via_ldap(
 
     // 输出到文件
     let output_dir = config.output_dir.as_deref()
-        .map(|d| std::path::PathBuf::from(d))
-        .unwrap_or_else(|| std::env::temp_dir());
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
 
     let timestamp = chrono::Utc::now().format("%Y%m%d%H%M%S");
 

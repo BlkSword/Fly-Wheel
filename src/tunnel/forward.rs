@@ -56,9 +56,9 @@ impl ForwardTunnel {
         self.event_handler.on_event(TunnelEvent::Started);
         println!();
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", format!("正向隧道启动: 监听 {}", self.config.local_addr));
-        println!("║  {}", format!("转发目标: {}", target));
-        println!("║  {}", format!("最大连接: {}", self.config.max_connections));
+        println!("║  正向隧道启动: 监听 {}", self.config.local_addr);
+        println!("║  转发目标: {}", target);
+        println!("║  最大连接: {}", self.config.max_connections);
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 停止隧道");
@@ -185,10 +185,10 @@ impl ForwardTunnel {
         self.event_handler.on_event(TunnelEvent::Started);
         println!();
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", format!("正向隧道启动: 监听 {}", self.config.local_addr));
-        println!("║  {}", format!("转发目标: {}", target));
-        println!("║  {}", format!("最大连接: {}", self.config.max_connections));
-        println!("║  {}", format!("加密: {}", if encrypted { "XChaCha20-Poly1305" } else { "无" }));
+        println!("║  正向隧道启动: 监听 {}", self.config.local_addr);
+        println!("║  转发目标: {}", target);
+        println!("║  最大连接: {}", self.config.max_connections);
+        println!("║  加密: {}", if encrypted { "XChaCha20-Poly1305" } else { "无" });
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 优雅关闭隧道");

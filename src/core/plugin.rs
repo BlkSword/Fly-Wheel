@@ -46,7 +46,7 @@ impl PluginType {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn from_str_opt(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "scanner" => Some(PluginType::Scanner),
             "collector" => Some(PluginType::Collector),
@@ -389,12 +389,12 @@ mod tests {
 
     #[test]
     fn test_plugin_type_from_str() {
-        assert_eq!(PluginType::from_str("scanner"), Some(PluginType::Scanner));
-        assert_eq!(PluginType::from_str("SCANNER"), Some(PluginType::Scanner));
-        assert_eq!(PluginType::from_str("collector"), Some(PluginType::Collector));
-        assert_eq!(PluginType::from_str("poc"), Some(PluginType::Poc));
-        assert_eq!(PluginType::from_str("cracker"), Some(PluginType::Cracker));
-        assert_eq!(PluginType::from_str("invalid"), None);
+        assert_eq!(PluginType::from_str_opt("scanner"), Some(PluginType::Scanner));
+        assert_eq!(PluginType::from_str_opt("SCANNER"), Some(PluginType::Scanner));
+        assert_eq!(PluginType::from_str_opt("collector"), Some(PluginType::Collector));
+        assert_eq!(PluginType::from_str_opt("poc"), Some(PluginType::Poc));
+        assert_eq!(PluginType::from_str_opt("cracker"), Some(PluginType::Cracker));
+        assert_eq!(PluginType::from_str_opt("invalid"), None);
     }
 
     #[test]

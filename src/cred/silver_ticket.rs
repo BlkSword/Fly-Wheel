@@ -162,6 +162,7 @@ fn parse_spn(spn: &str) -> Result<(String, String), String> {
 }
 
 /// 构造服务票据
+#[allow(clippy::too_many_arguments)]
 fn build_service_ticket(
     domain: &str,
     domain_sid: &str,

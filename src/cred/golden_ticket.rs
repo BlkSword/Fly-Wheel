@@ -242,6 +242,8 @@ fn build_pac_logon_info(
 }
 
 /// 构造TGT票据
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::vec_init_then_push)]
 fn build_tgt(
     domain: &str,
     domain_sid: &str,
@@ -253,6 +255,7 @@ fn build_tgt(
     valid_from: i64,
     valid_until: i64,
 ) -> Result<Vec<u8>, String> {
+    #[allow(clippy::vec_init_then_push)]
     let mut tgt = Vec::new();
 
     // TGT由两部分组成:

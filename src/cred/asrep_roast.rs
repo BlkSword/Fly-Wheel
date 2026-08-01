@@ -185,6 +185,7 @@ async fn send_as_req(
 ///
 /// KDCOptions不请求预认证，且不携带PA-ENC-TIMESTAMP padata。
 /// 如果目标用户设置了DONT_REQ_PREAUTH，KDC将直接返回AS-REP。
+#[allow(clippy::vec_init_then_push)]
 fn build_as_req_no_preauth(domain: &str, username: &str) -> Vec<u8> {
     let domain_bytes = domain.as_bytes();
     let user_bytes = username.as_bytes();
@@ -200,6 +201,7 @@ fn build_as_req_no_preauth(domain: &str, username: &str) -> Vec<u8> {
     ]);
 
     // cname [1] PrincipalName
+    #[allow(clippy::vec_init_then_push)]
     let mut cname = Vec::new();
     cname.push(0xA0); // name-type [0]
     cname.push(0x03);

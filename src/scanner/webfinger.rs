@@ -88,10 +88,9 @@ impl WebFingerScanner {
         // 优先使用主协议的结果
         let (response, url, is_https_actual) = if let Some(resp) = resp_primary {
             (resp, url_primary, is_https)
-        } else if let Some(resp) = resp_fallback {
-            (resp, url_fallback, !is_https)
         } else {
-            return None;
+            let resp = resp_fallback?;
+            (resp, url_fallback, !is_https)
         };
 
         let title = Self::extract_title(&response.body);

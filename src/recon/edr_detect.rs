@@ -273,9 +273,7 @@ pub fn detect_security_products() -> Result<Vec<SecurityProduct>, String> {
         // 检查注册表键
         if !detected {
             for key in sig.registry_keys {
-                let full_key = if key.starts_with("SOFTWARE") {
-                    format!("HKLM\\{}", key)
-                } else if key.starts_with("SYSTEM") {
+                let full_key = if key.starts_with("SOFTWARE") || key.starts_with("SYSTEM") {
                     format!("HKLM\\{}", key)
                 } else {
                     key.to_string()

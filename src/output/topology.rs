@@ -64,7 +64,7 @@ impl TopologyGenerator {
                         })
                         .collect();
 
-                    let is_gw = gateway.as_deref() == Some(&host.ip);
+                    let is_gw = gateway == Some(&host.ip);
 
                     TopoNode {
                         ip: host.ip.clone(),
@@ -100,7 +100,7 @@ impl TopologyGenerator {
         output.push_str(&format!("├{}\n", "─".repeat(78)));
 
         for subnet in &self.subnets {
-            output.push_str(&format!("│\n"));
+            output.push_str("│\n");
             output.push_str(&format!("│ ▶ {} ({} 主机)\n", subnet.cidr, subnet.nodes.len()));
             output.push_str(&format!("│ ┌{}\n", "─".repeat(74)));
 

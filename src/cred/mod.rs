@@ -206,19 +206,11 @@ impl Credential {
         match self.cred_type {
             CredType::KerberosTgs => {
                 // $krb5tgs$23$*username$domain$spn$hash
-                if let Some(ref attr) = self.attributes.get("hashcat_tgs") {
-                    Some(attr.to_string())
-                } else {
-                    None
-                }
+                self.attributes.get("hashcat_tgs").as_ref().map(|attr| attr.to_string())
             }
             CredType::KerberosAsrep => {
                 // $krb5asrep$23$*username$domain$hash
-                if let Some(ref attr) = self.attributes.get("hashcat_asrep") {
-                    Some(attr.to_string())
-                } else {
-                    None
-                }
+                self.attributes.get("hashcat_asrep").as_ref().map(|attr| attr.to_string())
             }
             CredType::NtlmHash => {
                 if let (Some(ref user), Some(ref ntlm)) = (&self.username, &self.ntlm_hash) {

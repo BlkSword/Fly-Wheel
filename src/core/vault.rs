@@ -113,13 +113,13 @@ impl Vault {
     /// 序列化为 JSON
     pub fn to_json(&self) -> Result<String> {
         serde_json::to_string_pretty(self)
-            .map_err(|e| IntraSweepError::Serialization(e))
+            .map_err(IntraSweepError::Serialization)
     }
 
     /// 从 JSON 反序列化
     pub fn from_json(json: &str) -> Result<Self> {
         serde_json::from_str(json)
-            .map_err(|e| IntraSweepError::Serialization(e))
+            .map_err(IntraSweepError::Serialization)
     }
 
     /// 加密并保存到文件
@@ -127,14 +127,14 @@ impl Vault {
         let json = self.to_json()?;
         let encrypted = encrypt_data(&json.into_bytes(), password)?;
         std::fs::write(path, &encrypted)
-            .map_err(|e| IntraSweepError::Io(e))?;
+            .map_err(IntraSweepError::Io)?;
         Ok(())
     }
 
     /// 从加密文件加载
     pub fn load_encrypted(path: &std::path::Path, password: &str) -> Result<Self> {
         let encrypted = std::fs::read(path)
-            .map_err(|e| IntraSweepError::Io(e))?;
+            .map_err(IntraSweepError::Io)?;
         let decrypted = decrypt_data(&encrypted, password)?;
         let json = String::from_utf8(decrypted)
             .map_err(|e| IntraSweepError::Other {

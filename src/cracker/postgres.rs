@@ -52,9 +52,6 @@ impl Cracker for PostgresCracker {
             target, port, username, password
         );
 
-        match tokio::time::timeout(Duration::from_secs(5), tokio_postgres::connect(&conn_str, NoTls)).await {
-            Ok(Ok(_conn)) => true,
-            _ => false,
-        }
+        matches!(tokio::time::timeout(Duration::from_secs(5), tokio_postgres::connect(&conn_str, NoTls)).await, Ok(Ok(_conn)))
     }
 }

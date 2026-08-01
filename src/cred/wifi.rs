@@ -71,6 +71,12 @@ fn extract_wifi_passwords_windows() -> Result<Vec<Credential>, String> {
     tracing::info!("[WiFi密码] 发现 {} 个WiFi配置文件", ssids.len());
 
     // 步骤2：获取每个SSID的密码
+    // 正则只编译一次（所有 profile 格式一致）
+    let key_regex = regex::Regex::new(r"(?:关键内容|Key Content)\s*:\s*(.+)")
+        .map_err(|_| "正则失败".to_string())?;
+    let auth_regex = regex::Regex::new(r"(?:身份验证|Authentication)\s*:\s*(.+)")
+        .map_err(|_| "正则失败".to_string())?;
+
     for ssid in &ssids {
         let key_output = std::process::Command::new("netsh")
             .args(["wlan", "show", "profile", "name=", ssid, "key=clear"])
@@ -78,15 +84,6 @@ fn extract_wifi_passwords_windows() -> Result<Vec<Credential>, String> {
             .map_err(|e| format!("netsh查询失败 ({}): {}", ssid, e))?;
 
         let key_stdout = String::from_utf8_lossy(&key_output.stdout);
-
-        // 提取密码
-        // 格式:    关键内容            : <password>
-        let key_regex = regex::Regex::new(r"(?:关键内容|Key Content)\s*:\s*(.+)")
-            .map_err(|_| "正则失败".to_string())?;
-
-        // 提取认证类型
-        let auth_regex = regex::Regex::new(r"(?:身份验证|Authentication)\s*:\s*(.+)")
-            .map_err(|_| "正则失败".to_string())?;
 
         let password = key_regex
             .captures(&key_stdout)

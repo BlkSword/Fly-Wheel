@@ -273,18 +273,27 @@ pub fn print_warning(text: &str) {
 pub fn print_banner() {
     println!();
     println!("╔════════════════════════════════════════════════════════════════════════════╗");
-    println!("║  {}", ColoredText::new(format!("IntraSweep {}", crate::core::obfstr::sensitive::sweep_full_label()), Color::Cyan).bold());
-    println!("║  {}", ColoredText::new("版本: 0.3.0  作者: BlkSword", Color::BrightBlack).bold());
+    println!(
+        "║  {}",
+        ColoredText::new(
+            format!(
+                "IntraSweep {}",
+                crate::core::obfstr::sensitive::sweep_full_label()
+            ),
+            Color::Cyan
+        )
+        .bold()
+    );
+    println!(
+        "║  {}",
+        ColoredText::new("版本: 0.3.0  作者: BlkSword", Color::BrightBlack).bold()
+    );
     println!("╚════════════════════════════════════════════════════════════════════════════╝");
 }
 
 /// 打印信息消息
 pub fn print_info(text: &str) {
-    println!(
-        "{} {}",
-        ColoredText::new("信息:", Color::Cyan).bold(),
-        text
-    );
+    println!("{} {}", ColoredText::new("信息:", Color::Cyan).bold(), text);
 }
 
 /// 打印主机信息（彩色）
@@ -294,7 +303,11 @@ pub fn print_host_info(ip: &str, ports: &[u16]) {
         ColoredText::new("主机", Color::Cyan).bold(),
         ColoredText::new(ip, Color::Green).bold(),
         ColoredText::new(
-            ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "),
+            ports
+                .iter()
+                .map(|p| p.to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
             Color::Yellow
         ),
     );

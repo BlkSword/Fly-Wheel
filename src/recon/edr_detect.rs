@@ -86,7 +86,12 @@ const KNOWN_SECURITY_PRODUCTS: &[SecuritySignature] = &[
         name: "Microsoft Defender Antivirus",
         vendor: "Microsoft",
         product_type: SecurityProductType::Antivirus,
-        process_names: &["MsMpEng.exe", "NisSrv.exe", "SecurityHealthService.exe", "MsSense.exe"],
+        process_names: &[
+            "MsMpEng.exe",
+            "NisSrv.exe",
+            "SecurityHealthService.exe",
+            "MsSense.exe",
+        ],
         service_names: &["WinDefend", "WdNisSvc", "Sense"],
         registry_keys: &[r"SOFTWARE\Microsoft\Windows Defender"],
         file_paths: &[r"C:\ProgramData\Microsoft\Windows Defender"],
@@ -116,7 +121,12 @@ const KNOWN_SECURITY_PRODUCTS: &[SecuritySignature] = &[
         name: "Carbon Black",
         vendor: "VMware",
         product_type: SecurityProductType::EDR,
-        process_names: &["CbDefense.exe", "CbSensor.exe", "RepMgr.exe", "RepUtils.exe"],
+        process_names: &[
+            "CbDefense.exe",
+            "CbSensor.exe",
+            "RepMgr.exe",
+            "RepUtils.exe",
+        ],
         service_names: &["CarbonBlack", "CbDefense", "CbSensor"],
         registry_keys: &[r"SOFTWARE\CarbonBlack"],
         file_paths: &[r"C:\Program Files\Confer"],
@@ -126,7 +136,11 @@ const KNOWN_SECURITY_PRODUCTS: &[SecuritySignature] = &[
         name: "SentinelOne",
         vendor: "SentinelOne",
         product_type: SecurityProductType::EDR,
-        process_names: &["SentinelAgent.exe", "SentinelAgentWorker.exe", "SentinelStaticEngine.exe"],
+        process_names: &[
+            "SentinelAgent.exe",
+            "SentinelAgentWorker.exe",
+            "SentinelStaticEngine.exe",
+        ],
         service_names: &["SentinelAgent"],
         registry_keys: &[r"SOFTWARE\SentinelOne"],
         file_paths: &[r"C:\Program Files\SentinelOne"],
@@ -136,7 +150,12 @@ const KNOWN_SECURITY_PRODUCTS: &[SecuritySignature] = &[
         name: "Trend Micro Apex One",
         vendor: "Trend Micro",
         product_type: SecurityProductType::Antivirus,
-        process_names: &["PccNTMon.exe", "ntrtscan.exe", "TMBMSRV.exe", "TmListen.exe"],
+        process_names: &[
+            "PccNTMon.exe",
+            "ntrtscan.exe",
+            "TMBMSRV.exe",
+            "TmListen.exe",
+        ],
         service_names: &["TMBMServer", "TmFilter", "tmwfp", "ntrtscan"],
         registry_keys: &[r"SOFTWARE\TrendMicro"],
         file_paths: &[r"C:\Program Files\Trend Micro"],
@@ -166,7 +185,12 @@ const KNOWN_SECURITY_PRODUCTS: &[SecuritySignature] = &[
         name: "Sophos Endpoint",
         vendor: "Sophos",
         product_type: SecurityProductType::Antivirus,
-        process_names: &["SophosFS.exe", "SavService.exe", "SophosUI.exe", "SEDService.exe"],
+        process_names: &[
+            "SophosFS.exe",
+            "SavService.exe",
+            "SophosUI.exe",
+            "SEDService.exe",
+        ],
         service_names: &["Sophos Endpoint Defense", "SAVService"],
         registry_keys: &[r"SOFTWARE\Sophos"],
         file_paths: &[r"C:\Program Files\Sophos"],
@@ -216,7 +240,12 @@ const KNOWN_SECURITY_PRODUCTS: &[SecuritySignature] = &[
         name: "火绒安全",
         vendor: "火绒",
         product_type: SecurityProductType::Antivirus,
-        process_names: &["HipsDaemon.exe", "HipsTray.exe", "HipsMain.exe", "wsctrl.exe"],
+        process_names: &[
+            "HipsDaemon.exe",
+            "HipsTray.exe",
+            "HipsMain.exe",
+            "wsctrl.exe",
+        ],
         service_names: &["HipsDaemon", "Huorong"],
         registry_keys: &[r"SOFTWARE\Huorong"],
         file_paths: &[r"C:\Program Files\Huorong"],
@@ -251,7 +280,10 @@ pub fn detect_security_products() -> Result<Vec<SecurityProduct>, String> {
 
         // 检查进程
         for pname in sig.process_names {
-            if running_processes.iter().any(|p| p.to_lowercase().contains(&pname.to_lowercase())) {
+            if running_processes
+                .iter()
+                .any(|p| p.to_lowercase().contains(&pname.to_lowercase()))
+            {
                 detected = true;
                 proc_name = Some(pname.to_string());
                 method = format!("进程检测: {}", pname);
@@ -262,7 +294,10 @@ pub fn detect_security_products() -> Result<Vec<SecurityProduct>, String> {
         // 如果没通过进程检测到，检查服务
         if !detected {
             for sname in sig.service_names {
-                if running_services.iter().any(|s| s.to_lowercase().contains(&sname.to_lowercase())) {
+                if running_services
+                    .iter()
+                    .any(|s| s.to_lowercase().contains(&sname.to_lowercase()))
+                {
                     detected = true;
                     method = format!("服务检测: {}", sname);
                     break;

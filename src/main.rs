@@ -34,11 +34,20 @@ fn main() {
     tracing::debug!("启动 IntraSweep");
 
     let result = match cli.command {
-        Commands::System { item, output, quiet } => {
-            intrasweep::cli::system::run_system(&item, output, quiet)
-        }
+        Commands::System {
+            item,
+            output,
+            quiet,
+        } => intrasweep::cli::system::run_system(&item, output, quiet),
 
-        Commands::Scan { targets, scan_type, fast, webfinger, format, output } => {
+        Commands::Scan {
+            targets,
+            scan_type,
+            fast,
+            webfinger,
+            format,
+            output,
+        } => {
             // 配置文件回填：CLI 未指定时使用 config 中的预设
             let (targets, scan_type, fast, webfinger) = if let Some(ref c) = cfg {
                 let sp = c.scan.as_ref();
@@ -55,32 +64,68 @@ fn main() {
             intrasweep::cli::scan::run_scan(targets, scan_type, fast, webfinger, &format, output)
         }
 
-        Commands::Crack { target, port, service, usernames, password_file,
-                          username_file, concurrency, timeout, delay, spray } => {
+        Commands::Crack {
+            target,
+            port,
+            service,
+            usernames,
+            password_file,
+            username_file,
+            concurrency,
+            timeout,
+            delay,
+            spray,
+        } => {
             // 配置文件回填
             let (password_file, username_file, concurrency, timeout) = if let Some(ref c) = cfg {
                 let cp = c.crack.as_ref();
                 (
                     password_file.or_else(|| cp.and_then(|p| p.password_file.clone())),
                     username_file.or_else(|| cp.and_then(|p| p.username_file.clone())),
-                    if concurrency != 10 { concurrency } else {
-                        cp.and_then(|p| p.concurrency).or(c.defaults.concurrency).unwrap_or(10)
+                    if concurrency != 10 {
+                        concurrency
+                    } else {
+                        cp.and_then(|p| p.concurrency)
+                            .or(c.defaults.concurrency)
+                            .unwrap_or(10)
                     },
-                    if timeout != 5 { timeout } else {
-                        cp.and_then(|p| p.timeout).or(c.defaults.timeout).unwrap_or(5)
+                    if timeout != 5 {
+                        timeout
+                    } else {
+                        cp.and_then(|p| p.timeout)
+                            .or(c.defaults.timeout)
+                            .unwrap_or(5)
                     },
                 )
             } else {
                 (password_file, username_file, concurrency, timeout)
             };
-            intrasweep::cli::crack::run_crack_cmd(target, port, service, usernames,
-                                                  password_file, username_file,
-                                                  concurrency, timeout, delay, spray)
+            intrasweep::cli::crack::run_crack_cmd(
+                target,
+                port,
+                service,
+                usernames,
+                password_file,
+                username_file,
+                concurrency,
+                timeout,
+                delay,
+                spray,
+            )
         }
 
-        Commands::Tunnel { tunnel_type, target, local_port, remote_port,
-                           hop, socks5_username, socks5_password,
-                           max_connections, timeout, encryption_key } => {
+        Commands::Tunnel {
+            tunnel_type,
+            target,
+            local_port,
+            remote_port,
+            hop,
+            socks5_username,
+            socks5_password,
+            max_connections,
+            timeout,
+            encryption_key,
+        } => {
             // 加密隧道尚未正确接线，显式报错而非静默跑明文
             if encryption_key.is_some() {
                 print_error("--encryption-key 加密隧道尚未实现（当前版本加密管道未正确接线，使用会导致明文传输）。请等待后续版本。");
@@ -90,34 +135,63 @@ fn main() {
             let (max_connections, timeout) = if let Some(ref c) = cfg {
                 let tp = c.tunnel.as_ref();
                 (
-                    if max_connections != 100 { max_connections } else {
-                        tp.and_then(|t| t.max_connections).or(c.defaults.concurrency).unwrap_or(100)
+                    if max_connections != 100 {
+                        max_connections
+                    } else {
+                        tp.and_then(|t| t.max_connections)
+                            .or(c.defaults.concurrency)
+                            .unwrap_or(100)
                     },
-                    if timeout != 30 { timeout } else {
-                        tp.and_then(|t| t.timeout).or(c.defaults.timeout).unwrap_or(30)
+                    if timeout != 30 {
+                        timeout
+                    } else {
+                        tp.and_then(|t| t.timeout)
+                            .or(c.defaults.timeout)
+                            .unwrap_or(30)
                     },
                 )
             } else {
                 (max_connections, timeout)
             };
-            intrasweep::cli::tunnel::run_tunnel_cmd(tunnel_type, target, local_port,
-                                                    remote_port, hop, socks5_username,
-                                                    socks5_password, max_connections, timeout,
-                                                    encryption_key)
+            intrasweep::cli::tunnel::run_tunnel_cmd(
+                tunnel_type,
+                target,
+                local_port,
+                remote_port,
+                hop,
+                socks5_username,
+                socks5_password,
+                max_connections,
+                timeout,
+                encryption_key,
+            )
         }
 
-        Commands::Vuln { targets, poc_file, severity, category,
-                         format, output, concurrency, timeout, web_probe } => {
+        Commands::Vuln {
+            targets,
+            poc_file,
+            severity,
+            category,
+            format,
+            output,
+            concurrency,
+            timeout,
+            web_probe,
+        } => {
             if web_probe {
                 print_error("--web-probe Web 主动探测尚未实现（仅有 payload 生成器，无执行逻辑）。请等待后续版本。");
                 std::process::exit(1);
             }
             let (concurrency, timeout) = if let Some(ref c) = cfg {
                 (
-                    if concurrency != 20 { concurrency } else {
+                    if concurrency != 20 {
+                        concurrency
+                    } else {
                         c.defaults.concurrency.unwrap_or(20)
                     },
-                    if timeout != 10 { timeout } else {
+                    if timeout != 10 {
+                        timeout
+                    } else {
                         c.defaults.timeout.unwrap_or(10)
                     },
                 )
@@ -125,18 +199,42 @@ fn main() {
                 (concurrency, timeout)
             };
             let format = core::config::apply_default_format(&cfg, &format);
-            intrasweep::cli::vuln::run_vuln_cmd(targets, poc_file, severity, category,
-                                                &format, output, concurrency, timeout, web_probe)
+            intrasweep::cli::vuln::run_vuln_cmd(
+                targets,
+                poc_file,
+                severity,
+                category,
+                &format,
+                output,
+                concurrency,
+                timeout,
+                web_probe,
+            )
         }
 
-        Commands::Cred { dc, domain, format, output } => {
+        Commands::Cred {
+            dc,
+            domain,
+            format,
+            output,
+        } => {
             let format = core::config::apply_default_format(&cfg, &format);
             intrasweep::cli::cred::run_cred_cmd(dc, domain, &format, output)
         }
 
-        Commands::Ad { dc, domain, username, password, ssl, mode,
-                       bloodhound_dir, format, output,
-                       golden_ticket, krbtgt_hash } => {
+        Commands::Ad {
+            dc,
+            domain,
+            username,
+            password,
+            ssl,
+            mode,
+            bloodhound_dir,
+            format,
+            output,
+            golden_ticket,
+            krbtgt_hash,
+        } => {
             if golden_ticket || krbtgt_hash.is_some() {
                 print_error("--golden-ticket / --krbtgt-hash 尚未实现真实的 Kerberos 票据伪造（当前仅写 kirbi 文件）。请使用 mimikatz 替代。");
                 std::process::exit(1);
@@ -150,29 +248,54 @@ fn main() {
                     print_info("AD --mode gpp 将搜索 SYSVOL 中的 GPP 密码文件并解密。");
                 }
                 "adcs" => {
-                    print_info("AD --mode adcs 枚举 ADCS 证书服务（当前仅匿名绑定，ESC 检测有限）。");
+                    print_info(
+                        "AD --mode adcs 枚举 ADCS 证书服务（当前仅匿名绑定，ESC 检测有限）。",
+                    );
                 }
                 _ => {}
             }
             let format = core::config::apply_default_format(&cfg, &format);
-            intrasweep::cli::ad::run_ad_cmd(dc, domain, username, password, ssl,
-                                            mode, bloodhound_dir, &format, output,
-                                            golden_ticket, krbtgt_hash)
+            intrasweep::cli::ad::run_ad_cmd(
+                dc,
+                domain,
+                username,
+                password,
+                ssl,
+                mode,
+                bloodhound_dir,
+                &format,
+                output,
+                golden_ticket,
+                krbtgt_hash,
+            )
         }
 
-        Commands::Recon { dc, domain, mode, format, output } => {
+        Commands::Recon {
+            dc,
+            domain,
+            mode,
+            format,
+            output,
+        } => {
             let format = core::config::apply_default_format(&cfg, &format);
             intrasweep::cli::recon::run_recon_cmd(dc, domain, mode, &format, output)
         }
 
-        Commands::Privesc { check, format, output } => {
+        Commands::Privesc {
+            check,
+            format,
+            output,
+        } => {
             let format = core::config::apply_default_format(&cfg, &format);
             intrasweep::cli::privesc::run_privesc_cmd(check, &format, output)
         }
 
-        Commands::Report { format, input, mitre, output } => {
-            intrasweep::cli::report::run_report_cmd(format, mitre, output, input)
-        }
+        Commands::Report {
+            format,
+            input,
+            mitre,
+            output,
+        } => intrasweep::cli::report::run_report_cmd(format, mitre, output, input),
     };
 
     if let Err(e) = result {

@@ -158,7 +158,11 @@ fn enumerate_all_sync(config: &LdapConfig) -> Result<AdEnumResult, String> {
         gpos_found: result.gpos.len(),
         trusts_found: result.trusts.len(),
         admin_accounts: result.users.iter().filter(|u| u.admin_count).count(),
-        da_accounts: result.users.iter().filter(|u| u.member_of.iter().any(|m| m.contains("Domain Admins"))).count(),
+        da_accounts: result
+            .users
+            .iter()
+            .filter(|u| u.member_of.iter().any(|m| m.contains("Domain Admins")))
+            .count(),
     };
 
     Ok(result)
@@ -189,7 +193,11 @@ fn search_attrs(
 }
 
 fn get_attr(entry: &ldap3::SearchEntry, name: &str) -> Option<String> {
-    entry.attrs.get(name).and_then(|v| v.first().cloned()).filter(|v| !v.is_empty())
+    entry
+        .attrs
+        .get(name)
+        .and_then(|v| v.first().cloned())
+        .filter(|v| !v.is_empty())
 }
 
 fn get_attr_multi(entry: &ldap3::SearchEntry, name: &str) -> Vec<String> {
@@ -249,68 +257,129 @@ fn parse_sid(bytes: &[u8]) -> Option<String> {
 }
 
 fn query_users(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdUser>, String> {
-    let rs = search_attrs(ldap, base_dn,
+    let rs = search_attrs(
+        ldap,
+        base_dn,
         "(&(objectClass=user)(objectCategory=person))",
-        &["sAMAccountName","displayName","distinguishedName","description","mail","adminCount",
-          "userAccountControl","memberOf","servicePrincipalName","objectSid"])?;
+        &[
+            "sAMAccountName",
+            "displayName",
+            "distinguishedName",
+            "description",
+            "mail",
+            "adminCount",
+            "userAccountControl",
+            "memberOf",
+            "servicePrincipalName",
+            "objectSid",
+        ],
+    )?;
 
-    Ok(rs.iter().map(|entry| {
-        let uac: u32 = get_attr(entry, "userAccountControl").and_then(|v| v.parse().ok()).unwrap_or(512);
-        AdUser {
-            sam_account_name: get_attr(entry, "sAMAccountName").unwrap_or_default(),
-            display_name: get_attr(entry, "displayName"),
-            dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
-            description: get_attr(entry, "description"),
-            email: get_attr(entry, "mail"),
-            admin_count: get_attr(entry, "adminCount").is_some(),
-            enabled: uac & 2 == 0,
-            password_expired: uac & 0x800000 != 0,
-            last_logon: None,
-            member_of: get_attr_multi(entry, "memberOf"),
-            spn: get_attr_multi(entry, "servicePrincipalName"),
-            sid: get_sid_attr(entry),
-        }
-    }).collect())
+    Ok(rs
+        .iter()
+        .map(|entry| {
+            let uac: u32 = get_attr(entry, "userAccountControl")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(512);
+            AdUser {
+                sam_account_name: get_attr(entry, "sAMAccountName").unwrap_or_default(),
+                display_name: get_attr(entry, "displayName"),
+                dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
+                description: get_attr(entry, "description"),
+                email: get_attr(entry, "mail"),
+                admin_count: get_attr(entry, "adminCount").is_some(),
+                enabled: uac & 2 == 0,
+                password_expired: uac & 0x800000 != 0,
+                last_logon: None,
+                member_of: get_attr_multi(entry, "memberOf"),
+                spn: get_attr_multi(entry, "servicePrincipalName"),
+                sid: get_sid_attr(entry),
+            }
+        })
+        .collect())
 }
 
 fn query_groups(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdGroup>, String> {
-    let rs = search_attrs(ldap, base_dn, "(objectClass=group)",
-        &["cn","distinguishedName","description","member","adminCount","objectSid"])?;
+    let rs = search_attrs(
+        ldap,
+        base_dn,
+        "(objectClass=group)",
+        &[
+            "cn",
+            "distinguishedName",
+            "description",
+            "member",
+            "adminCount",
+            "objectSid",
+        ],
+    )?;
 
-    Ok(rs.iter().map(|entry| AdGroup {
-        name: get_attr(entry, "cn").unwrap_or_default(),
-        dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
-        description: get_attr(entry, "description"),
-        members: get_attr_multi(entry, "member"),
-        admin_count: get_attr(entry, "adminCount").is_some(),
-        sid: get_sid_attr(entry),
-    }).collect())
+    Ok(rs
+        .iter()
+        .map(|entry| AdGroup {
+            name: get_attr(entry, "cn").unwrap_or_default(),
+            dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
+            description: get_attr(entry, "description"),
+            members: get_attr_multi(entry, "member"),
+            admin_count: get_attr(entry, "adminCount").is_some(),
+            sid: get_sid_attr(entry),
+        })
+        .collect())
 }
 
 fn query_computers(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdComputer>, String> {
-    let rs = search_attrs(ldap, base_dn, "(objectClass=computer)",
-        &["cn","distinguishedName","dNSHostName","operatingSystem","operatingSystemVersion","userAccountControl","objectSid"])?;
+    let rs = search_attrs(
+        ldap,
+        base_dn,
+        "(objectClass=computer)",
+        &[
+            "cn",
+            "distinguishedName",
+            "dNSHostName",
+            "operatingSystem",
+            "operatingSystemVersion",
+            "userAccountControl",
+            "objectSid",
+        ],
+    )?;
 
-    Ok(rs.iter().map(|entry| {
-        let uac: u32 = get_attr(entry, "userAccountControl").and_then(|v| v.parse().ok()).unwrap_or(4096);
-        AdComputer {
-            name: get_attr(entry, "cn").unwrap_or_default(),
-            dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
-            dns_hostname: get_attr(entry, "dNSHostName"),
-            os: get_attr(entry, "operatingSystem"),
-            os_version: get_attr(entry, "operatingSystemVersion"),
-            enabled: uac & 2 == 0,
-            last_logon: None,
-            sid: get_sid_attr(entry),
-        }
-    }).collect())
+    Ok(rs
+        .iter()
+        .map(|entry| {
+            let uac: u32 = get_attr(entry, "userAccountControl")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(4096);
+            AdComputer {
+                name: get_attr(entry, "cn").unwrap_or_default(),
+                dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
+                dns_hostname: get_attr(entry, "dNSHostName"),
+                os: get_attr(entry, "operatingSystem"),
+                os_version: get_attr(entry, "operatingSystemVersion"),
+                enabled: uac & 2 == 0,
+                last_logon: None,
+                sid: get_sid_attr(entry),
+            }
+        })
+        .collect())
 }
 
-fn query_kerberoast_targets(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<KerberoastTarget>, String> {
-    let rs = search_attrs(ldap, base_dn,
+fn query_kerberoast_targets(
+    ldap: &mut ldap3::LdapConn,
+    base_dn: &str,
+) -> Result<Vec<KerberoastTarget>, String> {
+    let rs = search_attrs(
+        ldap,
+        base_dn,
         "(&(servicePrincipalName=*)(objectClass=user)(!(objectClass=computer)))",
-        &["sAMAccountName","distinguishedName","servicePrincipalName","adminCount",
-          "userAccountControl","description"])?;
+        &[
+            "sAMAccountName",
+            "distinguishedName",
+            "servicePrincipalName",
+            "adminCount",
+            "userAccountControl",
+            "description",
+        ],
+    )?;
 
     let mut targets = Vec::new();
     for entry in &rs {
@@ -318,7 +387,9 @@ fn query_kerberoast_targets(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result
         let dn = get_attr(entry, "distinguishedName").unwrap_or_default();
         let spns = get_attr_multi(entry, "servicePrincipalName");
         let admin_count = get_attr(entry, "adminCount").is_some();
-        let uac: u32 = get_attr(entry, "userAccountControl").and_then(|v| v.parse().ok()).unwrap_or(0);
+        let uac: u32 = get_attr(entry, "userAccountControl")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
         let enabled = uac & 2 == 0;
         let description = get_attr(entry, "description");
 
@@ -339,48 +410,72 @@ fn query_kerberoast_targets(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result
     Ok(targets)
 }
 
-fn query_asrep_targets(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AsrepTarget>, String> {
-    let rs = search_attrs(ldap, base_dn,
+fn query_asrep_targets(
+    ldap: &mut ldap3::LdapConn,
+    base_dn: &str,
+) -> Result<Vec<AsrepTarget>, String> {
+    let rs = search_attrs(
+        ldap,
+        base_dn,
         "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))",
-        &["sAMAccountName","distinguishedName","userAccountControl","description"])?;
+        &[
+            "sAMAccountName",
+            "distinguishedName",
+            "userAccountControl",
+            "description",
+        ],
+    )?;
 
-    Ok(rs.iter().map(|entry| {
-        let uac: u32 = get_attr(entry, "userAccountControl").and_then(|v| v.parse().ok()).unwrap_or(0);
-        AsrepTarget {
-            username: get_attr(entry, "sAMAccountName").unwrap_or_default(),
-            dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
-            enabled: uac & 2 == 0,
-            description: get_attr(entry, "description"),
-        }
-    }).collect())
+    Ok(rs
+        .iter()
+        .map(|entry| {
+            let uac: u32 = get_attr(entry, "userAccountControl")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0);
+            AsrepTarget {
+                username: get_attr(entry, "sAMAccountName").unwrap_or_default(),
+                dn: get_attr(entry, "distinguishedName").unwrap_or_default(),
+                enabled: uac & 2 == 0,
+                description: get_attr(entry, "description"),
+            }
+        })
+        .collect())
 }
 
 fn query_trusts(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<AdTrust>, String> {
-    let rs = search_attrs(ldap, &format!("CN=System,{}", base_dn),
+    let rs = search_attrs(
+        ldap,
+        &format!("CN=System,{}", base_dn),
         "(objectClass=trustedDomain)",
-        &["cn","trustType","trustDirection","trustAttributes"])?;
+        &["cn", "trustType", "trustDirection", "trustAttributes"],
+    )?;
 
-    Ok(rs.iter().map(|entry| {
-        AdTrust {
+    Ok(rs
+        .iter()
+        .map(|entry| AdTrust {
             domain: get_attr(entry, "cn").unwrap_or_default(),
-            trust_type: get_attr(entry, "trustType").map(|v| match v.as_str() {
-                "1" => "Windows NT".to_string(),
-                "2" => "Windows 2000".to_string(),
-                "3" => "Kerberos".to_string(),
-                _ => v,
-            }).unwrap_or_else(|| "未知".to_string()),
-            trust_direction: get_attr(entry, "trustDirection").map(|v| match v.as_str() {
-                "0" => "禁用".to_string(),
-                "1" => "入站".to_string(),
-                "2" => "出站".to_string(),
-                "3" => "双向".to_string(),
-                _ => v,
-            }).unwrap_or_else(|| "未知".to_string()),
+            trust_type: get_attr(entry, "trustType")
+                .map(|v| match v.as_str() {
+                    "1" => "Windows NT".to_string(),
+                    "2" => "Windows 2000".to_string(),
+                    "3" => "Kerberos".to_string(),
+                    _ => v,
+                })
+                .unwrap_or_else(|| "未知".to_string()),
+            trust_direction: get_attr(entry, "trustDirection")
+                .map(|v| match v.as_str() {
+                    "0" => "禁用".to_string(),
+                    "1" => "入站".to_string(),
+                    "2" => "出站".to_string(),
+                    "3" => "双向".to_string(),
+                    _ => v,
+                })
+                .unwrap_or_else(|| "未知".to_string()),
             trust_attributes: get_attr(entry, "trustAttributes")
                 .map(|v| parse_trust_attributes(&v))
                 .unwrap_or_else(|| "未知".to_string()),
-        }
-    }).collect())
+        })
+        .collect())
 }
 
 /// 按位掩码解析 trustAttributes (MS-ADTS)
@@ -391,14 +486,30 @@ fn parse_trust_attributes(value: &str) -> String {
     };
 
     let mut parts = Vec::new();
-    if flags & 0x0000_0001 != 0 { parts.push("NON_TRANSITIVE"); }
-    if flags & 0x0000_0002 != 0 { parts.push("UPLEVEL_ONLY"); }
-    if flags & 0x0000_0004 != 0 { parts.push("QUARANTINED_DOMAIN"); }
-    if flags & 0x0000_0008 != 0 { parts.push("FOREST_TRANSITIVE"); }
-    if flags & 0x0000_0010 != 0 { parts.push("CROSS_ORGANIZATION"); }
-    if flags & 0x0000_0020 != 0 { parts.push("WITHIN_FOREST"); }
-    if flags & 0x0000_0040 != 0 { parts.push("TREAT_AS_EXTERNAL"); }
-    if flags & 0x0000_0080 != 0 { parts.push("USES_RC4_ENCRYPTION"); }
+    if flags & 0x0000_0001 != 0 {
+        parts.push("NON_TRANSITIVE");
+    }
+    if flags & 0x0000_0002 != 0 {
+        parts.push("UPLEVEL_ONLY");
+    }
+    if flags & 0x0000_0004 != 0 {
+        parts.push("QUARANTINED_DOMAIN");
+    }
+    if flags & 0x0000_0008 != 0 {
+        parts.push("FOREST_TRANSITIVE");
+    }
+    if flags & 0x0000_0010 != 0 {
+        parts.push("CROSS_ORGANIZATION");
+    }
+    if flags & 0x0000_0020 != 0 {
+        parts.push("WITHIN_FOREST");
+    }
+    if flags & 0x0000_0040 != 0 {
+        parts.push("TREAT_AS_EXTERNAL");
+    }
+    if flags & 0x0000_0080 != 0 {
+        parts.push("USES_RC4_ENCRYPTION");
+    }
 
     if parts.is_empty() {
         format!("0x{:08X}", flags)
@@ -408,12 +519,20 @@ fn parse_trust_attributes(value: &str) -> String {
 }
 
 fn query_gpos(ldap: &mut ldap3::LdapConn, base_dn: &str) -> Result<Vec<String>, String> {
-    let rs = search_attrs(ldap, base_dn, "(objectClass=groupPolicyContainer)",
-        &["cn","displayName"])?;
+    let rs = search_attrs(
+        ldap,
+        base_dn,
+        "(objectClass=groupPolicyContainer)",
+        &["cn", "displayName"],
+    )?;
 
-    Ok(rs.iter().map(|entry| {
-        get_attr(entry, "displayName").unwrap_or_else(|| get_attr(entry, "cn").unwrap_or_default())
-    }).collect())
+    Ok(rs
+        .iter()
+        .map(|entry| {
+            get_attr(entry, "displayName")
+                .unwrap_or_else(|| get_attr(entry, "cn").unwrap_or_default())
+        })
+        .collect())
 }
 
 /// 域密码策略 (通过 LDAP 查询域对象的属性)
@@ -466,12 +585,10 @@ pub fn query_password_policy(
 
     let entry = rs.first().ok_or_else(|| "未找到域对象".to_string())?;
 
-    let parse_i64 = |name: &str| -> Option<i64> {
-        get_attr(entry, name).and_then(|v| v.parse().ok())
-    };
-    let parse_u32 = |name: &str| -> Option<u32> {
-        get_attr(entry, name).and_then(|v| v.parse().ok())
-    };
+    let parse_i64 =
+        |name: &str| -> Option<i64> { get_attr(entry, name).and_then(|v| v.parse().ok()) };
+    let parse_u32 =
+        |name: &str| -> Option<u32> { get_attr(entry, name).and_then(|v| v.parse().ok()) };
 
     Ok(LdapPasswordPolicy {
         max_password_age_mins: parse_i64("maxPwdAge").and_then(large_integer_to_mins),
@@ -487,7 +604,11 @@ pub fn query_password_policy(
 
 /// 域名转 DN 格式 (corp.local → DC=corp,DC=local)
 pub fn domain_to_dn(domain: &str) -> String {
-    domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",")
+    domain
+        .split('.')
+        .map(|p| format!("DC={}", p))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 #[cfg(test)]

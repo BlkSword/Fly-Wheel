@@ -99,7 +99,14 @@ fn collect_windows_firewall_rules() -> Result<Vec<FirewallRule>, String> {
 
     // 使用netsh advfirewall查询
     let output = std::process::Command::new("netsh")
-        .args(["advfirewall", "firewall", "show", "rule", "name=all", "verbose"])
+        .args([
+            "advfirewall",
+            "firewall",
+            "show",
+            "rule",
+            "name=all",
+            "verbose",
+        ])
         .output()
         .map_err(|e| format!("netsh失败: {}", e))?;
 
@@ -199,7 +206,11 @@ fn collect_iptables_rules() -> Result<Vec<FirewallRule>, String> {
                 rules.push(FirewallRule {
                     name: format!("iptables-{}", parts[0]),
                     direction: FirewallDirection::Inbound,
-                    action: if parts[3] == "ACCEPT" { FirewallAction::Allow } else { FirewallAction::Block },
+                    action: if parts[3] == "ACCEPT" {
+                        FirewallAction::Allow
+                    } else {
+                        FirewallAction::Block
+                    },
                     protocol: parts[4].to_string(),
                     local_port: String::new(),
                     remote_port: String::new(),
@@ -253,7 +264,8 @@ pub fn get_firewall_profiles() -> Vec<FirewallProfile> {
 
                 if let Some(ref mut profile) = current_profile {
                     if line.contains("状态") || line.contains("State") {
-                        profile.enabled = line.to_lowercase().contains("on") || line.contains("启用");
+                        profile.enabled =
+                            line.to_lowercase().contains("on") || line.contains("启用");
                     }
                     if line.contains("入站") || line.contains("Inbound") {
                         profile.default_inbound = if line.to_lowercase().contains("allow") {

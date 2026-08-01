@@ -29,7 +29,14 @@ pub fn run_crack_cmd(
             .map(|s| matches!(s.to_lowercase().as_str(), "ssh"))
             .unwrap_or(false);
         if supported {
-            return run_spray(target, port, service.unwrap(), usernames, username_file, password_file);
+            return run_spray(
+                target,
+                port,
+                service.unwrap(),
+                usernames,
+                username_file,
+                password_file,
+            );
         }
         print_info("密码喷射当前仅支持 SSH（WinRM 等快速认证测试未实现），回退到普通爆破模式");
     }
@@ -185,7 +192,10 @@ fn run_interactive_crack(
 ) -> Result<()> {
     print_banner();
     println!();
-    print_info(&format!("IntraSweep 交互式{}配置向导", crate::core::obfstr::sensitive::crack_label()));
+    print_info(&format!(
+        "IntraSweep 交互式{}配置向导",
+        crate::core::obfstr::sensitive::crack_label()
+    ));
     println!();
 
     // 步骤 1: 目标主机
@@ -195,7 +205,8 @@ fn run_interactive_crack(
     println!("  域名:         example.com");
     println!();
 
-    let target = InteractiveMenu::read_input_required("请输入目标主机: ", "目标不能为空，请重新输入");
+    let target =
+        InteractiveMenu::read_input_required("请输入目标主机: ", "目标不能为空，请重新输入");
     print_success(&format!("已设置目标: {}", target));
 
     // 步骤 2: 服务类型
@@ -365,7 +376,11 @@ fn run_interactive_crack(
 
     let concurrency = if initial_concurrency == 10 {
         let input = InteractiveMenu::read_input("并发数 (默认: 10): ");
-        let c = if input.is_empty() { 10 } else { input.parse::<usize>().unwrap_or(10) };
+        let c = if input.is_empty() {
+            10
+        } else {
+            input.parse::<usize>().unwrap_or(10)
+        };
         print_success(&format!("已设置并发数: {}", c));
         c
     } else {
@@ -375,7 +390,11 @@ fn run_interactive_crack(
 
     let timeout = if initial_timeout == 5 {
         let input = InteractiveMenu::read_input("超时时间/秒 (默认: 5): ");
-        let t = if input.is_empty() { 5 } else { input.parse::<u64>().unwrap_or(5) };
+        let t = if input.is_empty() {
+            5
+        } else {
+            input.parse::<u64>().unwrap_or(5)
+        };
         print_success(&format!("已设置超时: {} 秒", t));
         t
     } else {
@@ -411,7 +430,11 @@ fn run_interactive_crack(
     // 步骤 8: 确认配置
     InteractiveMenu::print_step(8, 8, "确认配置");
     println!("  目标主机:     {}", target);
-    println!("  服务类型:     {} (端口: {})", service.to_uppercase(), port);
+    println!(
+        "  服务类型:     {} (端口: {})",
+        service.to_uppercase(),
+        port
+    );
     println!("  并发数:       {}", concurrency);
     println!("  超时:         {} 秒", timeout);
     if let Some(ref d) = delay {
@@ -672,7 +695,13 @@ fn run_crack(
     // 显示结果
     if result.is_success() {
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", colorize(&format!("{}!", crate::core::obfstr::sensitive::crack_success_label()), Color::BrightGreen));
+        println!(
+            "║  {}",
+            colorize(
+                &format!("{}!", crate::core::obfstr::sensitive::crack_success_label()),
+                Color::BrightGreen
+            )
+        );
         println!("╠════════════════════════════════════════════════════════════════════════════╣");
         println!("║  目标:        {}:{}", result.target, result.port);
         println!("║  服务:        {}", result.service);
@@ -686,7 +715,13 @@ fn run_crack(
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
     } else {
         println!("╔════════════════════════════════════════════════════════════════════════════╗");
-        println!("║  {}", colorize(&crate::core::obfstr::sensitive::crack_failed_label(), Color::BrightRed));
+        println!(
+            "║  {}",
+            colorize(
+                &crate::core::obfstr::sensitive::crack_failed_label(),
+                Color::BrightRed
+            )
+        );
         println!("╠════════════════════════════════════════════════════════════════════════════╣");
         println!("║  目标:        {}:{}", result.target, result.port);
         println!("║  服务:        {}", result.service);

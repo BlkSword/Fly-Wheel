@@ -79,9 +79,7 @@ impl FileCollector {
                 // 检查是否匹配敏感模式
                 for (pattern, category) in &sensitive_patterns {
                     if file_name_lower.contains(pattern) {
-                        let modified = entry.metadata()
-                            .ok()
-                            .and_then(|m| m.modified().ok());
+                        let modified = entry.metadata().ok().and_then(|m| m.modified().ok());
                         files.push(SensitiveFile {
                             path: entry.path().to_string_lossy().to_string(),
                             file_name,
@@ -104,9 +102,16 @@ impl FileCollector {
 
         // 配置文件扩展名
         let config_extensions = vec![
-            ".conf", ".config", ".cfg", ".ini",
-            ".json", ".yaml", ".yml", ".toml",
-            ".xml", ".properties",
+            ".conf",
+            ".config",
+            ".cfg",
+            ".ini",
+            ".json",
+            ".yaml",
+            ".yml",
+            ".toml",
+            ".xml",
+            ".properties",
         ];
 
         for base_path in search_paths {
@@ -186,7 +191,9 @@ impl FileCollector {
                             let matching_lines: Vec<(usize, String)> = lines
                                 .iter()
                                 .enumerate()
-                                .filter(|(_, line)| line.to_lowercase().contains(&keyword.to_lowercase()))
+                                .filter(|(_, line)| {
+                                    line.to_lowercase().contains(&keyword.to_lowercase())
+                                })
                                 .map(|(i, line)| (i + 1, line.to_string()))
                                 .collect();
 
@@ -260,7 +267,8 @@ impl Default for FileCollector {
 
 /// 判断路径是否是隐藏文件/目录
 fn is_hidden(entry: &walkdir::DirEntry) -> bool {
-    entry.file_name()
+    entry
+        .file_name()
         .to_str()
         .map(|s| s.starts_with('.'))
         .unwrap_or(false)
@@ -270,15 +278,9 @@ fn is_hidden(entry: &walkdir::DirEntry) -> bool {
 fn is_likely_text_file(path: &Path) -> bool {
     // 检查文件扩展名
     let text_extensions = vec![
-        "txt", "md", "rst", "log",
-        "json", "xml", "yaml", "yml", "toml",
-        "conf", "config", "cfg", "ini",
-        "sh", "bash", "zsh", "fish",
-        "ps1", "bat", "cmd",
-        "py", "rb", "pl", "js", "ts",
-        "rs", "go", "java", "c", "cpp", "h",
-        "html", "css", "scss",
-        "env", "sql",
+        "txt", "md", "rst", "log", "json", "xml", "yaml", "yml", "toml", "conf", "config", "cfg",
+        "ini", "sh", "bash", "zsh", "fish", "ps1", "bat", "cmd", "py", "rb", "pl", "js", "ts",
+        "rs", "go", "java", "c", "cpp", "h", "html", "css", "scss", "env", "sql",
     ];
 
     path.extension()
@@ -293,9 +295,16 @@ fn detect_config_type(filename: &str) -> String {
 
     if filename_lower.contains("ssh") || filename_lower.contains("sshd") {
         "SSH配置".to_string()
-    } else if filename_lower.contains("nginx") || filename_lower.contains("apache") || filename_lower.contains("httpd") {
+    } else if filename_lower.contains("nginx")
+        || filename_lower.contains("apache")
+        || filename_lower.contains("httpd")
+    {
         "Web服务器配置".to_string()
-    } else if filename_lower.contains("mysql") || filename_lower.contains("my.cnf") || filename_lower.contains("postgresql") || filename_lower.contains("mongodb") {
+    } else if filename_lower.contains("mysql")
+        || filename_lower.contains("my.cnf")
+        || filename_lower.contains("postgresql")
+        || filename_lower.contains("mongodb")
+    {
         "数据库配置".to_string()
     } else if filename_lower.contains("docker") {
         "Docker配置".to_string()
@@ -353,9 +362,7 @@ mod tests {
 
     #[test]
     fn test_file_collector_creation() {
-        let collector = FileCollector::new();
-        // 验证对象创建成功
-        assert!(true);
+        let _collector = FileCollector::new();
     }
 
     #[test]
@@ -378,9 +385,7 @@ mod tests {
 
     #[test]
     fn test_is_hidden() {
-        use walkdir::DirEntry;
         // 简单测试
-        assert!(true);
     }
 
     #[test]
@@ -388,9 +393,7 @@ mod tests {
         let collector = FileCollector::new();
         // 测试当前目录
         let paths = vec![".".to_string()];
-        let files = collector.find_config_files(&paths);
-        // 不应该崩溃
-        assert!(true);
+        let _files = collector.find_config_files(&paths);
     }
 
     #[test]
@@ -398,8 +401,6 @@ mod tests {
         let collector = FileCollector::new();
         let paths = vec![".".to_string()];
         let keywords = vec!["test".to_string()];
-        let matches = collector.search_keywords(&paths, &keywords);
-        // 不应该崩溃
-        assert!(true);
+        let _matches = collector.search_keywords(&paths, &keywords);
     }
 }

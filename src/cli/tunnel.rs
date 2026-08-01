@@ -79,7 +79,8 @@ fn run_tunnel(
     });
 
     let local_addr_str = format!("127.0.0.1:{}", local_port);
-    let local_addr = local_addr_str.parse()
+    let local_addr = local_addr_str
+        .parse()
         .map_err(|_| IntraSweepError::Config {
             message: format!("无效的本地地址: {}", local_addr_str),
         })?;
@@ -111,8 +112,7 @@ fn run_tunnel(
     }
 
     // 验证配置
-    config
-        .validate()?;
+    config.validate()?;
 
     // 创建隧道管理器
     let manager = TunnelManager::new();
@@ -160,7 +160,10 @@ fn run_interactive_tunnel(
 ) -> Result<()> {
     print_banner();
     println!();
-    print_info(&format!("IntraSweep 交互式{}配置向导", crate::core::obfstr::sensitive::tunnel_label()));
+    print_info(&format!(
+        "IntraSweep 交互式{}配置向导",
+        crate::core::obfstr::sensitive::tunnel_label()
+    ));
     println!();
 
     // 步骤 1: 隧道类型
@@ -189,8 +192,7 @@ fn run_interactive_tunnel(
         tunnel_type
     };
 
-    let tunnel_type_enum = TunnelType::parse(&tunnel_type)
-        .expect("交互式向导应保证隧道类型有效");
+    let tunnel_type_enum = TunnelType::parse(&tunnel_type).expect("交互式向导应保证隧道类型有效");
 
     // 步骤 2: 本地端口
     InteractiveMenu::print_step(2, 5, "本地监听端口");
@@ -217,7 +219,8 @@ fn run_interactive_tunnel(
     // 步骤 3: 远程目标/跳板
     let mut config = TunnelConfig::new(
         tunnel_type_enum,
-        format!("127.0.0.1:{}", local_port).parse()
+        format!("127.0.0.1:{}", local_port)
+            .parse()
             .expect("本地回环地址格式必须有效"),
     );
 
@@ -245,7 +248,8 @@ fn run_interactive_tunnel(
             } else {
                 let mut hops = Vec::new();
                 loop {
-                    let input = InteractiveMenu::read_input("请输入跳板地址 (host:port)，留空结束: ");
+                    let input =
+                        InteractiveMenu::read_input("请输入跳板地址 (host:port)，留空结束: ");
                     if input.is_empty() {
                         break;
                     }
@@ -275,14 +279,10 @@ fn run_interactive_tunnel(
 
             let auth_enabled = InteractiveMenu::read_input("是否启用 SOCKS5 认证? [y/N]: ");
             if auth_enabled.to_lowercase() == "y" {
-                let auth_user = InteractiveMenu::read_input_required(
-                    "SOCKS5 用户名: ",
-                    "用户名不能为空",
-                );
-                let auth_pass = InteractiveMenu::read_input_required(
-                    "SOCKS5 密码: ",
-                    "密码不能为空",
-                );
+                let auth_user =
+                    InteractiveMenu::read_input_required("SOCKS5 用户名: ", "用户名不能为空");
+                let auth_pass =
+                    InteractiveMenu::read_input_required("SOCKS5 密码: ", "密码不能为空");
                 config = config.with_socks5_auth(auth_user, auth_pass);
                 print_success("已设置 SOCKS5 认证");
             }
@@ -316,10 +316,7 @@ fn run_interactive_tunnel(
     let enc_enabled = InteractiveMenu::read_input("是否启用加密? [y/N]: ");
     let enc_enabled = enc_enabled.to_lowercase() == "y";
     if enc_enabled {
-        let key = InteractiveMenu::read_input_required(
-            "请输入加密密钥: ",
-            "加密密钥不能为空",
-        );
+        let key = InteractiveMenu::read_input_required("请输入加密密钥: ", "加密密钥不能为空");
         config = config.with_encryption_key(key);
         print_success("已启用 XChaCha20-Poly1305 加密");
     }
@@ -343,7 +340,10 @@ fn run_interactive_tunnel(
     }
     println!("  最大连接:     {}", max_connections);
     println!("  超时:         {} 秒", timeout);
-    println!("  加密:         {}", if enc_enabled { "启用" } else { "未启用" });
+    println!(
+        "  加密:         {}",
+        if enc_enabled { "启用" } else { "未启用" }
+    );
     println!();
 
     if !InteractiveMenu::confirm("确认启动隧道? [Y/n]: ") {

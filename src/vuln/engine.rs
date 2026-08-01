@@ -73,11 +73,12 @@ pub async fn execute_http_request(
         builder = builder.body(body);
     }
 
-    let resp = builder.send().await.map_err(|e| {
-        crate::core::error::IntraSweepError::Other {
+    let resp = builder
+        .send()
+        .await
+        .map_err(|e| crate::core::error::IntraSweepError::Other {
             message: format!("HTTP请求失败: {}", e),
-        }
-    })?;
+        })?;
 
     let status_code = resp.status().as_u16();
     let headers_str = resp
@@ -195,11 +196,7 @@ fn extract_regex_single(text: &str, pattern: &Option<String>, group: usize) -> O
     caps.get(group).map(|m| m.as_str().to_string())
 }
 
-fn extract_regex(
-    text: &str,
-    pattern: &Option<String>,
-    group: usize,
-) -> Vec<(String, String)> {
+fn extract_regex(text: &str, pattern: &Option<String>, group: usize) -> Vec<(String, String)> {
     let pattern = match pattern {
         Some(p) => p,
         None => return vec![],

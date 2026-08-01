@@ -208,7 +208,10 @@ impl SprayEngine {
             let mut handles = Vec::new();
 
             for username in users_to_try {
-                let permit = semaphore.clone().acquire_owned().await
+                let permit = semaphore
+                    .clone()
+                    .acquire_owned()
+                    .await
                     .expect("Semaphore 不应被关闭");
                 let target = self.config.target.clone();
                 let port = self.config.port;
@@ -218,7 +221,9 @@ impl SprayEngine {
                 let timeout = self.config.timeout;
 
                 let handle = tokio::spawn(async move {
-                    let result = try_single_login(&target, port, service, &username, &password, timeout).await;
+                    let result =
+                        try_single_login(&target, port, service, &username, &password, timeout)
+                            .await;
                     drop(permit);
                     (username, password, result)
                 });
@@ -315,11 +320,10 @@ async fn try_single_login(
                     tcp.set_write_timeout(Some(std::time::Duration::from_secs(1)))
                         .ok();
 
-                    let mut session = ssh2::Session::new()
-                        .map_err(|e| format!("SSH会话创建失败: {}", e))?;
+                    let mut session =
+                        ssh2::Session::new().map_err(|e| format!("SSH会话创建失败: {}", e))?;
                     session.set_tcp_stream(tcp);
-                    session.handshake()
-                        .map_err(|_| "SSH握手失败".to_string())?;
+                    session.handshake().map_err(|_| "SSH握手失败".to_string())?;
                     session
                         .userauth_password(username, password)
                         .map(|_| true)
@@ -378,8 +382,8 @@ mod tests {
 
     #[test]
     fn test_spray_config_validation_ok() {
-        let config = SprayConfig::new("target", CrackService::Ssh)
-            .with_usernames(vec!["admin".to_string()]);
+        let config =
+            SprayConfig::new("target", CrackService::Ssh).with_usernames(vec!["admin".to_string()]);
         assert!(config.validate().is_ok());
     }
 

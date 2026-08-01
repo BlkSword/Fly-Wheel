@@ -14,7 +14,7 @@ pub mod webfinger_db;
 #[cfg(windows)]
 pub mod arp;
 
-pub use config::{ScanConfig, ScanPreset, HostScanMethod, PortScanMethod};
+pub use config::{HostScanMethod, PortScanMethod, ScanConfig, ScanPreset};
 pub use host::HostScanner;
 pub use models::{HostResult, ScanResult, ScanStats, ScanType};
 pub use port::{PortScanner, ProgressCallback};
@@ -265,7 +265,10 @@ impl Scanner {
                 continue;
             }
 
-            let ip: std::net::IpAddr = host.ip.parse().unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
+            let ip: std::net::IpAddr = host
+                .ip
+                .parse()
+                .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::UNSPECIFIED));
             let fingerprints = scanner.probe_host_all(ip, &http_ports).await;
             total_found += fingerprints.len();
             host.web_fingerprints = fingerprints;
@@ -275,7 +278,11 @@ impl Scanner {
     }
 
     /// 保存扫描结果为JSON
-    pub fn save_result(&self, result: &ScanResult, path: Option<PathBuf>) -> crate::core::Result<PathBuf> {
+    pub fn save_result(
+        &self,
+        result: &ScanResult,
+        path: Option<PathBuf>,
+    ) -> crate::core::Result<PathBuf> {
         let output_path = path.unwrap_or_else(|| {
             let hostname = if !result.hosts.is_empty() {
                 result.hosts[0].ip.clone()

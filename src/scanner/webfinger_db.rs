@@ -85,7 +85,6 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         favicon_hashes: &[],
         confidence: 90,
     },
-
     // === 管理面板 ===
     FingerprintRule {
         name: "宝塔面板",
@@ -111,7 +110,6 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         favicon_hashes: &[],
         confidence: 90,
     },
-
     // === OA 系统 ===
     FingerprintRule {
         name: "泛微OA",
@@ -145,7 +143,6 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         favicon_hashes: &[],
         confidence: 90,
     },
-
     // === 开发工具 ===
     FingerprintRule {
         name: "Jenkins",
@@ -179,7 +176,6 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         favicon_hashes: &[],
         confidence: 90,
     },
-
     // === 框架 ===
     FingerprintRule {
         name: "Spring Boot",
@@ -205,7 +201,6 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         favicon_hashes: &[],
         confidence: 90,
     },
-
     // === 基础设施 ===
     FingerprintRule {
         name: "Nacos",
@@ -227,7 +222,11 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         name: "Elasticsearch",
         category: "基础设施",
         header_patterns: &[],
-        body_patterns: &["\"cluster_name\"", "\"lucene_version\"", "You Know, for Search"],
+        body_patterns: &[
+            "\"cluster_name\"",
+            "\"lucene_version\"",
+            "You Know, for Search",
+        ],
         favicon_hashes: &[],
         confidence: 95,
     },
@@ -263,7 +262,6 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         favicon_hashes: &[],
         confidence: 90,
     },
-
     // === 网络设备 ===
     FingerprintRule {
         name: "路由器管理页面",
@@ -273,7 +271,6 @@ pub const FINGERPRINT_DB: &[FingerprintRule] = &[
         favicon_hashes: &[],
         confidence: 70,
     },
-
     // === 其他 ===
     FingerprintRule {
         name: "Zabbix",
@@ -317,7 +314,10 @@ mod tests {
                 "规则 '{}' 必须有至少一种匹配模式",
                 rule.name
             );
-            assert!(rule.confidence > 0 && rule.confidence <= 100, "置信度范围错误");
+            assert!(
+                rule.confidence > 0 && rule.confidence <= 100,
+                "置信度范围错误"
+            );
         }
     }
 

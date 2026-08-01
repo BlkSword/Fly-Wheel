@@ -3,7 +3,7 @@
 //! 处理扫描子命令的交互式配置向导和直接模式
 
 use crate::cli::{
-    colorize, parse_scan_type, print_banner, print_scan_types, InteractiveMenu, save_scan_result,
+    colorize, parse_scan_type, print_banner, print_scan_types, save_scan_result, InteractiveMenu,
 };
 use crate::core::Result;
 use crate::output::color::*;
@@ -54,7 +54,13 @@ pub fn run_scan(
                         print_error("综合扫描需要指定目标");
                         std::process::exit(1);
                     }
-                    run_comprehensive_scan_simple(targets.clone(), preset, webfinger, output_fmt, output)
+                    run_comprehensive_scan_simple(
+                        targets.clone(),
+                        preset,
+                        webfinger,
+                        output_fmt,
+                        output,
+                    )
                 }
                 _ => {
                     print_error(&format!("未知的扫描类型: {}", scan_type));
@@ -96,7 +102,8 @@ fn run_interactive_scan(
         println!("  多个目标:     192.168.1.1,192.168.1.2,192.168.1.0/24");
         println!();
 
-        let input = InteractiveMenu::read_input_required("请输入扫描目标: ", "目标不能为空，请重新输入");
+        let input =
+            InteractiveMenu::read_input_required("请输入扫描目标: ", "目标不能为空，请重新输入");
         let targets: Vec<String> = input.split(',').map(|s| s.trim().to_string()).collect();
         print_success(&format!("已设置 {} 个目标", targets.len()));
         targets
@@ -136,8 +143,13 @@ fn run_interactive_scan(
 
     let default_preset = if fast { 1 } else { 2 };
     let preset_choice = InteractiveMenu::read_number_opt(
-        &format!("请选择扫描预设 [1-4, 默认 {}]: ", if fast { "1(Fast)" } else { "2(Standard)" }),
-        1, 4, default_preset,
+        &format!(
+            "请选择扫描预设 [1-4, 默认 {}]: ",
+            if fast { "1(Fast)" } else { "2(Standard)" }
+        ),
+        1,
+        4,
+        default_preset,
     );
     let config = match preset_choice {
         1 => {
@@ -213,11 +225,19 @@ fn run_interactive_scan(
     println!("  扫描预设:     {}", format_preset(&config));
     println!(
         "  服务探测:     {}",
-        if config.service_detection { "启用" } else { "禁用" }
+        if config.service_detection {
+            "启用"
+        } else {
+            "禁用"
+        }
     );
     println!(
         "  Web指纹:     {}",
-        if config.web_fingerprint { "启用" } else { "禁用" }
+        if config.web_fingerprint {
+            "启用"
+        } else {
+            "禁用"
+        }
     );
     println!("  主机扫描方式: {}", config.host_scan_method.display_name());
     println!("  端口扫描方式: {}", config.port_scan_method.display_name());
@@ -660,7 +680,10 @@ fn print_scan_results(result: &crate::scanner::ScanResult) {
     println!("║  存活主机:     {:<60}║", result.stats.alive_hosts);
     println!("║  开放端口:     {:<60}║", result.stats.total_open_ports);
     if result.stats.web_fingerprints_found > 0 {
-        println!("║  Web指纹:     {:<60}║", result.stats.web_fingerprints_found);
+        println!(
+            "║  Web指纹:     {:<60}║",
+            result.stats.web_fingerprints_found
+        );
     }
     println!("╠════════════════════════════════════════════════════════════════════════════╣");
     println!("║  扫描结果");
@@ -696,8 +719,19 @@ fn print_scan_results(result: &crate::scanner::ScanResult) {
                 if !host.web_fingerprints.is_empty() {
                     for wf in &host.web_fingerprints {
                         if !wf.web_apps.is_empty() {
-                            let apps: Vec<String> = wf.web_apps.iter()
-                                .map(|a| format!("{}{}", a.name, a.version.as_deref().map(|v| format!(" {}", v)).unwrap_or_default()))
+                            let apps: Vec<String> = wf
+                                .web_apps
+                                .iter()
+                                .map(|a| {
+                                    format!(
+                                        "{}{}",
+                                        a.name,
+                                        a.version
+                                            .as_deref()
+                                            .map(|v| format!(" {}", v))
+                                            .unwrap_or_default()
+                                    )
+                                })
                                 .collect();
                             println!(
                                 "║    {} {:<74}║",
@@ -706,11 +740,7 @@ fn print_scan_results(result: &crate::scanner::ScanResult) {
                             );
                         }
                         if !wf.title.is_empty() {
-                            println!(
-                                "║    {} {:<74}║",
-                                colorize("T", Color::Yellow),
-                                wf.title
-                            );
+                            println!("║    {} {:<74}║", colorize("T", Color::Yellow), wf.title);
                         }
                     }
                 }

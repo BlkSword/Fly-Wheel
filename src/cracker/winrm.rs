@@ -37,13 +37,25 @@ impl Default for WinrmCracker {
 #[async_trait]
 impl Cracker for WinrmCracker {
     async fn crack(&self, config: &CrackConfig) -> CrackResult {
-        base::run_crack(config, CrackService::Winrm, "WinRM (HTTP)", |username, password, target, port, timeout| {
-            let username = username.unwrap_or_else(|| "Administrator".to_string());
-            Self::try_connect_sync(&target, port, &username, &password, timeout)
-        }).await
+        base::run_crack(
+            config,
+            CrackService::Winrm,
+            "WinRM (HTTP)",
+            |username, password, target, port, timeout| {
+                let username = username.unwrap_or_else(|| "Administrator".to_string());
+                Self::try_connect_sync(&target, port, &username, &password, timeout)
+            },
+        )
+        .await
     }
 
-    async fn verify(&self, target: &str, port: u16, username: Option<&str>, password: &str) -> bool {
+    async fn verify(
+        &self,
+        target: &str,
+        port: u16,
+        username: Option<&str>,
+        password: &str,
+    ) -> bool {
         let username = username.unwrap_or("Administrator");
         Self::try_connect_sync(target, port, username, password, Duration::from_secs(10))
     }
@@ -51,7 +63,13 @@ impl Cracker for WinrmCracker {
 
 impl WinrmCracker {
     /// 尝试连接 WinRM 服务并认证
-    fn try_connect_sync(target: &str, port: u16, username: &str, password: &str, timeout: Duration) -> bool {
+    fn try_connect_sync(
+        target: &str,
+        port: u16,
+        username: &str,
+        password: &str,
+        timeout: Duration,
+    ) -> bool {
         // 先尝试 Basic 认证
         if Self::try_winrm_basic(target, port, username, password, timeout) {
             return true;
@@ -61,7 +79,13 @@ impl WinrmCracker {
     }
 
     /// WinRM Basic 认证
-    fn try_winrm_basic(target: &str, port: u16, username: &str, password: &str, timeout: Duration) -> bool {
+    fn try_winrm_basic(
+        target: &str,
+        port: u16,
+        username: &str,
+        password: &str,
+        timeout: Duration,
+    ) -> bool {
         let addr = format!("{}:{}", target, port);
 
         let socket_addrs = match addr.to_socket_addrs() {
@@ -75,8 +99,12 @@ impl WinrmCracker {
                 Err(_) => continue,
             };
 
-            if stream.set_read_timeout(Some(Duration::from_secs(5))).is_err()
-                || stream.set_write_timeout(Some(Duration::from_secs(5))).is_err()
+            if stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .is_err()
+                || stream
+                    .set_write_timeout(Some(Duration::from_secs(5)))
+                    .is_err()
             {
                 continue;
             }
@@ -91,7 +119,11 @@ impl WinrmCracker {
                  Content-Length: {}\r\n\
                  \r\n\
                  {}",
-                target, port, credentials, WINRM_SOAP_BODY.len(), WINRM_SOAP_BODY
+                target,
+                port,
+                credentials,
+                WINRM_SOAP_BODY.len(),
+                WINRM_SOAP_BODY
             );
 
             if stream.write_all(request.as_bytes()).is_err() {
@@ -104,7 +136,8 @@ impl WinrmCracker {
                 Ok(n) if n > 0 => {
                     let response = String::from_utf8_lossy(&buffer[..n]);
                     // HTTP 200 表示认证成功
-                    if response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200") {
+                    if response.starts_with("HTTP/1.1 200") || response.starts_with("HTTP/1.0 200")
+                    {
                         return true;
                     }
                 }
@@ -116,7 +149,13 @@ impl WinrmCracker {
     }
 
     /// WinRM NTLM 认证
-    fn try_winrm_ntlm(target: &str, port: u16, username: &str, password: &str, timeout: Duration) -> bool {
+    fn try_winrm_ntlm(
+        target: &str,
+        port: u16,
+        username: &str,
+        password: &str,
+        timeout: Duration,
+    ) -> bool {
         let addr = format!("{}:{}", target, port);
 
         let socket_addrs = match addr.to_socket_addrs() {
@@ -130,8 +169,12 @@ impl WinrmCracker {
                 Err(_) => continue,
             };
 
-            if stream.set_read_timeout(Some(Duration::from_secs(5))).is_err()
-                || stream.set_write_timeout(Some(Duration::from_secs(5))).is_err()
+            if stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .is_err()
+                || stream
+                    .set_write_timeout(Some(Duration::from_secs(5)))
+                    .is_err()
             {
                 continue;
             }
@@ -185,8 +228,12 @@ impl WinrmCracker {
                 Err(_) => continue,
             };
 
-            if stream2.set_read_timeout(Some(Duration::from_secs(5))).is_err()
-                || stream2.set_write_timeout(Some(Duration::from_secs(5))).is_err()
+            if stream2
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .is_err()
+                || stream2
+                    .set_write_timeout(Some(Duration::from_secs(5)))
+                    .is_err()
             {
                 continue;
             }
@@ -199,7 +246,11 @@ impl WinrmCracker {
                  Content-Length: {}\r\n\
                  \r\n\
                  {}",
-                target, port, type3_b64, WINRM_SOAP_BODY.len(), WINRM_SOAP_BODY
+                target,
+                port,
+                type3_b64,
+                WINRM_SOAP_BODY.len(),
+                WINRM_SOAP_BODY
             );
 
             if stream2.write_all(auth_request.as_bytes()).is_err() {
@@ -210,7 +261,9 @@ impl WinrmCracker {
             match stream2.read(&mut buffer2) {
                 Ok(n) if n > 0 => {
                     let response2 = String::from_utf8_lossy(&buffer2[..n]);
-                    if response2.starts_with("HTTP/1.1 200") || response2.starts_with("HTTP/1.0 200") {
+                    if response2.starts_with("HTTP/1.1 200")
+                        || response2.starts_with("HTTP/1.0 200")
+                    {
                         return true;
                     }
                 }
@@ -299,7 +352,10 @@ mod tests {
     fn test_base64_encode_string() {
         let encoded = base64_encode("Administrator:password".to_string());
         let decoded = base64_decode_bytes(&encoded).unwrap();
-        assert_eq!(String::from_utf8(decoded).unwrap(), "Administrator:password");
+        assert_eq!(
+            String::from_utf8(decoded).unwrap(),
+            "Administrator:password"
+        );
     }
 
     #[test]
@@ -321,6 +377,5 @@ mod tests {
     fn test_winrm_cracker_creation() {
         let cracker = WinrmCracker::new();
         let _ = cracker;
-        assert!(true);
     }
 }

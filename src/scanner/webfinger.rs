@@ -52,11 +52,7 @@ impl WebFingerScanner {
     }
 
     /// 并行探测主机的所有 HTTP 端口
-    pub async fn probe_host_all(
-        &self,
-        ip: IpAddr,
-        ports: &[u16],
-    ) -> Vec<WebFingerprint> {
+    pub async fn probe_host_all(&self, ip: IpAddr, ports: &[u16]) -> Vec<WebFingerprint> {
         let probes: Vec<_> = ports
             .iter()
             .map(|&port| self.probe_port(ip, port))
@@ -101,7 +97,9 @@ impl WebFingerScanner {
         if !web_apps.is_empty() || response.status_code == 200 {
             tracing::info!(
                 "发现 Web 服务: {}:{} - 标题: '{}', 应用: {:?}",
-                ip, port, title,
+                ip,
+                port,
+                title,
                 web_apps.iter().map(|a| a.name.as_str()).collect::<Vec<_>>()
             );
 
@@ -125,8 +123,14 @@ impl WebFingerScanner {
         let resp = tokio::time::timeout(self.timeout, async {
             self.client
                 .get(url)
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                )
+                .header(
+                    "Accept",
+                    "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                )
                 .send()
                 .await
         })
@@ -154,10 +158,7 @@ impl WebFingerScanner {
     async fn fetch_favicon_hash(&self, base_url: &str) -> Option<i32> {
         let favicon_url = format!("{}/favicon.ico", base_url.trim_end_matches('/'));
         let resp = tokio::time::timeout(self.timeout, async {
-            self.client
-                .get(&favicon_url)
-                .send()
-                .await
+            self.client.get(&favicon_url).send().await
         })
         .await
         .ok()?
@@ -183,10 +184,14 @@ impl WebFingerScanner {
         for rule in FINGERPRINT_DB {
             let header_match = rule.header_patterns.iter().any(|p| {
                 response.headers.iter().any(|(k, v)| {
-                    k.as_str().eq_ignore_ascii_case(p) || v.to_lowercase().contains(&p.to_lowercase())
+                    k.as_str().eq_ignore_ascii_case(p)
+                        || v.to_lowercase().contains(&p.to_lowercase())
                 })
             });
-            let body_match = rule.body_patterns.iter().any(|p| body_lower.contains(&p.to_lowercase()));
+            let body_match = rule
+                .body_patterns
+                .iter()
+                .any(|p| body_lower.contains(&p.to_lowercase()));
 
             if header_match || body_match {
                 matches.push(WebAppMatch {

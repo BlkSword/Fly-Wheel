@@ -17,12 +17,28 @@ pub fn run_vuln_cmd(
     timeout: u64,
     _web_probe: bool,
 ) -> Result<()> {
-    let output_fmt = OutputFormat::parse(format)
-        .unwrap_or(OutputFormat::Json);
+    let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
     match targets {
-        Some(targets) => run_vuln_scan(targets, poc_file, severity, category, output_fmt, output, concurrency, timeout),
-        None => run_interactive_vuln(poc_file, severity, category, output_fmt, output, concurrency, timeout),
+        Some(targets) => run_vuln_scan(
+            targets,
+            poc_file,
+            severity,
+            category,
+            output_fmt,
+            output,
+            concurrency,
+            timeout,
+        ),
+        None => run_interactive_vuln(
+            poc_file,
+            severity,
+            category,
+            output_fmt,
+            output,
+            concurrency,
+            timeout,
+        ),
     }
 }
 
@@ -92,7 +108,9 @@ fn run_vuln_scan(
         } else {
             "vuln".to_string()
         };
-        PathBuf::from(crate::output::format::generate_output_filename(&base, output_fmt))
+        PathBuf::from(crate::output::format::generate_output_filename(
+            &base, output_fmt,
+        ))
     });
 
     match output_fmt {
@@ -131,13 +149,20 @@ fn run_interactive_vuln(
     println!("示例: 192.168.1.0/24 | 10.0.0.1:8080 | 192.168.1.1,192.168.1.2");
     println!();
 
-    let targets_input = InteractiveMenu::read_input_required("请输入扫描目标: ", "目标不能为空，请重新输入");
-    let targets: Vec<String> = targets_input.split(',').map(|s| s.trim().to_string()).collect();
+    let targets_input =
+        InteractiveMenu::read_input_required("请输入扫描目标: ", "目标不能为空，请重新输入");
+    let targets: Vec<String> = targets_input
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .collect();
     print_success(&format!("已设置 {} 个目标", targets.len()));
 
     // 步骤 2: PoC 规则
     InteractiveMenu::print_step(2, 5, "PoC 规则");
-    println!("  1. 使用内置PoC规则 ({} 条)", crate::vuln::builtin::get_builtin_pocs().len());
+    println!(
+        "  1. 使用内置PoC规则 ({} 条)",
+        crate::vuln::builtin::get_builtin_pocs().len()
+    );
     println!("  2. 加载外部PoC文件");
     println!("  3. 内置 + 外部");
     println!();
@@ -218,7 +243,16 @@ fn run_interactive_vuln(
         return Ok(());
     }
 
-    run_vuln_scan(targets, external_path, final_severity, final_category, output_fmt, output, final_concurrency, final_timeout)
+    run_vuln_scan(
+        targets,
+        external_path,
+        final_severity,
+        final_category,
+        output_fmt,
+        output,
+        final_concurrency,
+        final_timeout,
+    )
 }
 
 fn print_vuln_results(result: &crate::vuln::VulnScanResult) {
@@ -255,13 +289,19 @@ fn print_vuln_results(result: &crate::vuln::VulnScanResult) {
     println!();
 
     println!("┌────────────────────────────────────────────────────────────────────────────┐");
-    println!("│ {:<18} {:<6} {:<15} {:<8} {:<20} │",
-        "目标", "端口", "漏洞ID", "严重性", "名称");
+    println!(
+        "│ {:<18} {:<6} {:<15} {:<8} {:<20} │",
+        "目标", "端口", "漏洞ID", "严重性", "名称"
+    );
     println!("├────────────────────────────────────────────────────────────────────────────┤");
 
     for finding in &result.findings {
-        let severity_str = format!("{}{}{}", finding.severity.color_code(),
-            finding.severity.display_name(), "\x1b[0m");
+        let severity_str = format!(
+            "{}{}{}",
+            finding.severity.color_code(),
+            finding.severity.display_name(),
+            "\x1b[0m"
+        );
         let target = if finding.target.len() > 16 {
             format!("{}...", &finding.target[..13])
         } else {
@@ -273,27 +313,34 @@ fn print_vuln_results(result: &crate::vuln::VulnScanResult) {
             finding.vuln_name.clone()
         };
 
-        println!("│ {:<18} {:<6} {:<15} {:<4}    {:<20} │",
-            target, finding.port, finding.vuln_id, severity_str, name);
+        println!(
+            "│ {:<18} {:<6} {:<15} {:<4}    {:<20} │",
+            target, finding.port, finding.vuln_id, severity_str, name
+        );
     }
 
     println!("└────────────────────────────────────────────────────────────────────────────┘");
     println!();
 
     for finding in &result.findings {
-        println!("  {}[{}] {} {}\x1b[0m - {}:{}",
+        println!(
+            "  {}[{}] {} {}\x1b[0m - {}:{}",
             finding.severity.color_code(),
             finding.severity.display_name(),
             finding.vuln_id,
             finding.vuln_name,
             finding.target,
-            finding.port);
+            finding.port
+        );
         if !finding.description.is_empty() {
             println!("    {}", finding.description);
         }
         if !finding.evidence.is_empty() {
             let evidence: String = finding.evidence.chars().take(100).collect();
-            println!("    证据: {}", evidence.replace('\n', " ").replace('\r', ""));
+            println!(
+                "    证据: {}",
+                evidence.replace('\n', " ").replace('\r', "")
+            );
         }
         if !finding.remediation.is_empty() {
             println!("    修复: {}", finding.remediation);
@@ -306,8 +353,15 @@ fn export_vuln_csv(result: &crate::vuln::VulnScanResult, path: &std::path::Path)
     let mut wtr = csv::Writer::from_path(path)?;
 
     wtr.write_record([
-        "目标", "端口", "漏洞ID", "漏洞名称", "严重性", "类别",
-        "描述", "证据", "修复建议",
+        "目标",
+        "端口",
+        "漏洞ID",
+        "漏洞名称",
+        "严重性",
+        "类别",
+        "描述",
+        "证据",
+        "修复建议",
     ])?;
 
     for finding in &result.findings {

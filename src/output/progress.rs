@@ -176,7 +176,10 @@ impl SimpleProgress {
             .take(self.width)
             .collect();
 
-        let msg = format!("\r[{}] {:.1}% ({}/{})", bar, progress, self.current, self.total);
+        let msg = format!(
+            "\r[{}] {:.1}% ({}/{})",
+            bar, progress, self.current, self.total
+        );
 
         // 计算需要清除的字符数
         let clear_len = if msg.len() < self.last_print_len {

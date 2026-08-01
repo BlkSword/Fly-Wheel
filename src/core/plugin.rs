@@ -210,7 +210,13 @@ impl PluginManager {
     /// 发现可用插件
     pub fn discover(&self) -> Vec<PluginMeta> {
         let mut found = Vec::new();
-        let lib_ext = if cfg!(windows) { "dll" } else if cfg!(target_os = "macos") { "dylib" } else { "so" };
+        let lib_ext = if cfg!(windows) {
+            "dll"
+        } else if cfg!(target_os = "macos") {
+            "dylib"
+        } else {
+            "so"
+        };
 
         for search_path in &self.search_paths {
             if !search_path.exists() {
@@ -223,9 +229,7 @@ impl PluginManager {
                     let path = entry.path();
                     if let Some(ext) = path.extension() {
                         if ext == "json" {
-                            let stem = path.file_stem()
-                                .and_then(|s| s.to_str())
-                                .unwrap_or("");
+                            let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
 
                             // 检查对应的库文件是否存在
                             let lib_path = search_path.join(format!(
@@ -283,7 +287,12 @@ impl Default for PluginManager {
 }
 
 /// 生成插件元数据模板文件
-pub fn generate_plugin_template(id: &str, name: &str, plugin_type: PluginType, output_dir: &Path) -> std::io::Result<PathBuf> {
+pub fn generate_plugin_template(
+    id: &str,
+    name: &str,
+    plugin_type: PluginType,
+    output_dir: &Path,
+) -> std::io::Result<PathBuf> {
     let meta = PluginMeta::new(id, name, plugin_type)
         .with_author("Your Name")
         .with_description("插件描述");
@@ -389,11 +398,23 @@ mod tests {
 
     #[test]
     fn test_plugin_type_from_str() {
-        assert_eq!(PluginType::from_str_opt("scanner"), Some(PluginType::Scanner));
-        assert_eq!(PluginType::from_str_opt("SCANNER"), Some(PluginType::Scanner));
-        assert_eq!(PluginType::from_str_opt("collector"), Some(PluginType::Collector));
+        assert_eq!(
+            PluginType::from_str_opt("scanner"),
+            Some(PluginType::Scanner)
+        );
+        assert_eq!(
+            PluginType::from_str_opt("SCANNER"),
+            Some(PluginType::Scanner)
+        );
+        assert_eq!(
+            PluginType::from_str_opt("collector"),
+            Some(PluginType::Collector)
+        );
         assert_eq!(PluginType::from_str_opt("poc"), Some(PluginType::Poc));
-        assert_eq!(PluginType::from_str_opt("cracker"), Some(PluginType::Cracker));
+        assert_eq!(
+            PluginType::from_str_opt("cracker"),
+            Some(PluginType::Cracker)
+        );
         assert_eq!(PluginType::from_str_opt("invalid"), None);
     }
 
@@ -438,12 +459,7 @@ mod tests {
     #[test]
     fn test_generate_plugin_template() {
         let dir = std::env::temp_dir();
-        let result = generate_plugin_template(
-            "my-plugin",
-            "我的插件",
-            PluginType::Poc,
-            &dir,
-        );
+        let result = generate_plugin_template("my-plugin", "我的插件", PluginType::Poc, &dir);
         assert!(result.is_ok());
 
         let json_path = result.unwrap();

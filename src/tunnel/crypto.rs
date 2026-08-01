@@ -87,7 +87,11 @@ enum RdState {
     /// 正在读 4 字节长度头
     Header { pos: usize, hdr: [u8; 4] },
     /// 正在读 nonce + ciphertext
-    Payload { pos: usize, len: usize, pkt: Vec<u8> },
+    Payload {
+        pos: usize,
+        len: usize,
+        pkt: Vec<u8>,
+    },
 }
 
 impl<S: AsyncRead + AsyncWrite + Unpin> EncryptedStream<S> {

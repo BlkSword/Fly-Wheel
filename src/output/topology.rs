@@ -57,11 +57,7 @@ impl TopologyGenerator {
                     let services: Vec<String> = host
                         .open_ports
                         .iter()
-                        .map(|p| {
-                            p.service
-                                .clone()
-                                .unwrap_or_else(|| format!("{}", p.port))
-                        })
+                        .map(|p| p.service.clone().unwrap_or_else(|| format!("{}", p.port)))
                         .collect();
 
                     let is_gw = gateway == Some(&host.ip);
@@ -101,7 +97,11 @@ impl TopologyGenerator {
 
         for subnet in &self.subnets {
             output.push_str("│\n");
-            output.push_str(&format!("│ ▶ {} ({} 主机)\n", subnet.cidr, subnet.nodes.len()));
+            output.push_str(&format!(
+                "│ ▶ {} ({} 主机)\n",
+                subnet.cidr,
+                subnet.nodes.len()
+            ));
             output.push_str(&format!("│ ┌{}\n", "─".repeat(74)));
 
             if let Some(gw) = &subnet.gateway {
@@ -109,7 +109,11 @@ impl TopologyGenerator {
             }
 
             for node in &subnet.nodes {
-                let status = if node.is_alive { "✓ 存活" } else { "✗ 离线" };
+                let status = if node.is_alive {
+                    "✓ 存活"
+                } else {
+                    "✗ 离线"
+                };
                 let gw_mark = if node.is_gateway { " [GW]" } else { "" };
                 let hostname = node
                     .hostname
@@ -160,7 +164,9 @@ impl TopologyGenerator {
 
         html.push_str("<!DOCTYPE html>\n<html lang=\"zh\">\n<head>\n");
         html.push_str("<meta charset=\"UTF-8\">\n");
-        html.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+        html.push_str(
+            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n",
+        );
         html.push_str(&format!("<title>{}</title>\n", self.title));
         html.push_str("<style>\n");
         html.push_str(include_str!("topology_styles.css"));
@@ -254,7 +260,11 @@ impl TopologyGenerator {
                     "        {{\"ip\": \"{}\", \"alive\": {}, \"ports\": [{}]}}{}",
                     node.ip,
                     node.is_alive,
-                    node.open_ports.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(", "),
+                    node.open_ports
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
                     if j < subnet.nodes.len() - 1 { "," } else { "" }
                 ));
                 out.push('\n');

@@ -13,25 +13,20 @@ async fn start_echo_server() -> String {
     let addr = listener.local_addr().unwrap().to_string();
 
     tokio::spawn(async move {
-        loop {
-            match listener.accept().await {
-                Ok((mut stream, _)) => {
-                    tokio::spawn(async move {
-                        let mut buf = vec![0u8; 4096];
-                        loop {
-                            match stream.read(&mut buf).await {
-                                Ok(0) | Err(_) => break,
-                                Ok(n) => {
-                                    if stream.write_all(&buf[..n]).await.is_err() {
-                                        break;
-                                    }
-                                }
+        while let Ok((mut stream, _)) = listener.accept().await {
+            tokio::spawn(async move {
+                let mut buf = vec![0u8; 4096];
+                loop {
+                    match stream.read(&mut buf).await {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => {
+                            if stream.write_all(&buf[..n]).await.is_err() {
+                                break;
                             }
                         }
-                    });
+                    }
                 }
-                Err(_) => break,
-            }
+            });
         }
     });
 
@@ -142,7 +137,7 @@ async fn test_forward_tunnel_config_validation() {
 /// 测试隧道加密层 roundtrip
 #[tokio::test]
 async fn test_crypto_layer_roundtrip() {
-    use intrasweep::tunnel::crypto::{CryptoLayer, derive_key};
+    use intrasweep::tunnel::crypto::{derive_key, CryptoLayer};
 
     let key = derive_key("test-secret-key");
     let crypto = CryptoLayer::new(&key);
@@ -161,7 +156,7 @@ async fn test_crypto_layer_roundtrip() {
 /// 测试错误密钥解密失败
 #[tokio::test]
 async fn test_crypto_wrong_key_fails() {
-    use intrasweep::tunnel::crypto::{CryptoLayer, derive_key};
+    use intrasweep::tunnel::crypto::{derive_key, CryptoLayer};
 
     let key1 = derive_key("correct-key");
     let key2 = derive_key("wrong-key");

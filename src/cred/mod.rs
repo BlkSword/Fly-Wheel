@@ -195,10 +195,7 @@ impl Credential {
                 return true;
             }
         }
-        matches!(
-            self.cred_type,
-            CredType::KerberosTgt | CredType::NtlmHash
-        )
+        matches!(self.cred_type, CredType::KerberosTgt | CredType::NtlmHash)
     }
 
     /// 转换为hashcat可破解格式（如果是Kerberos票据）
@@ -206,15 +203,28 @@ impl Credential {
         match self.cred_type {
             CredType::KerberosTgs => {
                 // $krb5tgs$23$*username$domain$spn$hash
-                self.attributes.get("hashcat_tgs").as_ref().map(|attr| attr.to_string())
+                self.attributes
+                    .get("hashcat_tgs")
+                    .as_ref()
+                    .map(|attr| attr.to_string())
             }
             CredType::KerberosAsrep => {
                 // $krb5asrep$23$*username$domain$hash
-                self.attributes.get("hashcat_asrep").as_ref().map(|attr| attr.to_string())
+                self.attributes
+                    .get("hashcat_asrep")
+                    .as_ref()
+                    .map(|attr| attr.to_string())
             }
             CredType::NtlmHash => {
                 if let (Some(ref user), Some(ref ntlm)) = (&self.username, &self.ntlm_hash) {
-                    Some(format!("{}:{}:{}", user, self.lm_hash.as_deref().unwrap_or("aad3b435b51404eeaad3b435b51404ee"), ntlm))
+                    Some(format!(
+                        "{}:{}:{}",
+                        user,
+                        self.lm_hash
+                            .as_deref()
+                            .unwrap_or("aad3b435b51404eeaad3b435b51404ee"),
+                        ntlm
+                    ))
                 } else {
                     None
                 }
@@ -305,7 +315,10 @@ impl CredHarvestResult {
 
     /// 获取高价值凭据列表
     pub fn high_value_credentials(&self) -> Vec<&Credential> {
-        self.credentials.iter().filter(|c| c.is_high_value()).collect()
+        self.credentials
+            .iter()
+            .filter(|c| c.is_high_value())
+            .collect()
     }
 
     /// 导出为hashcat输入格式
@@ -490,12 +503,12 @@ mod tests {
         result.credentials.push(
             Credential::new(CredType::CleartextPassword, "测试")
                 .with_username("admin")
-                .with_password("Password123!")
+                .with_password("Password123!"),
         );
         result.credentials.push(
             Credential::new(CredType::NtlmHash, "测试")
                 .with_username("Administrator")
-                .with_ntlm_hash("abc123")
+                .with_ntlm_hash("abc123"),
         );
         result.compute_stats();
 
@@ -515,22 +528,19 @@ mod tests {
 
     #[test]
     fn test_credential_is_high_value_service_account() {
-        let cred = Credential::new(CredType::CleartextPassword, "测试")
-            .with_username("svc_backup");
+        let cred = Credential::new(CredType::CleartextPassword, "测试").with_username("svc_backup");
         assert!(cred.is_high_value());
     }
 
     #[test]
     fn test_credential_is_high_value_krbtgt() {
-        let cred = Credential::new(CredType::NtlmHash, "测试")
-            .with_username("krbtgt");
+        let cred = Credential::new(CredType::NtlmHash, "测试").with_username("krbtgt");
         assert!(cred.is_high_value());
     }
 
     #[test]
     fn test_credential_not_high_value() {
-        let cred = Credential::new(CredType::AppCredential, "测试")
-            .with_username("johndoe");
+        let cred = Credential::new(CredType::AppCredential, "测试").with_username("johndoe");
         assert!(!cred.is_high_value());
     }
 }

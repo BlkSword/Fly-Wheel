@@ -39,7 +39,8 @@ pub struct NtlmChallenge {
 
 /// 计算 NT Hash: MD4(UTF-16LE(password))
 pub fn nt_hash(password: &str) -> [u8; 16] {
-    let utf16le: Vec<u8> = password.encode_utf16()
+    let utf16le: Vec<u8> = password
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
 
@@ -53,8 +54,7 @@ pub fn ntlmv2_hash(nt_hash: &[u8], username: &str, domain: &str) -> [u8; 16] {
         .flat_map(|c| c.to_le_bytes())
         .collect();
 
-    let mut mac = HmacMd5::new_from_slice(nt_hash)
-        .expect("HMAC key length is valid");
+    let mut mac = HmacMd5::new_from_slice(nt_hash).expect("HMAC key length is valid");
     mac.update(&identity);
     let result = mac.finalize().into_bytes();
     let mut hash = [0u8; 16];
@@ -63,17 +63,12 @@ pub fn ntlmv2_hash(nt_hash: &[u8], username: &str, domain: &str) -> [u8; 16] {
 }
 
 /// 计算 NTLMv2 响应
-pub fn ntlmv2_response(
-    ntlmv2_hash: &[u8],
-    server_challenge: &[u8],
-    target_info: &[u8],
-) -> Vec<u8> {
+pub fn ntlmv2_response(ntlmv2_hash: &[u8], server_challenge: &[u8], target_info: &[u8]) -> Vec<u8> {
     // 构造 blob
     let blob = build_ntlmv2_blob(target_info);
 
     // NTProofStr = HMAC-MD5(NTLMv2_Hash, ServerChallenge + Blob)
-    let mut mac = HmacMd5::new_from_slice(ntlmv2_hash)
-        .expect("HMAC key length is valid");
+    let mut mac = HmacMd5::new_from_slice(ntlmv2_hash).expect("HMAC key length is valid");
     mac.update(server_challenge);
     mac.update(&blob);
     let nt_proof_str = mac.finalize().into_bytes();
@@ -124,10 +119,8 @@ fn get_nt_timestamp() -> u64 {
 
     // Unix epoch (1970) 到 NT epoch (1601) 的间隔: 11644473600 秒
     const EPOCH_DIFF_SECS: u64 = 11644473600;
-    
 
-    (duration.as_secs() + EPOCH_DIFF_SECS) * 10_000_000
-        + duration.subsec_nanos() as u64 / 100
+    (duration.as_secs() + EPOCH_DIFF_SECS) * 10_000_000 + duration.subsec_nanos() as u64 / 100
 }
 
 /// 生成 8 字节 Client Challenge（密码学安全随机数）
@@ -152,10 +145,12 @@ pub fn build_type1(hostname: &str, domain: &str) -> Vec<u8> {
     let hostname_upper = hostname.to_uppercase();
     let domain_upper = domain.to_uppercase();
 
-    let hostname_bytes: Vec<u8> = hostname_upper.encode_utf16()
+    let hostname_bytes: Vec<u8> = hostname_upper
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
-    let domain_bytes: Vec<u8> = domain_upper.encode_utf16()
+    let domain_bytes: Vec<u8> = domain_upper
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
 
@@ -248,27 +243,32 @@ pub fn build_type3(
     // 计算 NT 响应
     let nt_h = nt_hash(password);
     let ntlmv2_h = ntlmv2_hash(&nt_h, username, domain);
-    let nt_response = ntlmv2_response(&ntlmv2_h, &challenge.server_challenge, &challenge.target_info);
+    let nt_response = ntlmv2_response(
+        &ntlmv2_h,
+        &challenge.server_challenge,
+        &challenge.target_info,
+    );
 
     // LM 响应 (NTLMv2 中 LM 响应为 8 字节零 + client challenge，或直接空)
     let lm_response = vec![0u8; 24];
 
-    let flags = challenge.negotiate_flags
-        | NTLMSSP_NEGOTIATE_UNICODE
-        | NTLMSSP_NEGOTIATE_NTLM;
+    let flags = challenge.negotiate_flags | NTLMSSP_NEGOTIATE_UNICODE | NTLMSSP_NEGOTIATE_NTLM;
 
     // Unicode 编码
     let domain_upper = domain.to_uppercase();
     let username_upper = username; // 用户名保留原始大小写
     let hostname_upper = hostname.to_uppercase();
 
-    let domain_bytes: Vec<u8> = domain_upper.encode_utf16()
+    let domain_bytes: Vec<u8> = domain_upper
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
-    let username_bytes: Vec<u8> = username_upper.encode_utf16()
+    let username_bytes: Vec<u8> = username_upper
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
-    let hostname_bytes: Vec<u8> = hostname_upper.encode_utf16()
+    let hostname_bytes: Vec<u8> = hostname_upper
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
 
@@ -403,7 +403,10 @@ pub fn decode_ts_request(data: &[u8]) -> Result<Vec<u8>, String> {
                 return Err("期望 OCTET STRING".to_string());
             }
             let (len_info, str_start) = der_read_length(&octet_data[1..])?;
-            return Ok(octet_data[1 + str_start.consumed..1 + str_start.consumed + len_info.value].to_vec());
+            return Ok(
+                octet_data[1 + str_start.consumed..1 + str_start.consumed + len_info.value]
+                    .to_vec(),
+            );
         }
         pos += 1;
     }
@@ -443,16 +446,28 @@ fn der_read_length(data: &[u8]) -> Result<(LengthInfo, LengthInfo), String> {
     let first = data[0];
     if first < 128 {
         Ok((
-            LengthInfo { consumed: 1, value: first as usize },
-            LengthInfo { consumed: 1, value: first as usize },
+            LengthInfo {
+                consumed: 1,
+                value: first as usize,
+            },
+            LengthInfo {
+                consumed: 1,
+                value: first as usize,
+            },
         ))
     } else if first == 0x81 {
         if data.len() < 2 {
             return Err("长度字段不完整".to_string());
         }
         Ok((
-            LengthInfo { consumed: 2, value: data[1] as usize },
-            LengthInfo { consumed: 2, value: data[1] as usize },
+            LengthInfo {
+                consumed: 2,
+                value: data[1] as usize,
+            },
+            LengthInfo {
+                consumed: 2,
+                value: data[1] as usize,
+            },
         ))
     } else if first == 0x82 {
         if data.len() < 3 {
@@ -460,8 +475,14 @@ fn der_read_length(data: &[u8]) -> Result<(LengthInfo, LengthInfo), String> {
         }
         let len = ((data[1] as usize) << 8) | (data[2] as usize);
         Ok((
-            LengthInfo { consumed: 3, value: len },
-            LengthInfo { consumed: 3, value: len },
+            LengthInfo {
+                consumed: 3,
+                value: len,
+            },
+            LengthInfo {
+                consumed: 3,
+                value: len,
+            },
         ))
     } else {
         Err(format!("不支持的 DER 长度格式: 0x{:02X}", first))
@@ -503,7 +524,12 @@ fn md4_hash(input: &[u8]) -> [u8; 16] {
     // 处理每个 64 字节块
     for chunk in data.chunks_exact(64) {
         let m: [u32; 16] = std::array::from_fn(|i| {
-            u32::from_le_bytes([chunk[i * 4], chunk[i * 4 + 1], chunk[i * 4 + 2], chunk[i * 4 + 3]])
+            u32::from_le_bytes([
+                chunk[i * 4],
+                chunk[i * 4 + 1],
+                chunk[i * 4 + 2],
+                chunk[i * 4 + 3],
+            ])
         });
 
         let (aa, bb, cc, dd) = (a, b, c, d);
@@ -511,24 +537,69 @@ fn md4_hash(input: &[u8]) -> [u8; 16] {
         // Round 1
         for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] {
             a = a.wrapping_add(f(b, c, d)).wrapping_add(m[i]);
-            a = rotate_left(a, if i % 4 == 0 { 3 } else if i % 4 == 1 { 7 } else if i % 4 == 2 { 11 } else { 19 });
-            let tmp = d; d = c; c = b; b = a; a = tmp;
+            a = rotate_left(
+                a,
+                if i % 4 == 0 {
+                    3
+                } else if i % 4 == 1 {
+                    7
+                } else if i % 4 == 2 {
+                    11
+                } else {
+                    19
+                },
+            );
+            let tmp = d;
+            d = c;
+            c = b;
+            b = a;
+            a = tmp;
         }
 
         // Round 2 — 按 step index 确定移位量: 0→3, 1→5, 2→9, 3→13
-        for (j, i) in [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15].iter().enumerate() {
-            let s = match j % 4 { 0 => 3, 1 => 5, 2 => 9, _ => 13 };
-            a = a.wrapping_add(g(b, c, d)).wrapping_add(m[*i]).wrapping_add(0x5A827999);
+        for (j, i) in [0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15]
+            .iter()
+            .enumerate()
+        {
+            let s = match j % 4 {
+                0 => 3,
+                1 => 5,
+                2 => 9,
+                _ => 13,
+            };
+            a = a
+                .wrapping_add(g(b, c, d))
+                .wrapping_add(m[*i])
+                .wrapping_add(0x5A827999);
             a = rotate_left(a, s);
-            let tmp = d; d = c; c = b; b = a; a = tmp;
+            let tmp = d;
+            d = c;
+            c = b;
+            b = a;
+            a = tmp;
         }
 
         // Round 3 — 按 step index 确定移位量: 0→3, 1→9, 2→11, 3→15
-        for (j, i) in [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15].iter().enumerate() {
-            let s = match j % 4 { 0 => 3, 1 => 9, 2 => 11, _ => 15 };
-            a = a.wrapping_add(h(b, c, d)).wrapping_add(m[*i]).wrapping_add(0x6ED9EBA1);
+        for (j, i) in [0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15]
+            .iter()
+            .enumerate()
+        {
+            let s = match j % 4 {
+                0 => 3,
+                1 => 9,
+                2 => 11,
+                _ => 15,
+            };
+            a = a
+                .wrapping_add(h(b, c, d))
+                .wrapping_add(m[*i])
+                .wrapping_add(0x6ED9EBA1);
             a = rotate_left(a, s);
-            let tmp = d; d = c; c = b; b = a; a = tmp;
+            let tmp = d;
+            d = c;
+            c = b;
+            b = a;
+            a = tmp;
         }
 
         a = a.wrapping_add(aa);
@@ -574,8 +645,8 @@ mod tests {
         // 空密码的 NT Hash 已知向量
         let hash = nt_hash("");
         let expected: [u8; 16] = [
-            0x31, 0xD6, 0xCF, 0xE0, 0xD1, 0x6A, 0xE9, 0x31,
-            0xB7, 0x3C, 0x59, 0xD7, 0xE0, 0xC0, 0x89, 0xC0,
+            0x31, 0xD6, 0xCF, 0xE0, 0xD1, 0x6A, 0xE9, 0x31, 0xB7, 0x3C, 0x59, 0xD7, 0xE0, 0xC0,
+            0x89, 0xC0,
         ];
         assert_eq!(hash, expected, "空密码 NT Hash 不匹配");
     }
@@ -584,8 +655,8 @@ mod tests {
     fn test_nt_hash_password() {
         let hash = nt_hash("password");
         let expected: [u8; 16] = [
-            0x88, 0x46, 0xF7, 0xEA, 0xEE, 0x8F, 0xB1, 0x17,
-            0xAD, 0x06, 0xBD, 0xD8, 0x30, 0xB7, 0x58, 0x6C,
+            0x88, 0x46, 0xF7, 0xEA, 0xEE, 0x8F, 0xB1, 0x17, 0xAD, 0x06, 0xBD, 0xD8, 0x30, 0xB7,
+            0x58, 0x6C,
         ];
         assert_eq!(hash, expected, "\"password\" NT Hash 不匹配");
     }
@@ -594,8 +665,8 @@ mod tests {
     fn test_nt_hash_securesecret() {
         let hash = nt_hash("SecREt01");
         let expected: [u8; 16] = [
-            0xCD, 0x06, 0xCA, 0x7C, 0x7E, 0x10, 0xC9, 0x9B,
-            0x1D, 0x33, 0xB7, 0x48, 0x5A, 0x2E, 0xD8, 0x08,
+            0xCD, 0x06, 0xCA, 0x7C, 0x7E, 0x10, 0xC9, 0x9B, 0x1D, 0x33, 0xB7, 0x48, 0x5A, 0x2E,
+            0xD8, 0x08,
         ];
         assert_eq!(hash, expected, "\"SecREt01\" NT Hash 不匹配");
     }
@@ -615,15 +686,15 @@ mod tests {
         // 构造一个最小的 Type 2 消息
         // NTLM Type2: sig(8) + type(4) + target_name_buf(8) + flags(4) + challenge(8) + reserved(8) + target_info_buf(8) = 48
         let mut msg = Vec::new();
-        msg.extend_from_slice(NTLMSSP_SIGNATURE);  // 签名
-        msg.extend_from_slice(&MSG_TYPE_CHALLENGE.to_le_bytes());  // 类型
-        msg.extend_from_slice(&[0u8; 8]);  // 目标名安全缓冲 (8 bytes: len+maxlen+offset)
+        msg.extend_from_slice(NTLMSSP_SIGNATURE); // 签名
+        msg.extend_from_slice(&MSG_TYPE_CHALLENGE.to_le_bytes()); // 类型
+        msg.extend_from_slice(&[0u8; 8]); // 目标名安全缓冲 (8 bytes: len+maxlen+offset)
         let mut flags = [0u8; 4];
         flags[0] = 0x01; // NTLMSSP_NEGOTIATE_UNICODE
-        msg.extend_from_slice(&flags);  // 标志 (offset 20)
+        msg.extend_from_slice(&flags); // 标志 (offset 20)
         msg.extend_from_slice(&[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]); // 挑战 (offset 24)
-        msg.extend_from_slice(&[0u8; 8]);  // 保留 (offset 32)
-        msg.extend_from_slice(&[0u8; 8]);  // 目标信息安全缓冲 (空, offset 40)
+        msg.extend_from_slice(&[0u8; 8]); // 保留 (offset 32)
+        msg.extend_from_slice(&[0u8; 8]); // 目标信息安全缓冲 (空, offset 40)
 
         let result = parse_type2(&msg).unwrap();
         assert_eq!(result.server_challenge, [1, 2, 3, 4, 5, 6, 7, 8]);
@@ -666,10 +737,9 @@ mod tests {
         let ntlmv2_h = ntlmv2_hash(&nt_h, "user", "DOMAIN");
         let server_challenge = [0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF];
         let target_info = vec![
-            0x02, 0x00, 0x0C, 0x00,  // AvPair: NetBIOS domain name
-            0x44, 0x00, 0x4F, 0x00, 0x4D, 0x00, 0x41, 0x00,
-            0x49, 0x00, 0x4E, 0x00,
-            0x00, 0x00, 0x00, 0x00,  // AvPair terminator
+            0x02, 0x00, 0x0C, 0x00, // AvPair: NetBIOS domain name
+            0x44, 0x00, 0x4F, 0x00, 0x4D, 0x00, 0x41, 0x00, 0x49, 0x00, 0x4E, 0x00, 0x00, 0x00,
+            0x00, 0x00, // AvPair terminator
         ];
         let response = ntlmv2_response(&ntlmv2_h, &server_challenge, &target_info);
         // NTProofStr (16 bytes) + Blob
@@ -708,11 +778,18 @@ mod tests {
         assert_eq!(&msg[0..8], b"NTLMSSP\0", "签名字段错误");
 
         // [8..12] 消息类型 = 1
-        assert_eq!(u32::from_le_bytes(msg[8..12].try_into().unwrap()), 1, "消息类型应为 1");
+        assert_eq!(
+            u32::from_le_bytes(msg[8..12].try_into().unwrap()),
+            1,
+            "消息类型应为 1"
+        );
 
         // [12..16] 协商标志 (u32)
         let flags = u32::from_le_bytes(msg[12..16].try_into().unwrap());
-        assert!(flags & NTLMSSP_NEGOTIATE_UNICODE != 0, "应设置 UNICODE 标志");
+        assert!(
+            flags & NTLMSSP_NEGOTIATE_UNICODE != 0,
+            "应设置 UNICODE 标志"
+        );
         assert!(flags & NTLMSSP_NEGOTIATE_NTLM != 0, "应设置 NTLM 标志");
 
         // [16..24] DomainNameFields: Len(u16) + MaxLen(u16) + BufferOffset(u32)
@@ -725,16 +802,26 @@ mod tests {
         // [24..32] WorkstationFields: Len(u16) + MaxLen(u16) + BufferOffset(u32)
         let ws_len = u16::from_le_bytes(msg[24..26].try_into().unwrap());
         let ws_offset = u32::from_le_bytes(msg[28..32].try_into().unwrap());
-        assert_eq!(ws_offset, 32 + dom_len as u32, "Workstation 偏移应紧跟 Domain 数据");
+        assert_eq!(
+            ws_offset,
+            32 + dom_len as u32,
+            "Workstation 偏移应紧跟 Domain 数据"
+        );
 
         // 验证 payload 中的 Domain 数据（UTF-16LE "DOM"）
         let dom_data = &msg[dom_offset as usize..dom_offset as usize + dom_len as usize];
-        let dom_str: Vec<u16> = dom_data.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let dom_str: Vec<u16> = dom_data
+            .chunks(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
         assert_eq!(String::from_utf16(&dom_str).unwrap(), "DOM");
 
         // 验证 payload 中的 Workstation 数据（UTF-16LE "WS"）
         let ws_data = &msg[ws_offset as usize..ws_offset as usize + ws_len as usize];
-        let ws_str: Vec<u16> = ws_data.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let ws_str: Vec<u16> = ws_data
+            .chunks(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
         assert_eq!(String::from_utf16(&ws_str).unwrap(), "WS");
     }
 
@@ -744,9 +831,9 @@ mod tests {
         // Signature(8) + MessageType(4) + TargetNameFields(8) + NegotiateFlags(4) + ServerChallenge(8) + Reserved(8) + TargetInfoFields(8) = 48
         // 关键：NegotiateFlags 在偏移 20，不是 12
         let mut msg = Vec::new();
-        msg.extend_from_slice(b"NTLMSSP\0");                    // [0..8] 签名
-        msg.extend_from_slice(&2u32.to_le_bytes());             // [8..12] 类型 = 2
-        // [12..20] TargetNameFields (Len=0, MaxLen=0, Offset=0)
+        msg.extend_from_slice(b"NTLMSSP\0"); // [0..8] 签名
+        msg.extend_from_slice(&2u32.to_le_bytes()); // [8..12] 类型 = 2
+                                                    // [12..20] TargetNameFields (Len=0, MaxLen=0, Offset=0)
         msg.extend_from_slice(&0u16.to_le_bytes());
         msg.extend_from_slice(&0u16.to_le_bytes());
         msg.extend_from_slice(&0u32.to_le_bytes());
@@ -765,27 +852,36 @@ mod tests {
         let result = parse_type2(&msg).unwrap();
 
         // 验证 flags 从偏移 20 正确读取
-        assert_eq!(result.negotiate_flags, test_flags,
-            "flags 应从偏移 20 读取，期望 0x{:08X}，实际 0x{:08X}", test_flags, result.negotiate_flags);
+        assert_eq!(
+            result.negotiate_flags, test_flags,
+            "flags 应从偏移 20 读取，期望 0x{:08X}，实际 0x{:08X}",
+            test_flags, result.negotiate_flags
+        );
 
         // 验证 challenge 从偏移 24 正确读取
-        assert_eq!(result.server_challenge, [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22]);
+        assert_eq!(
+            result.server_challenge,
+            [0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11, 0x22]
+        );
     }
 
     #[test]
     fn test_type2_with_target_info() {
         // 构造含 TargetInfo 的 Type 2 消息
         let target_info: Vec<u8> = vec![
-            0x02, 0x00, 0x08, 0x00,  // AvId=2 (NetBIOS domain), Len=8
-            0x44, 0x00, 0x4F, 0x00, 0x4D, 0x00, 0x41, 0x00,  // "DOMA"
-            0x00, 0x00, 0x00, 0x00,  // AvPair terminator
+            0x02, 0x00, 0x08, 0x00, // AvId=2 (NetBIOS domain), Len=8
+            0x44, 0x00, 0x4F, 0x00, 0x4D, 0x00, 0x41, 0x00, // "DOMA"
+            0x00, 0x00, 0x00, 0x00, // AvPair terminator
         ];
 
         let mut msg = Vec::new();
         msg.extend_from_slice(b"NTLMSSP\0");
         msg.extend_from_slice(&2u32.to_le_bytes());
         // TargetNameFields: 指向 payload 中的目标名
-        let target_name: Vec<u8> = "DOMAIN".encode_utf16().flat_map(|c| c.to_le_bytes()).collect();
+        let target_name: Vec<u8> = "DOMAIN"
+            .encode_utf16()
+            .flat_map(|c| c.to_le_bytes())
+            .collect();
         let tn_offset = 48u32;
         msg.extend_from_slice(&(target_name.len() as u16).to_le_bytes());
         msg.extend_from_slice(&(target_name.len() as u16).to_le_bytes());
@@ -807,7 +903,10 @@ mod tests {
 
         let result = parse_type2(&msg).unwrap();
         assert_eq!(result.server_challenge, [1, 2, 3, 4, 5, 6, 7, 8]);
-        assert_eq!(result.target_info, target_info, "TargetInfo 应从正确偏移提取");
+        assert_eq!(
+            result.target_info, target_info,
+            "TargetInfo 应从正确偏移提取"
+        );
     }
 
     #[test]
@@ -824,7 +923,11 @@ mod tests {
         let msg = build_type3("User", "Password", "Domain", "Workstation", &challenge);
 
         // 头部至少 64 字节
-        assert!(msg.len() >= 64, "Type3 消息至少 64 字节头，实际 {}", msg.len());
+        assert!(
+            msg.len() >= 64,
+            "Type3 消息至少 64 字节头，实际 {}",
+            msg.len()
+        );
 
         // [0..8] 签名
         assert_eq!(&msg[0..8], b"NTLMSSP\0");
@@ -859,7 +962,10 @@ mod tests {
 
         // 验证用户名 payload（UTF-16LE "User"）
         let user_data = &msg[user_offset as usize..user_offset as usize + user_len as usize];
-        let user_str: Vec<u16> = user_data.chunks(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        let user_str: Vec<u16> = user_data
+            .chunks(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
         assert_eq!(String::from_utf16(&user_str).unwrap(), "User");
     }
 

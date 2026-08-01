@@ -94,6 +94,37 @@ pub fn run_check(category: &str) -> Vec<PrivescFinding> {
     }
 }
 
+/// 获取可用检查类别列表
+pub fn available_categories() -> Vec<&'static str> {
+    #[cfg(windows)]
+    {
+        vec![
+            "service",
+            "credentials",
+            "registry",
+            "tokens",
+            "files",
+            "patches",
+            "dll",
+            "all",
+        ]
+    }
+    #[cfg(not(windows))]
+    {
+        vec![
+            "suid",
+            "capabilities",
+            "cron",
+            "writable",
+            "docker",
+            "sudo",
+            "ssh",
+            "kernel",
+            "all",
+        ]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -187,7 +218,14 @@ mod tests {
         };
         assert_eq!(stats.total_checks, 10);
         assert_eq!(stats.critical_count, 2);
-        assert_eq!(stats.high_count + stats.medium_count + stats.low_count + stats.info_count + stats.critical_count, 10);
+        assert_eq!(
+            stats.high_count
+                + stats.medium_count
+                + stats.low_count
+                + stats.info_count
+                + stats.critical_count,
+            10
+        );
     }
 
     #[test]
@@ -282,7 +320,7 @@ mod tests {
     #[test]
     fn test_privesc_severity_order() {
         // 验证严重性顺序: Critical > High > Medium > Low > Info
-        let severities = vec![
+        let severities = [
             PrivescSeverity::Critical,
             PrivescSeverity::High,
             PrivescSeverity::Medium,
@@ -298,23 +336,5 @@ mod tests {
                 }
             }
         }
-    }
-}
-
-/// 获取可用检查类别列表
-pub fn available_categories() -> Vec<&'static str> {
-    #[cfg(windows)]
-    {
-        vec![
-            "service", "credentials", "registry", "tokens",
-            "files", "patches", "dll", "all",
-        ]
-    }
-    #[cfg(not(windows))]
-    {
-        vec![
-            "suid", "capabilities", "cron", "writable",
-            "docker", "sudo", "ssh", "kernel", "all",
-        ]
     }
 }

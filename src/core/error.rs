@@ -69,13 +69,14 @@ impl From<String> for IntraSweepError {
 
 impl From<&str> for IntraSweepError {
     fn from(s: &str) -> Self {
-        IntraSweepError::Other { message: s.to_string() }
+        IntraSweepError::Other {
+            message: s.to_string(),
+        }
     }
 }
 
 /// 项目统一的 Result 类型
 pub type Result<T> = std::result::Result<T, IntraSweepError>;
-
 
 #[cfg(test)]
 mod tests {

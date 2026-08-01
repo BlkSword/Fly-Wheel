@@ -75,7 +75,10 @@ impl InteractiveMenu {
             match input.parse::<usize>() {
                 Ok(n) if n >= min && n <= max => return n,
                 _ => {
-                    print_error(&format!("请输入 {} 到 {} 之间的数字，或按回车使用默认值 {}", min, max, default));
+                    print_error(&format!(
+                        "请输入 {} 到 {} 之间的数字，或按回车使用默认值 {}",
+                        min, max, default
+                    ));
                 }
             }
         }
@@ -453,7 +456,8 @@ pub(crate) const SYSTEM_ITEMS: &[(&str, &str)] = &[
 ];
 
 /// scan 子命令映射 (完整名称, 缩写)
-pub(crate) const SCAN_TYPES: &[(&str, &str)] = &[("host", "h"), ("port", "po"), ("comprehensive", "c")];
+pub(crate) const SCAN_TYPES: &[(&str, &str)] =
+    &[("host", "h"), ("port", "po"), ("comprehensive", "c")];
 
 /// tunnel 子命令映射 (完整名称, 缩写)
 /// 注: http/dns 隧道尚未接线，暂不列入
@@ -518,7 +522,9 @@ pub(crate) fn save_scan_result(
         } else {
             "scan".to_string()
         };
-        PathBuf::from(crate::output::format::generate_output_filename(&hostname, output_fmt))
+        PathBuf::from(crate::output::format::generate_output_filename(
+            &hostname, output_fmt,
+        ))
     });
     crate::output::format::export_result(result, &path, output_fmt)?;
     Ok(path)
@@ -586,6 +592,9 @@ pub(crate) fn print_banner() {
     println!("|___|___|  /__|  |__|  (____  /_______  / \\/\\_/  \\___  >\\___  >   __/ ");
     println!("         \\/                 \\/        \\/             \\/     \\/|__|    ");
     println!();
-    println!("                       {}", crate::core::obfstr::sensitive::banner_label());
+    println!(
+        "                       {}",
+        crate::core::obfstr::sensitive::banner_label()
+    );
     println!();
 }

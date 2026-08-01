@@ -8,7 +8,15 @@ use crate::output::format::OutputFormat;
 use std::path::PathBuf;
 
 /// 交互式向导返回参数：dc, domain, username, password, ssl, mode, bloodhound_dir
-type AdWizardArgs = (String, String, Option<String>, Option<String>, bool, String, Option<PathBuf>);
+type AdWizardArgs = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    bool,
+    String,
+    Option<PathBuf>,
+);
 
 pub fn run_ad_cmd(
     dc: Option<String>,
@@ -23,13 +31,20 @@ pub fn run_ad_cmd(
     _golden_ticket: bool,
     _krbtgt_hash: Option<String>,
 ) -> Result<()> {
-    let output_fmt = OutputFormat::parse(format)
-        .unwrap_or(OutputFormat::Json);
+    let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
     // 无参数时进入交互式模式
     let (dc, domain, username, password, ssl, mode, bloodhound_dir) = match (dc, domain) {
         (Some(dc), Some(domain)) => (dc, domain, username, password, ssl, mode, bloodhound_dir),
-        (dc_opt, domain_opt) => run_interactive_ad(dc_opt, domain_opt, username, password, ssl, mode, bloodhound_dir)?,
+        (dc_opt, domain_opt) => run_interactive_ad(
+            dc_opt,
+            domain_opt,
+            username,
+            password,
+            ssl,
+            mode,
+            bloodhound_dir,
+        )?,
     };
 
     let ad_label = "AD域枚举";
@@ -61,7 +76,8 @@ pub fn run_ad_cmd(
         "bloodhound" => {
             let enumerator = crate::ad::ldap::AdEnumerator::new(config);
             let result = rt.block_on(enumerator.enumerate_all()).map_err(ad_err)?;
-            let bh_dir = bloodhound_dir.unwrap_or_else(|| std::path::PathBuf::from("bloodhound_output"));
+            let bh_dir =
+                bloodhound_dir.unwrap_or_else(|| std::path::PathBuf::from("bloodhound_output"));
             crate::ad::bloodhound::export_bloodhound(&result, &bh_dir)?;
             print_success(&format!("BloodHound 数据已导出到: {}", bh_dir.display()));
             return Ok(());
@@ -123,11 +139,19 @@ fn run_interactive_ad(
         initial_username
     } else {
         let u = InteractiveMenu::read_input("用户名 (留空=匿名): ");
-        if u.is_empty() { None } else { Some(u) }
+        if u.is_empty() {
+            None
+        } else {
+            Some(u)
+        }
     };
     let password = if username.is_some() && initial_password.is_none() {
         let p = InteractiveMenu::read_input("密码: ");
-        if p.is_empty() { None } else { Some(p) }
+        if p.is_empty() {
+            None
+        } else {
+            Some(p)
+        }
     } else {
         initial_password
     };
@@ -203,7 +227,11 @@ fn run_interactive_ad(
     println!("  域名:         {}", domain);
     println!(
         "  认证:         {}",
-        if username.is_some() { "已设置凭据" } else { "匿名绑定" }
+        if username.is_some() {
+            "已设置凭据"
+        } else {
+            "匿名绑定"
+        }
     );
     println!(
         "  连接:         {}",
@@ -217,7 +245,9 @@ fn run_interactive_ad(
 
     if !InteractiveMenu::confirm("确认开始 AD 枚举? [Y/n]: ") {
         print_info("已取消");
-        return Err(IntraSweepError::Other { message: "用户取消".to_string() });
+        return Err(IntraSweepError::Other {
+            message: "用户取消".to_string(),
+        });
     }
 
     Ok((dc, domain, username, password, ssl, mode, bloodhound_dir))
@@ -249,13 +279,33 @@ fn print_ad_enum_results(result: &crate::ad::AdEnumResult) {
     println!("║  耗时: {:.2}s{:<51}║", result.duration_secs, "");
     println!("╠{}", "═".repeat(69));
 
-    println!("║  用户: {}  组: {}  计算机: {}", result.users.len(), result.groups.len(), result.computers.len());
-    println!("║  Kerberoast目标: {}  AS-REP目标: {}", result.kerberoast_targets.len(), result.asrep_targets.len());
-    println!("║  信任关系: {}  GPO: {}", result.trusts.len(), result.gpos.len());
+    println!(
+        "║  用户: {}  组: {}  计算机: {}",
+        result.users.len(),
+        result.groups.len(),
+        result.computers.len()
+    );
+    println!(
+        "║  Kerberoast目标: {}  AS-REP目标: {}",
+        result.kerberoast_targets.len(),
+        result.asrep_targets.len()
+    );
+    println!(
+        "║  信任关系: {}  GPO: {}",
+        result.trusts.len(),
+        result.gpos.len()
+    );
 
     let admin_count = result.users.iter().filter(|u| u.admin_count).count();
-    let da_count = result.users.iter().filter(|u| u.member_of.iter().any(|m| m.contains("Domain Admins"))).count();
-    println!("║  管理员账户: {}  Domain Admins: {}", admin_count, da_count);
+    let da_count = result
+        .users
+        .iter()
+        .filter(|u| u.member_of.iter().any(|m| m.contains("Domain Admins")))
+        .count();
+    println!(
+        "║  管理员账户: {}  Domain Admins: {}",
+        admin_count, da_count
+    );
 
     println!("╠{}", "═".repeat(69));
 
@@ -263,10 +313,16 @@ fn print_ad_enum_results(result: &crate::ad::AdEnumResult) {
         println!("║  Kerberoast 目标:");
         for t in result.kerberoast_targets.iter().take(10) {
             let status = if t.enabled { "启用" } else { "禁用" };
-            println!("║    {} ({}) SPN: {} [{}]", t.username, status, t.spn, t.service_type);
+            println!(
+                "║    {} ({}) SPN: {} [{}]",
+                t.username, status, t.spn, t.service_type
+            );
         }
         if result.kerberoast_targets.len() > 10 {
-            println!("║    ... 还有 {} 个目标", result.kerberoast_targets.len() - 10);
+            println!(
+                "║    ... 还有 {} 个目标",
+                result.kerberoast_targets.len() - 10
+            );
         }
     }
 
@@ -288,7 +344,10 @@ fn print_kerberoast_results(targets: &[crate::ad::KerberoastTarget]) {
     for t in targets.iter().take(20) {
         let status = if t.enabled { "启用" } else { "禁用" };
         let admin = if t.admin_count { " [管理员]" } else { "" };
-        println!("║  {} | {} | {} ({}){}", t.username, t.spn, t.service_type, status, admin);
+        println!(
+            "║  {} | {} | {} ({}){}",
+            t.username, t.spn, t.service_type, status, admin
+        );
     }
     if targets.len() > 20 {
         println!("║  ... 还有 {} 个目标", targets.len() - 20);

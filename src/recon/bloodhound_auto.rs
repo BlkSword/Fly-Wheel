@@ -102,9 +102,7 @@ pub async fn collect_bloodhound_data(
 
     match config.method {
         CollectionMethod::SharpHound => collect_via_sharphound(config),
-        CollectionMethod::Ldap | CollectionMethod::Stealth => {
-            collect_via_ldap(config).await
-        }
+        CollectionMethod::Ldap | CollectionMethod::Stealth => collect_via_ldap(config).await,
     }
 }
 
@@ -113,7 +111,9 @@ fn collect_via_sharphound(
     config: &BloodHoundCollectConfig,
 ) -> Result<BloodHoundCollectResult, String> {
     let temp_dir = std::env::temp_dir();
-    let output_dir = config.output_dir.as_deref()
+    let output_dir = config
+        .output_dir
+        .as_deref()
         .map(|d| d.to_string())
         .unwrap_or_else(|| temp_dir.to_string_lossy().to_string());
 
@@ -134,12 +134,10 @@ fn collect_via_sharphound(
     }
 
     if sharphound_path.is_none() {
-        return Err(
-            "SharpHound.exe未找到。请将SharpHound放入工作目录，\
+        return Err("SharpHound.exe未找到。请将SharpHound放入工作目录，\
             或使用LDAP收集方法。\n\
             下载地址: https://github.com/BloodHoundAD/SharpHound/releases"
-                .to_string(),
-        );
+            .to_string());
     }
 
     let sharphound = sharphound_path.unwrap();
@@ -204,8 +202,7 @@ async fn collect_via_ldap(
     };
 
     let ldap_url = format!("ldap://{}:389", config.domain_controller);
-    let mut ldap = ldap3::LdapConn::new(&ldap_url)
-        .map_err(|e| format!("LDAP连接失败: {}", e))?;
+    let mut ldap = ldap3::LdapConn::new(&ldap_url).map_err(|e| format!("LDAP连接失败: {}", e))?;
 
     ldap.simple_bind("", "")
         .map_err(|e| format!("LDAP绑定失败: {}", e))?;
@@ -231,7 +228,9 @@ async fn collect_via_ldap(
     }
 
     // 输出到文件
-    let output_dir = config.output_dir.as_deref()
+    let output_dir = config
+        .output_dir
+        .as_deref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(std::env::temp_dir);
 
@@ -302,16 +301,29 @@ fn collect_users_json(
     include_sessions: bool,
 ) -> Result<Vec<serde_json::Value>, String> {
     let attrs = vec![
-        "sAMAccountName", "displayName", "distinguishedName", "description",
-        "mail", "adminCount", "userAccountControl", "memberOf", "servicePrincipalName",
-        "objectSid", "lastLogonTimestamp",
+        "sAMAccountName",
+        "displayName",
+        "distinguishedName",
+        "description",
+        "mail",
+        "adminCount",
+        "userAccountControl",
+        "memberOf",
+        "servicePrincipalName",
+        "objectSid",
+        "lastLogonTimestamp",
     ];
     if include_sessions {
         // NetSessionEnum需要单独做
     }
 
     let sr = ldap
-        .search(base_dn, ldap3::Scope::Subtree, "(&(objectClass=user)(objectCategory=person))", &attrs)
+        .search(
+            base_dn,
+            ldap3::Scope::Subtree,
+            "(&(objectClass=user)(objectCategory=person))",
+            &attrs,
+        )
         .map_err(|e| format!("LDAP用户查询失败: {}", e))?;
 
     let users: Vec<serde_json::Value> = sr.0.iter().map(|entry| {
@@ -343,25 +355,34 @@ fn collect_groups_json(
     ldap: &mut ldap3::LdapConn,
     base_dn: &str,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let attrs = &["cn", "distinguishedName", "description", "member", "adminCount"];
+    let attrs = &[
+        "cn",
+        "distinguishedName",
+        "description",
+        "member",
+        "adminCount",
+    ];
 
     let sr = ldap
         .search(base_dn, ldap3::Scope::Subtree, "(objectClass=group)", attrs)
         .map_err(|e| format!("LDAP组查询失败: {}", e))?;
 
-    let groups: Vec<serde_json::Value> = sr.0.iter().map(|entry| {
-        let entry = ldap3::SearchEntry::construct(entry.clone());
-        serde_json::json!({
-            "Name": get_attr(&entry, "cn").unwrap_or_default(),
-            "DistinguishedName": get_attr(&entry, "distinguishedName"),
-            "Description": get_attr(&entry, "description"),
-            "Members": get_attr_multi(&entry, "member"),
-            "AdminCount": get_attr(&entry, "adminCount").is_some(),
-            "Properties": {
-                "domain": base_dn,
-            }
-        })
-    }).collect();
+    let groups: Vec<serde_json::Value> =
+        sr.0.iter()
+            .map(|entry| {
+                let entry = ldap3::SearchEntry::construct(entry.clone());
+                serde_json::json!({
+                    "Name": get_attr(&entry, "cn").unwrap_or_default(),
+                    "DistinguishedName": get_attr(&entry, "distinguishedName"),
+                    "Description": get_attr(&entry, "description"),
+                    "Members": get_attr_multi(&entry, "member"),
+                    "AdminCount": get_attr(&entry, "adminCount").is_some(),
+                    "Properties": {
+                        "domain": base_dn,
+                    }
+                })
+            })
+            .collect();
 
     Ok(groups)
 }
@@ -373,14 +394,23 @@ fn collect_computers_json(
     include_sessions: bool,
 ) -> Result<Vec<serde_json::Value>, String> {
     let attrs = vec![
-        "cn", "distinguishedName", "dNSHostName", "operatingSystem",
-        "operatingSystemVersion", "userAccountControl",
+        "cn",
+        "distinguishedName",
+        "dNSHostName",
+        "operatingSystem",
+        "operatingSystemVersion",
+        "userAccountControl",
     ];
 
     let _ = include_sessions;
 
     let sr = ldap
-        .search(base_dn, ldap3::Scope::Subtree, "(objectClass=computer)", &attrs)
+        .search(
+            base_dn,
+            ldap3::Scope::Subtree,
+            "(objectClass=computer)",
+            &attrs,
+        )
         .map_err(|e| format!("LDAP计算机查询失败: {}", e))?;
 
     let computers: Vec<serde_json::Value> = sr.0.iter().map(|entry| {
@@ -402,11 +432,19 @@ fn collect_computers_json(
 }
 
 fn domain_to_dn(domain: &str) -> String {
-    domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",")
+    domain
+        .split('.')
+        .map(|p| format!("DC={}", p))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 fn get_attr(entry: &ldap3::SearchEntry, name: &str) -> Option<String> {
-    entry.attrs.get(name).and_then(|v| v.first().cloned()).filter(|v| !v.is_empty())
+    entry
+        .attrs
+        .get(name)
+        .and_then(|v| v.first().cloned())
+        .filter(|v| !v.is_empty())
 }
 
 fn get_attr_multi(entry: &ldap3::SearchEntry, name: &str) -> Vec<String> {

@@ -34,13 +34,25 @@ impl Default for RdpCracker {
 #[async_trait]
 impl Cracker for RdpCracker {
     async fn crack(&self, config: &CrackConfig) -> CrackResult {
-        base::run_crack(config, CrackService::Rdp, "RDP", |username, password, target, port, timeout| {
-            let username = username.unwrap_or_else(|| "Administrator".to_string());
-            Self::try_connect_sync(&target, port, &username, &password, timeout)
-        }).await
+        base::run_crack(
+            config,
+            CrackService::Rdp,
+            "RDP",
+            |username, password, target, port, timeout| {
+                let username = username.unwrap_or_else(|| "Administrator".to_string());
+                Self::try_connect_sync(&target, port, &username, &password, timeout)
+            },
+        )
+        .await
     }
 
-    async fn verify(&self, target: &str, port: u16, username: Option<&str>, password: &str) -> bool {
+    async fn verify(
+        &self,
+        target: &str,
+        port: u16,
+        username: Option<&str>,
+        password: &str,
+    ) -> bool {
         let username = username.unwrap_or("Administrator");
         Self::try_connect_sync(target, port, username, password, Duration::from_secs(10))
     }
@@ -48,7 +60,13 @@ impl Cracker for RdpCracker {
 
 impl RdpCracker {
     /// 尝试通过 CredSSP/NLA 认证连接 RDP 服务
-    fn try_connect_sync(target: &str, port: u16, username: &str, password: &str, timeout: Duration) -> bool {
+    fn try_connect_sync(
+        target: &str,
+        port: u16,
+        username: &str,
+        password: &str,
+        timeout: Duration,
+    ) -> bool {
         // 1. TCP 连接
         let stream = match Self::tcp_connect(target, port, timeout) {
             Some(s) => s,
@@ -90,12 +108,14 @@ impl RdpCracker {
     fn x224_negotiate(mut stream: TcpStream) -> Result<TcpStream, String> {
         // 构造 X.224 Connection Request
         let request = build_x224_cr();
-        stream.write_all(&request)
+        stream
+            .write_all(&request)
             .map_err(|e| format!("发送 X.224 请求失败: {}", e))?;
 
         // 读取响应
         let mut response = [0u8; 1024];
-        let n = stream.read(&mut response)
+        let n = stream
+            .read(&mut response)
             .map_err(|e| format!("读取 X.224 响应失败: {}", e))?;
 
         if n < 11 {
@@ -115,7 +135,10 @@ impl RdpCracker {
         // TPDU 类型: 0xD0 = Connection Confirm
         let tpdu_type = response[tpdu_start + 1];
         if tpdu_type != 0xD0 {
-            return Err(format!("期望 Connection Confirm (0xD0), 收到 0x{:02X}", tpdu_type));
+            return Err(format!(
+                "期望 Connection Confirm (0xD0), 收到 0x{:02X}",
+                tpdu_type
+            ));
         }
 
         // 解析 RDP Negotiation Response
@@ -124,10 +147,14 @@ impl RdpCracker {
         if nego_start + 8 <= n {
             // 检查协商类型: 0x00000002 = TYPE_NEG_RSP
             let nego_type = u32::from_be_bytes(
-                response[nego_start..nego_start + 4].try_into().unwrap_or([0; 4])
+                response[nego_start..nego_start + 4]
+                    .try_into()
+                    .unwrap_or([0; 4]),
             );
             let selected_protocol = u32::from_le_bytes(
-                response[nego_start + 4..nego_start + 8].try_into().unwrap_or([0; 4])
+                response[nego_start + 4..nego_start + 8]
+                    .try_into()
+                    .unwrap_or([0; 4]),
             );
 
             if nego_type != 0x00000002 {
@@ -152,7 +179,8 @@ impl RdpCracker {
             .map_err(|e| format!("创建 TLS 连接器失败: {}", e))?;
 
         // 使用空域名进行连接
-        connector.connect("rdp", stream)
+        connector
+            .connect("rdp", stream)
             .map_err(|e| format!("TLS 握手失败: {}", e))
     }
 
@@ -262,13 +290,13 @@ fn build_x224_cr() -> Vec<u8> {
 
     let mut x224 = Vec::with_capacity(x224_data_len + 7);
     x224.push(x224_len); // LI
-    x224.push(0xE0);     // TPDU type: Connection Request
+    x224.push(0xE0); // TPDU type: Connection Request
     x224.extend_from_slice(&0x0000u16.to_be_bytes()); // DST-REF
     x224.extend_from_slice(&0x0000u16.to_be_bytes()); // SRC-REF
-    x224.push(0x00);     // CLASS OPTION
-    // Cookie
+    x224.push(0x00); // CLASS OPTION
+                     // Cookie
     x224.extend_from_slice(cookie);
-    x224.push(0x0D);     // CR+LF 分隔
+    x224.push(0x0D); // CR+LF 分隔
     x224.push(0x0A);
     // RDP Negotiation Request
     x224.extend_from_slice(&nego_req);
@@ -276,9 +304,9 @@ fn build_x224_cr() -> Vec<u8> {
     // TPKT 头: version(1) + reserved(1) + length(2)
     let tpkt_len = (4 + x224.len()) as u16;
     let mut tpkt = Vec::with_capacity(tpkt_len as usize);
-    tpkt.push(0x03);                                     // version
-    tpkt.push(0x00);                                     // reserved
-    tpkt.extend_from_slice(&tpkt_len.to_be_bytes());     // length (big-endian)
+    tpkt.push(0x03); // version
+    tpkt.push(0x00); // reserved
+    tpkt.extend_from_slice(&tpkt_len.to_be_bytes()); // length (big-endian)
     tpkt.extend_from_slice(&x224);
 
     tpkt
@@ -405,7 +433,8 @@ fn find_subsequence(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     if needle.len() > haystack.len() {
         return None;
     }
-    haystack.windows(needle.len())
+    haystack
+        .windows(needle.len())
         .position(|window| window == needle)
 }
 
@@ -442,7 +471,6 @@ mod tests {
     fn test_rdp_cracker_creation() {
         let cracker = RdpCracker::new();
         let _ = cracker;
-        assert!(true);
     }
 
     #[test]

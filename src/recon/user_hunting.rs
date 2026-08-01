@@ -37,10 +37,7 @@ pub struct UserSession {
 }
 
 /// 猎杀域管理员用户会话
-pub fn hunt_user_sessions(
-    dc: &str,
-    domain: &str,
-) -> Result<Vec<UserSession>, String> {
+pub fn hunt_user_sessions(dc: &str, domain: &str) -> Result<Vec<UserSession>, String> {
     let mut sessions = Vec::new();
 
     // 1. 首先获取域管理员组成员列表
@@ -58,7 +55,8 @@ pub fn hunt_user_sessions(
                 for session in comp_sessions {
                     tracing::info!(
                         "[用户猎杀] 🔑 发现域管会话: {} 登录在 {}",
-                        session.username, computer
+                        session.username,
+                        computer
                     );
                     sessions.push(session);
                 }
@@ -96,7 +94,8 @@ fn get_domain_admin_users(dc: &str, domain: &str) -> Result<Vec<String>, String>
             }
             if in_member_list && !line.is_empty() {
                 let user = line.trim().to_string();
-                if !user.is_empty() && !user.starts_with("命令") && !user.starts_with("The command") {
+                if !user.is_empty() && !user.starts_with("命令") && !user.starts_with("The command")
+                {
                     admins.push(user);
                 }
             }
@@ -108,7 +107,11 @@ fn get_domain_admin_users(dc: &str, domain: &str) -> Result<Vec<String>, String>
         let ldap_url = format!("ldap://{}:389", dc);
         if let Ok(mut ldap) = ldap3::LdapConn::new(&ldap_url) {
             if ldap.simple_bind("", "").is_ok() {
-                let base = domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",");
+                let base = domain
+                    .split('.')
+                    .map(|p| format!("DC={}", p))
+                    .collect::<Vec<_>>()
+                    .join(",");
                 let filter = "(&(objectClass=group)(cn=Domain Admins))";
                 if let Ok(sr) = ldap.search(&base, ldap3::Scope::Subtree, filter, ["member"]) {
                     for entry in &sr.0 {
@@ -164,7 +167,10 @@ fn get_domain_computers(_dc: &str, _domain: &str) -> Result<Vec<String>, String>
                 let stdout = String::from_utf8_lossy(&o.stdout);
                 let mut in_list = false;
                 for line in stdout.lines() {
-                    if line.contains("---") { in_list = true; continue; }
+                    if line.contains("---") {
+                        in_list = true;
+                        continue;
+                    }
                     if in_list && !line.trim().is_empty() {
                         let name = line.trim().to_string();
                         if !name.contains("命令") && !name.contains("The command") {
@@ -202,7 +208,9 @@ fn query_computer_sessions(
                 if parts.len() >= 3 {
                     let username = parts[0].to_string();
                     let session_id: u32 = parts[2].parse().unwrap_or(0);
-                    let is_da = domain_admins.iter().any(|a| a.eq_ignore_ascii_case(&username));
+                    let is_da = domain_admins
+                        .iter()
+                        .any(|a| a.eq_ignore_ascii_case(&username));
 
                     sessions.push(UserSession {
                         username: username.clone(),
@@ -210,7 +218,11 @@ fn query_computer_sessions(
                         computer: clean_computer.to_string(),
                         computer_ip: None,
                         session_id,
-                        session_type: if parts.len() > 1 && parts[1] == "console" { "Console".to_string() } else { "RDP".to_string() },
+                        session_type: if parts.len() > 1 && parts[1] == "console" {
+                            "Console".to_string()
+                        } else {
+                            "RDP".to_string()
+                        },
                         is_domain_admin: is_da,
                         is_local_admin: false,
                         logon_time: parts.get(5).map(|s| s.to_string()),
@@ -262,13 +274,18 @@ pub fn quick_user_hunt(domain_admins: &[String]) -> Vec<UserSession> {
 
     if cfg!(windows) {
         // 使用qwinsta或query session本地
-        if let Ok(output) = std::process::Command::new("query").args(["session"]).output() {
+        if let Ok(output) = std::process::Command::new("query")
+            .args(["session"])
+            .output()
+        {
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines().skip(1) {
                 let parts: Vec<&str> = line.split_whitespace().collect();
                 if parts.len() >= 2 {
                     let username = parts[1].to_string();
-                    let is_da = domain_admins.iter().any(|a| a.eq_ignore_ascii_case(&username));
+                    let is_da = domain_admins
+                        .iter()
+                        .any(|a| a.eq_ignore_ascii_case(&username));
                     sessions.push(UserSession {
                         username,
                         domain: String::new(),

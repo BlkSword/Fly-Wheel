@@ -27,8 +27,15 @@ pub struct HttpResponseContext {
 }
 
 /// 对 HTTP 响应执行匹配器列表
-pub fn match_http_response(matchers: &[Matcher], condition: &str, ctx: &HttpResponseContext) -> bool {
-    let results: Vec<bool> = matchers.iter().map(|m| match_http_matcher(m, ctx)).collect();
+pub fn match_http_response(
+    matchers: &[Matcher],
+    condition: &str,
+    ctx: &HttpResponseContext,
+) -> bool {
+    let results: Vec<bool> = matchers
+        .iter()
+        .map(|m| match_http_matcher(m, ctx))
+        .collect();
 
     match condition {
         "or" => results.iter().any(|&r| r),
@@ -61,9 +68,11 @@ fn match_http_matcher(m: &Matcher, ctx: &HttpResponseContext) -> bool {
         MatcherType::Binary => {
             // HTTP Binary 匹配：在响应 body 的原始字节中搜索十六进制模式
             let body_bytes = ctx.body.as_bytes();
-            m.binary
-                .iter()
-                .any(|hex| hex_decode(hex).map(|bytes| find_subsequence(body_bytes, &bytes)).unwrap_or(false))
+            m.binary.iter().any(|hex| {
+                hex_decode(hex)
+                    .map(|bytes| find_subsequence(body_bytes, &bytes))
+                    .unwrap_or(false)
+            })
         }
     };
 
@@ -76,7 +85,10 @@ fn match_http_matcher(m: &Matcher, ctx: &HttpResponseContext) -> bool {
 
 /// 对 TCP 响应执行匹配器列表
 pub fn match_tcp_response(matchers: &[Matcher], condition: &str, data: &[u8]) -> bool {
-    let results: Vec<bool> = matchers.iter().map(|m| match_tcp_matcher(m, data)).collect();
+    let results: Vec<bool> = matchers
+        .iter()
+        .map(|m| match_tcp_matcher(m, data))
+        .collect();
 
     match condition {
         "or" => results.iter().any(|&r| r),
@@ -90,10 +102,11 @@ fn match_tcp_matcher(m: &Matcher, data: &[u8]) -> bool {
             let data_str = String::from_utf8_lossy(data);
             m.words.iter().any(|w| data_str.contains(w))
         }
-        MatcherType::Binary => m
-            .binary
-            .iter()
-            .any(|hex| hex_decode(hex).map(|bytes| find_subsequence(data, &bytes)).unwrap_or(false)),
+        MatcherType::Binary => m.binary.iter().any(|hex| {
+            hex_decode(hex)
+                .map(|bytes| find_subsequence(data, &bytes))
+                .unwrap_or(false)
+        }),
         MatcherType::Regex => {
             let data_str = String::from_utf8_lossy(data);
             m.regex.iter().any(|pattern| {

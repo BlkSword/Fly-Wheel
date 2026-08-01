@@ -53,8 +53,18 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
     let mut wtr = csv::Writer::from_path(path)?;
 
     wtr.write_record([
-        "IP", "端口", "状态", "服务", "版本", "Banner",
-        "Web应用", "Web版本", "Web类别", "标题", "URL", "FaviconHash",
+        "IP",
+        "端口",
+        "状态",
+        "服务",
+        "版本",
+        "Banner",
+        "Web应用",
+        "Web版本",
+        "Web类别",
+        "标题",
+        "URL",
+        "FaviconHash",
     ])?;
 
     for host in &result.hosts {
@@ -74,7 +84,9 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
                         &app.category,
                         &wf.title,
                         &wf.url,
-                        wf.favicon_hash.map_or(String::new(), |h| h.to_string()).as_str(),
+                        wf.favicon_hash
+                            .map_or(String::new(), |h| h.to_string())
+                            .as_str(),
                     ])?;
                 }
                 if wf.web_apps.is_empty() {
@@ -85,10 +97,14 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
                         "",
                         "",
                         "",
-                        "", "", "",
+                        "",
+                        "",
+                        "",
                         &wf.title,
                         &wf.url,
-                        wf.favicon_hash.map_or(String::new(), |h| h.to_string()).as_str(),
+                        wf.favicon_hash
+                            .map_or(String::new(), |h| h.to_string())
+                            .as_str(),
                     ])?;
                 }
             }
@@ -98,7 +114,9 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
         for port in &host.open_ports {
             // 查找关联的指纹
             let port_str = port.port.to_string();
-            let related_fps: Vec<_> = host.web_fingerprints.iter()
+            let related_fps: Vec<_> = host
+                .web_fingerprints
+                .iter()
                 .filter(|wf| wf.url.contains(&port_str) || wf.url.contains(&host.ip))
                 .collect();
 
@@ -110,7 +128,12 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
                     port.service.as_deref().unwrap_or(""),
                     port.version.as_deref().unwrap_or(""),
                     port.banner.as_deref().unwrap_or(""),
-                    "", "", "", "", "", "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
                 ])?;
             } else {
                 for wf in related_fps {
@@ -127,7 +150,9 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
                             &app.category,
                             &wf.title,
                             &wf.url,
-                            wf.favicon_hash.map_or(String::new(), |h| h.to_string()).as_str(),
+                            wf.favicon_hash
+                                .map_or(String::new(), |h| h.to_string())
+                                .as_str(),
                         ])?;
                     }
                     if wf.web_apps.is_empty() {
@@ -138,10 +163,14 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
                             port.service.as_deref().unwrap_or(""),
                             port.version.as_deref().unwrap_or(""),
                             port.banner.as_deref().unwrap_or(""),
-                            "", "", "",
+                            "",
+                            "",
+                            "",
                             &wf.title,
                             &wf.url,
-                            wf.favicon_hash.map_or(String::new(), |h| h.to_string()).as_str(),
+                            wf.favicon_hash
+                                .map_or(String::new(), |h| h.to_string())
+                                .as_str(),
                         ])?;
                     }
                 }
@@ -156,7 +185,12 @@ pub fn export_csv(result: &ScanResult, path: &Path) -> Result<()> {
 /// 生成默认输出文件名
 pub fn generate_output_filename(base_name: &str, format: OutputFormat) -> String {
     let timestamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
-    format!("intrasweep-{}-{}{}", base_name, timestamp, format.extension())
+    format!(
+        "intrasweep-{}-{}{}",
+        base_name,
+        timestamp,
+        format.extension()
+    )
 }
 
 /// 导出漏洞扫描结果为 JSON

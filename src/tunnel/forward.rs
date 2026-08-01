@@ -8,10 +8,10 @@ use crate::tunnel::models::{ConnectionInfo, TunnelEvent, TunnelEventHandler, Tun
 use crate::tunnel::relay;
 use crate::tunnel::shutdown::Shutdown;
 use std::sync::Arc;
-use tracing;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::{timeout, Duration};
+use tracing;
 
 /// 正向隧道
 pub struct ForwardTunnel {
@@ -22,10 +22,7 @@ pub struct ForwardTunnel {
 
 impl ForwardTunnel {
     /// 创建新的正向隧道
-    pub fn new(
-        config: TunnelConfig,
-        event_handler: Arc<dyn TunnelEventHandler>,
-    ) -> Self {
+    pub fn new(config: TunnelConfig, event_handler: Arc<dyn TunnelEventHandler>) -> Self {
         Self {
             config,
             status: Arc::new(tokio::sync::RwLock::new(TunnelStatus::new())),
@@ -38,12 +35,16 @@ impl ForwardTunnel {
         // 验证配置
         self.config.validate()?;
 
-        let target = self.config.remote_target.clone()
+        let target = self
+            .config
+            .remote_target
+            .clone()
             .ok_or_else(|| IntraSweepError::Config {
                 message: "正向隧道需要指定远程目标".to_string(),
             })?;
 
-        let listener = TcpListener::bind(&self.config.local_addr).await
+        let listener = TcpListener::bind(&self.config.local_addr)
+            .await
             .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
@@ -165,12 +166,16 @@ impl ForwardTunnel {
     pub async fn start_with_shutdown(&self, shutdown: &Shutdown) -> Result<()> {
         self.config.validate()?;
 
-        let target = self.config.remote_target.clone()
+        let target = self
+            .config
+            .remote_target
+            .clone()
             .ok_or_else(|| IntraSweepError::Config {
                 message: "正向隧道需要指定远程目标".to_string(),
             })?;
 
-        let listener = TcpListener::bind(&self.config.local_addr).await
+        let listener = TcpListener::bind(&self.config.local_addr)
+            .await
             .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
@@ -188,7 +193,14 @@ impl ForwardTunnel {
         println!("║  正向隧道启动: 监听 {}", self.config.local_addr);
         println!("║  转发目标: {}", target);
         println!("║  最大连接: {}", self.config.max_connections);
-        println!("║  加密: {}", if encrypted { "XChaCha20-Poly1305" } else { "无" });
+        println!(
+            "║  加密: {}",
+            if encrypted {
+                "XChaCha20-Poly1305"
+            } else {
+                "无"
+            }
+        );
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 优雅关闭隧道");
@@ -306,5 +318,4 @@ impl ForwardTunnel {
         println!("正向隧道已关闭");
         Ok(())
     }
-
 }

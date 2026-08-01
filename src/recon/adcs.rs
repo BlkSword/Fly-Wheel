@@ -73,10 +73,7 @@ pub struct AdcsIssue {
 }
 
 /// 枚举ADCS环境
-pub fn enumerate_adcs(
-    dc: &str,
-    domain: &str,
-) -> Result<AdcsEnumResult, String> {
+pub fn enumerate_adcs(dc: &str, domain: &str) -> Result<AdcsEnumResult, String> {
     tracing::info!("[ADCS] 枚举证书服务 (DC: {}, 域: {})", dc, domain);
 
     let mut result = AdcsEnumResult {
@@ -97,10 +94,7 @@ pub fn enumerate_adcs(
             if let Some(esc) = analyze_template_esc(template) {
                 result.exploitable_issues.push(AdcsIssue {
                     esc_type: esc.clone(),
-                    description: format!(
-                        "证书模板 '{}' 存在 {} 错误配置",
-                        template.name, esc
-                    ),
+                    description: format!("证书模板 '{}' 存在 {} 错误配置", template.name, esc),
                     severity: match esc.as_str() {
                         "ESC1" => "严重".to_string(),
                         "ESC2" | "ESC3" => "高".to_string(),
@@ -121,13 +115,16 @@ pub fn enumerate_adcs(
 /// LDAP查询CA服务器
 fn query_ca_servers(dc: &str, domain: &str) -> Result<Vec<CaServer>, String> {
     let ldap_url = format!("ldap://{}:389", dc);
-    let mut ldap = ldap3::LdapConn::new(&ldap_url)
-        .map_err(|e| format!("LDAP连接失败: {}", e))?;
+    let mut ldap = ldap3::LdapConn::new(&ldap_url).map_err(|e| format!("LDAP连接失败: {}", e))?;
 
     ldap.simple_bind("", "")
         .map_err(|e| format!("LDAP绑定失败: {}", e))?;
 
-    let base_dn = domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",");
+    let base_dn = domain
+        .split('.')
+        .map(|p| format!("DC={}", p))
+        .collect::<Vec<_>>()
+        .join(",");
     let config_dn = format!("CN=Configuration,{}", base_dn);
 
     // 查询PKI Enrollment Services
@@ -141,10 +138,14 @@ fn query_ca_servers(dc: &str, domain: &str) -> Result<Vec<CaServer>, String> {
     let mut ca_servers = Vec::new();
     for entry in &sr.0 {
         let entry = ldap3::SearchEntry::construct(entry.clone());
-        let name = entry.attrs.get("cn")
+        let name = entry
+            .attrs
+            .get("cn")
             .and_then(|v| v.first().cloned())
             .unwrap_or_default();
-        let dns = entry.attrs.get("dNSHostName")
+        let dns = entry
+            .attrs
+            .get("dNSHostName")
             .and_then(|v| v.first().cloned());
 
         ca_servers.push(CaServer {
@@ -161,74 +162,109 @@ fn query_ca_servers(dc: &str, domain: &str) -> Result<Vec<CaServer>, String> {
 /// LDAP查询证书模板
 fn query_cert_templates(dc: &str, domain: &str) -> Result<Vec<CertTemplate>, String> {
     let ldap_url = format!("ldap://{}:389", dc);
-    let mut ldap = ldap3::LdapConn::new(&ldap_url)
-        .map_err(|e| format!("LDAP连接失败: {}", e))?;
+    let mut ldap = ldap3::LdapConn::new(&ldap_url).map_err(|e| format!("LDAP连接失败: {}", e))?;
 
     ldap.simple_bind("", "")
         .map_err(|e| format!("LDAP绑定失败: {}", e))?;
 
-    let base_dn = domain.split('.').map(|p| format!("DC={}", p)).collect::<Vec<_>>().join(",");
+    let base_dn = domain
+        .split('.')
+        .map(|p| format!("DC={}", p))
+        .collect::<Vec<_>>()
+        .join(",");
     let config_dn = format!("CN=Configuration,{}", base_dn);
 
     let filter = "(objectClass=pKICertificateTemplate)";
     let attrs = &[
-        "cn", "displayName", "pKIExpirationPeriod", "msPKI-Enrollment-Flag",
-        "msPKI-Certificate-Name-Flag", "msPKI-RA-Application-Policies",
-        "pKIExtendedKeyUsage", "msPKI-Certificate-Application-Policy",
+        "cn",
+        "displayName",
+        "pKIExpirationPeriod",
+        "msPKI-Enrollment-Flag",
+        "msPKI-Certificate-Name-Flag",
+        "msPKI-RA-Application-Policies",
+        "pKIExtendedKeyUsage",
+        "msPKI-Certificate-Application-Policy",
     ];
 
     let sr = ldap
         .search(&config_dn, ldap3::Scope::Subtree, filter, attrs)
         .map_err(|e| format!("LDAP模板查询失败: {}", e))?;
 
-    let templates: Vec<CertTemplate> = sr.0.iter().map(|entry| {
-        let entry = ldap3::SearchEntry::construct(entry.clone());
-        let name = entry.attrs.get("cn").and_then(|v| v.first().cloned()).unwrap_or_default();
-        let display = entry.attrs.get("displayName").and_then(|v| v.first().cloned());
+    let templates: Vec<CertTemplate> =
+        sr.0.iter()
+            .map(|entry| {
+                let entry = ldap3::SearchEntry::construct(entry.clone());
+                let name = entry
+                    .attrs
+                    .get("cn")
+                    .and_then(|v| v.first().cloned())
+                    .unwrap_or_default();
+                let display = entry
+                    .attrs
+                    .get("displayName")
+                    .and_then(|v| v.first().cloned());
 
-        // 检查标志
-        let enroll_flag = entry.attrs.get("msPKI-Enrollment-Flag")
-            .and_then(|v| v.first())
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(0);
+                // 检查标志
+                let enroll_flag = entry
+                    .attrs
+                    .get("msPKI-Enrollment-Flag")
+                    .and_then(|v| v.first())
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0);
 
-        let name_flag = entry.attrs.get("msPKI-Certificate-Name-Flag")
-            .and_then(|v| v.first())
-            .and_then(|v| v.parse::<u32>().ok())
-            .unwrap_or(0);
+                let name_flag = entry
+                    .attrs
+                    .get("msPKI-Certificate-Name-Flag")
+                    .and_then(|v| v.first())
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0);
 
-        // CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT = 1
-        let allows_custom_san = name_flag & 1 != 0;
-        // CT_FLAG_PEND_ALL_REQUESTS = 2
-        let requires_manager_approval = enroll_flag & 2 != 0;
+                // CT_FLAG_ENROLLEE_SUPPLIES_SUBJECT = 1
+                let allows_custom_san = name_flag & 1 != 0;
+                // CT_FLAG_PEND_ALL_REQUESTS = 2
+                let requires_manager_approval = enroll_flag & 2 != 0;
 
-        let mut flags = Vec::new();
-        if enroll_flag & 1 != 0 { flags.push("ENROLLEE_SUPPLIES_SUBJECT".to_string()); }
-        if enroll_flag & 2 != 0 { flags.push("PEND_ALL_REQUESTS".to_string()); }
-        if enroll_flag & 4 != 0 { flags.push("NO_PRIVATE_KEY_ARCHIVAL".to_string()); }
-        if name_flag & 1 != 0 { flags.push("ENROLLEE_SUPPLIES_SUBJECT_ALT_NAME".to_string()); }
+                let mut flags = Vec::new();
+                if enroll_flag & 1 != 0 {
+                    flags.push("ENROLLEE_SUPPLIES_SUBJECT".to_string());
+                }
+                if enroll_flag & 2 != 0 {
+                    flags.push("PEND_ALL_REQUESTS".to_string());
+                }
+                if enroll_flag & 4 != 0 {
+                    flags.push("NO_PRIVATE_KEY_ARCHIVAL".to_string());
+                }
+                if name_flag & 1 != 0 {
+                    flags.push("ENROLLEE_SUPPLIES_SUBJECT_ALT_NAME".to_string());
+                }
 
-        // 检查扩展密钥用途
-        let eku = entry.attrs.get("pKIExtendedKeyUsage")
-            .cloned()
-            .unwrap_or_default();
+                // 检查扩展密钥用途
+                let eku = entry
+                    .attrs
+                    .get("pKIExtendedKeyUsage")
+                    .cloned()
+                    .unwrap_or_default();
 
-        let client_auth = eku.iter().any(|e| e.contains("1.3.6.1.5.5.7.3.2")); // Client Authentication
-        let kerberos_auth = eku.iter().any(|e| e.contains("1.3.6.1.5.2.3.4")); // KDC Authentication
+                let client_auth = eku.iter().any(|e| e.contains("1.3.6.1.5.5.7.3.2")); // Client Authentication
+                let kerberos_auth = eku.iter().any(|e| e.contains("1.3.6.1.5.2.3.4")); // KDC Authentication
 
-        CertTemplate {
-            name,
-            display_name: display,
-            validity_period: entry.attrs.get("pKIExpirationPeriod").and_then(|v| v.first().cloned()),
-            requires_manager_approval,
-            allows_custom_san,
-            enrollment_rights: Vec::new(), // 需要进一步查询nTSecurityDescriptor
-            flags,
-            client_authentication: client_auth,
-            kerberos_authentication: kerberos_auth,
-            esc_category: None, // 将在analyze_template_esc中分析
-        }
-    }).collect();
+                CertTemplate {
+                    name,
+                    display_name: display,
+                    validity_period: entry
+                        .attrs
+                        .get("pKIExpirationPeriod")
+                        .and_then(|v| v.first().cloned()),
+                    requires_manager_approval,
+                    allows_custom_san,
+                    enrollment_rights: Vec::new(), // 需要进一步查询nTSecurityDescriptor
+                    flags,
+                    client_authentication: client_auth,
+                    kerberos_authentication: kerberos_auth,
+                    esc_category: None, // 将在analyze_template_esc中分析
+                }
+            })
+            .collect();
 
     Ok(templates)
 }
@@ -244,13 +280,19 @@ fn analyze_template_esc(template: &CertTemplate) -> Option<String> {
     }
 
     // ESC2: 模板可用于任意目的（无EKU限制）
-    if template.flags.contains(&"NO_PRIVATE_KEY_ARCHIVAL".to_string()) {
+    if template
+        .flags
+        .contains(&"NO_PRIVATE_KEY_ARCHIVAL".to_string())
+    {
         // 简化检查
     }
 
     // ESC3: 注册代理模板滥用
     if template.name.to_lowercase().contains("enrollmentagent")
-        || template.name.to_lowercase().contains("exchange enrollment agent")
+        || template
+            .name
+            .to_lowercase()
+            .contains("exchange enrollment agent")
     {
         return Some("ESC3".to_string());
     }

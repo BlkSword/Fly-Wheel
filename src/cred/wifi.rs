@@ -2,7 +2,7 @@
 //!
 //! 提取WiFi密码可以发现潜在的其他系统凭据。
 
-use crate::cred::{Credential, CredType};
+use crate::cred::{CredType, Credential};
 
 /// WiFi配置条目
 #[derive(Debug, Clone)]
@@ -103,7 +103,7 @@ fn extract_wifi_passwords_windows() -> Result<Vec<Credential>, String> {
                     .with_target(ssid)
                     .with_password(&password)
                     .with_attribute("authentication", &auth)
-                    .with_attribute("source", "netsh wlan show profile")
+                    .with_attribute("source", "netsh wlan show profile"),
             );
         }
     }
@@ -140,7 +140,7 @@ fn extract_wifi_passwords_linux() -> Result<Vec<Credential>, String> {
                                 Credential::new(CredType::WifiPassword, "NetworkManager")
                                     .with_target(&ssid)
                                     .with_password(&password)
-                                    .with_attribute("source", &file_path.to_string_lossy())
+                                    .with_attribute("source", &file_path.to_string_lossy()),
                             );
                         }
                     }
@@ -169,7 +169,7 @@ fn extract_wifi_passwords_macos() -> Result<Vec<Credential>, String> {
                 credentials.push(
                     Credential::new(CredType::WifiPassword, "macOS钥匙串")
                         .with_target("AirPort网络")
-                        .with_password(&password)
+                        .with_password(&password),
                 );
             }
         }
@@ -197,7 +197,10 @@ mod tests {
     fn test_parse_nm_field() {
         let content = "[wifi]\nssid=MyWiFi\npsk=secret123\n";
         assert_eq!(parse_nm_field(content, "ssid"), Some("MyWiFi".to_string()));
-        assert_eq!(parse_nm_field(content, "psk"), Some("secret123".to_string()));
+        assert_eq!(
+            parse_nm_field(content, "psk"),
+            Some("secret123".to_string())
+        );
     }
 
     #[test]

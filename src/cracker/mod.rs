@@ -16,5 +16,5 @@ pub mod spray;
 pub mod ssh;
 pub mod winrm;
 
-pub use service::{CrackConfig, CrackService};
 pub use dict::DictManager;
+pub use service::{CrackConfig, CrackService};

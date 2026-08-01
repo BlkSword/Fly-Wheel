@@ -7,8 +7,7 @@ pub use models::SystemReport;
 
 use crate::core::Result;
 use crate::modules::collect::{
-    SystemCollector, NetworkCollector, ProcessCollector,
-    CredentialCollector, FileCollector
+    CredentialCollector, FileCollector, NetworkCollector, ProcessCollector, SystemCollector,
 };
 use crate::output::progress::LayeredProgress;
 use models::*;
@@ -62,7 +61,10 @@ impl InfoCollector {
         #[allow(clippy::field_reassign_with_default)]
         let mut network_report = NetworkReport::default();
         network_report.interfaces = self.network.collect_interfaces();
-        progress.complete_task(&format!("网络接口收集完成 - 发现{}个接口", network_report.interfaces.len()));
+        progress.complete_task(&format!(
+            "网络接口收集完成 - 发现{}个接口",
+            network_report.interfaces.len()
+        ));
 
         // 3. 收集网络配置信息
         progress.start_task("收集网络配置信息");
@@ -73,10 +75,12 @@ impl InfoCollector {
         progress.update_current("获取网络连接");
         network_report.connections = self.network.collect_connections();
         network_report.update_stats();
-        progress.complete_task(&format!("网络配置收集完成 - {}个路由, {}个ARP条目, {}个活动连接",
+        progress.complete_task(&format!(
+            "网络配置收集完成 - {}个路由, {}个ARP条目, {}个活动连接",
             network_report.stats.route_count,
             network_report.stats.arp_count,
-            network_report.stats.connection_count));
+            network_report.stats.connection_count
+        ));
 
         // 4. 收集进程信息
         progress.start_task("收集进程信息");
@@ -88,20 +92,28 @@ impl InfoCollector {
         progress.update_current("分析进程详情");
         process_report.processes = all_processes.into_iter().take(100).collect();
         process_report.update_stats();
-        progress.complete_task(&format!("进程信息收集完成 - 共{}个进程", process_report.total_count));
+        progress.complete_task(&format!(
+            "进程信息收集完成 - 共{}个进程",
+            process_report.total_count
+        ));
 
         // 5. 收集密码哈希
         progress.start_task("收集密码哈希信息");
         progress.update_current("搜索系统密码文件");
         let mut credential_report = CredentialReport::default();
         credential_report.password_hashes = self.credential.collect_password_hashes();
-        progress.complete_task(&format!("密码哈希收集完成 - 发现{}个条目", credential_report.password_hashes.len()));
+        progress.complete_task(&format!(
+            "密码哈希收集完成 - 发现{}个条目",
+            credential_report.password_hashes.len()
+        ));
 
         // 6. 收集密钥和令牌
         progress.start_task("收集SSH密钥和API令牌");
         progress.update_current("搜索AWS凭证");
         credential_report.tokens = self.credential.collect_tokens();
-        credential_report.tokens.extend(self.credential.collect_env_secrets());
+        credential_report
+            .tokens
+            .extend(self.credential.collect_env_secrets());
         progress.update_current("搜索SSH密钥");
         credential_report.ssh_keys = self.credential.collect_ssh_keys();
         progress.update_current("搜索API密钥");
@@ -112,9 +124,10 @@ impl InfoCollector {
         remote_sessions.extend(self.credential.collect_rdp_history());
         credential_report.remote_sessions = remote_sessions;
         credential_report.update_stats();
-        progress.complete_task(&format!("密钥收集完成 - {}个SSH密钥, {}个API密钥",
-            credential_report.stats.ssh_key_count,
-            credential_report.stats.api_key_count));
+        progress.complete_task(&format!(
+            "密钥收集完成 - {}个SSH密钥, {}个API密钥",
+            credential_report.stats.ssh_key_count, credential_report.stats.api_key_count
+        ));
 
         // 7. 收集敏感文件
         progress.start_task("搜索敏感文件");
@@ -129,9 +142,10 @@ impl InfoCollector {
         let recent_files = self.file.find_recent_files(&recent_paths, 7);
         file_report.recent_files = self.convert_to_recent_files(recent_files);
         file_report.update_stats();
-        progress.complete_task(&format!("文件搜索完成 - {}个敏感文件, {}个最近文件",
-            file_report.stats.sensitive_count,
-            file_report.stats.recent_count));
+        progress.complete_task(&format!(
+            "文件搜索完成 - {}个敏感文件, {}个最近文件",
+            file_report.stats.sensitive_count, file_report.stats.recent_count
+        ));
 
         // 8. 生成最终报告
         progress.start_task("生成最终报告");
@@ -217,8 +231,7 @@ impl InfoCollector {
                     path: p.to_string_lossy().to_string(),
                     name,
                     size: metadata.len(),
-                    modified: chrono::DateTime::<chrono::Utc>::from(modified)
-                        .to_rfc3339(),
+                    modified: chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339(),
                     is_sensitive: false, // 可以添加逻辑判断
                 })
             })
@@ -259,8 +272,9 @@ pub fn save_report(report: &SystemReport, output_path: Option<PathBuf>) -> Resul
 
 #[cfg(test)]
 mod tests {
+    // 测试构造数据多为字段赋值模式，与进度条/默认值构建风格一致
+    #![allow(clippy::field_reassign_with_default)]
     use super::*;
-    use super::models::*;
     use crate::modules::collect::*;
 
     // === 辅助函数 ===
@@ -325,8 +339,7 @@ mod tests {
 
     #[test]
     fn test_collector_creation() {
-        let collector = InfoCollector::new();
-        assert!(true);
+        let _collector = InfoCollector::new();
     }
 
     #[test]
@@ -354,15 +367,30 @@ mod tests {
     #[test]
     fn test_network_report_update_stats() {
         let mut report = NetworkReport::default();
-        report.interfaces = vec![make_interface("eth0", "10.0.0.1"), make_interface("eth1", "192.168.1.1")];
-        report.routes = vec![make_route("0.0.0.0"), make_route("10.0.0.0"), make_route("192.168.1.0")];
+        report.interfaces = vec![
+            make_interface("eth0", "10.0.0.1"),
+            make_interface("eth1", "192.168.1.1"),
+        ];
+        report.routes = vec![
+            make_route("0.0.0.0"),
+            make_route("10.0.0.0"),
+            make_route("192.168.1.0"),
+        ];
         report.arp_table = vec![ArpEntry {
-            ip: "192.168.1.5".to_string(), mac: "aa:bb:cc:dd:ee:ff".to_string(),
-            interface: "eth0".to_string(), interface_ip: Some("10.0.0.1".to_string()), state: "动态".to_string(),
+            ip: "192.168.1.5".to_string(),
+            mac: "aa:bb:cc:dd:ee:ff".to_string(),
+            interface: "eth0".to_string(),
+            interface_ip: Some("10.0.0.1".to_string()),
+            state: "动态".to_string(),
         }];
         report.connections = vec![NetworkConnection {
-            protocol: "TCP".to_string(), local_addr: "10.0.0.1".to_string(), local_port: 22,
-            remote_addr: "10.0.0.100".to_string(), remote_port: 54321, state: "ESTABLISHED".to_string(), pid: Some(1234),
+            protocol: "TCP".to_string(),
+            local_addr: "10.0.0.1".to_string(),
+            local_port: 22,
+            remote_addr: "10.0.0.100".to_string(),
+            remote_port: 54321,
+            state: "ESTABLISHED".to_string(),
+            pid: Some(1234),
         }];
 
         report.update_stats();
@@ -422,7 +450,7 @@ mod tests {
         let mut report = ProcessReport::default();
         report.processes = vec![
             make_process("small", 1.0, 500_000_000),
-            make_process("medium", 5.0, 1024 * 1024 * 1024),  // 刚好等于阈值
+            make_process("medium", 5.0, 1024 * 1024 * 1024), // 刚好等于阈值
             make_process("big", 10.0, 2 * 1024 * 1024 * 1024),
         ];
         report.update_stats();
@@ -445,8 +473,8 @@ mod tests {
     fn test_process_report_case_insensitive_suspicious() {
         let mut report = ProcessReport::default();
         report.processes = vec![
-            make_process("PowerShell", 5.0, 10_000_000),  // 混合大小写
-            make_process("PWSH", 5.0, 10_000_000),        // 大写
+            make_process("PowerShell", 5.0, 10_000_000), // 混合大小写
+            make_process("PWSH", 5.0, 10_000_000),       // 大写
         ];
         report.update_stats();
         assert_eq!(report.suspicious.len(), 2);
@@ -462,16 +490,41 @@ mod tests {
             make_hash_entry("admin", "def456"),
         ];
         report.tokens = vec![Token {
-            token_type: "Bearer".to_string(), location: "/home/user/.config".to_string(), content: "tok_xxx".to_string(),
+            token_type: "Bearer".to_string(),
+            location: "/home/user/.config".to_string(),
+            content: "tok_xxx".to_string(),
         }];
         report.ssh_keys = vec![
-            SshKey { key_type: "RSA".to_string(), path: "/root/.ssh/id_rsa".to_string(), fingerprint: Some("SHA256:aaa".to_string()) },
-            SshKey { key_type: "ED25519".to_string(), path: "/root/.ssh/id_ed25519".to_string(), fingerprint: None },
+            SshKey {
+                key_type: "RSA".to_string(),
+                path: "/root/.ssh/id_rsa".to_string(),
+                fingerprint: Some("SHA256:aaa".to_string()),
+            },
+            SshKey {
+                key_type: "ED25519".to_string(),
+                path: "/root/.ssh/id_ed25519".to_string(),
+                fingerprint: None,
+            },
         ];
         report.api_keys = vec![
-            ApiKey { service: "AWS".to_string(), location: "~/.aws/credentials".to_string(), redacted: true, key_value: None },
-            ApiKey { service: "GitHub".to_string(), location: "~/.gitconfig".to_string(), redacted: false, key_value: Some("ghp_xxx".to_string()) },
-            ApiKey { service: "Docker".to_string(), location: "~/.docker/config.json".to_string(), redacted: true, key_value: None },
+            ApiKey {
+                service: "AWS".to_string(),
+                location: "~/.aws/credentials".to_string(),
+                redacted: true,
+                key_value: None,
+            },
+            ApiKey {
+                service: "GitHub".to_string(),
+                location: "~/.gitconfig".to_string(),
+                redacted: false,
+                key_value: Some("ghp_xxx".to_string()),
+            },
+            ApiKey {
+                service: "Docker".to_string(),
+                location: "~/.docker/config.json".to_string(),
+                redacted: true,
+                key_value: None,
+            },
         ];
 
         report.update_stats();
@@ -501,9 +554,12 @@ mod tests {
             make_sensitive_file("/etc/shadow", 1024),
             make_sensitive_file("/etc/sudoers", 2048),
         ];
-        report.config_files = vec![
-            ConfigFile { path: "/etc/nginx/nginx.conf".to_string(), file_name: "nginx.conf".to_string(), config_type: "nginx".to_string(), size: 512 },
-        ];
+        report.config_files = vec![ConfigFile {
+            path: "/etc/nginx/nginx.conf".to_string(),
+            file_name: "nginx.conf".to_string(),
+            config_type: "nginx".to_string(),
+            size: 512,
+        }];
 
         report.update_stats();
 

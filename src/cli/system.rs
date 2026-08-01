@@ -2,7 +2,10 @@
 //!
 //! 处理 system 子命令的各类信息收集功能
 
-use crate::cli::{colorize, format_bytes, parse_system_item, print_banner, print_system_items, save_scan_result, InteractiveMenu};
+use crate::cli::{
+    colorize, format_bytes, parse_system_item, print_banner, print_system_items, save_scan_result,
+    InteractiveMenu,
+};
 use crate::collector::models::*;
 use crate::collector::InfoCollector;
 use crate::core::Result;
@@ -23,8 +26,17 @@ pub fn run_system(item: &Option<String>, output: Option<PathBuf>, quiet: bool) -
             print_info("IntraSweep 交互式系统信息收集");
             println!();
             print_system_items();
-            let choice = InteractiveMenu::read_number_opt("请选择收集项目 [1-7, 默认 1(all)]: ", 1, 7, 1);
-            let items: [&str; 7] = ["all", "system", "network", "process", "credential", "file", "domain"];
+            let choice =
+                InteractiveMenu::read_number_opt("请选择收集项目 [1-7, 默认 1(all)]: ", 1, 7, 1);
+            let items: [&str; 7] = [
+                "all",
+                "system",
+                "network",
+                "process",
+                "credential",
+                "file",
+                "domain",
+            ];
             items[choice - 1].to_string()
         }
     };
@@ -484,7 +496,10 @@ fn print_credential_info(credential: &CredentialReport) {
     println!("║  API密钥:    {:<60}║", credential.stats.api_key_count);
     println!("║  Token总数:  {:<60}║", credential.stats.token_count);
     println!("║  已连主机:   {:<60}║", credential.stats.known_host_count);
-    println!("║  远程会话:   {:<60}║", credential.stats.remote_session_count);
+    println!(
+        "║  远程会话:   {:<60}║",
+        credential.stats.remote_session_count
+    );
     println!("╚════════════════════════════════════════════════════════════════════════════╝");
     println!();
 }
@@ -622,7 +637,11 @@ fn run_domain_scan(output: Option<PathBuf>) -> Result<()> {
 
     print_domain_scan_results(&result);
 
-    if let Ok(path) = save_scan_result(&convert_domain_result_to_scan(result), OutputFormat::Json, output) {
+    if let Ok(path) = save_scan_result(
+        &convert_domain_result_to_scan(result),
+        OutputFormat::Json,
+        output,
+    ) {
         println!();
         print_success(&format!("结果已保存到: {}", path.display()));
     }
@@ -634,7 +653,9 @@ fn run_domain_scan(output: Option<PathBuf>) -> Result<()> {
 fn convert_domain_result_to_scan(
     domain_result: crate::scanner::domain::DomainScanResult,
 ) -> crate::scanner::ScanResult {
-    use crate::scanner::models::{HostResult, PortInfo, PortState, ScanResult, ScanStats, ScanType};
+    use crate::scanner::models::{
+        HostResult, PortInfo, PortState, ScanResult, ScanStats, ScanType,
+    };
 
     let mut host = HostResult {
         ip: "domain".to_string(),

@@ -142,10 +142,7 @@ impl NetworkCollector {
         use std::process::Command;
         let mut arp_table = Vec::new();
 
-        if let Ok(output) = Command::new("arp")
-            .args(["-a"])
-            .output()
-        {
+        if let Ok(output) = Command::new("arp").args(["-a"]).output() {
             let content = String::from_utf8_lossy(&output.stdout);
             // 解析 arp -a 输出
             for line in content.lines() {
@@ -173,10 +170,7 @@ impl NetworkCollector {
         use std::process::Command;
         let mut connections = Vec::new();
 
-        if let Ok(output) = Command::new("netstat")
-            .args(["-ano"])
-            .output()
-        {
+        if let Ok(output) = Command::new("netstat").args(["-ano"]).output() {
             let content = String::from_utf8_lossy(&output.stdout);
             // 解析 netstat -ano 输出
             for line in content.lines().skip(4) {
@@ -187,7 +181,11 @@ impl NetworkCollector {
                     if protocol == "TCP" || protocol == "UDP" {
                         let (local_addr, local_port) = parse_addr_port(parts[1]);
                         let (remote_addr, remote_port) = parse_addr_port(parts[2]);
-                        let state = if protocol == "TCP" { parts[3].to_string() } else { "N/A".to_string() };
+                        let state = if protocol == "TCP" {
+                            parts[3].to_string()
+                        } else {
+                            "N/A".to_string()
+                        };
                         let pid = parts[4].parse::<u32>().ok();
 
                         connections.push(NetworkConnection {
@@ -332,10 +330,7 @@ impl NetworkCollector {
 
         let mut interfaces = Vec::new();
 
-        if let Ok(output) = Command::new("ifconfig")
-            .arg("-a")
-            .output()
-        {
+        if let Ok(output) = Command::new("ifconfig").arg("-a").output() {
             let content = String::from_utf8_lossy(&output.stdout);
             interfaces = parse_macos_ifconfig(&content);
         }
@@ -352,10 +347,7 @@ impl NetworkCollector {
         use std::process::Command;
         let mut routes = Vec::new();
 
-        if let Ok(output) = Command::new("netstat")
-            .args(&["-rn"])
-            .output()
-        {
+        if let Ok(output) = Command::new("netstat").args(&["-rn"]).output() {
             let content = String::from_utf8_lossy(&output.stdout);
             // 解析 macOS netstat -rn 输出
             for line in content.lines().skip(1) {
@@ -384,10 +376,7 @@ impl NetworkCollector {
         use std::process::Command;
         let mut arp_table = Vec::new();
 
-        if let Ok(output) = Command::new("arp")
-            .arg("-a")
-            .output()
-        {
+        if let Ok(output) = Command::new("arp").arg("-a").output() {
             let content = String::from_utf8_lossy(&output.stdout);
             for line in content.lines() {
                 let parts: Vec<&str> = line.split_whitespace().collect();
@@ -411,10 +400,7 @@ impl NetworkCollector {
         use std::process::Command;
         let mut connections = Vec::new();
 
-        if let Ok(output) = Command::new("netstat")
-            .args(&["-an"])
-            .output()
-        {
+        if let Ok(output) = Command::new("netstat").args(&["-an"]).output() {
             let content = String::from_utf8_lossy(&output.stdout);
             for line in content.lines() {
                 if line.starts_with("tcp") || line.starts_with("udp") {
@@ -423,7 +409,11 @@ impl NetworkCollector {
                         let protocol = parts[0].to_string();
                         let (local_addr, local_port) = parse_addr_port(parts[3]);
                         let (remote_addr, remote_port) = parse_addr_port(parts[4]);
-                        let state = if protocol == "tcp" { parts[5].to_string() } else { "N/A".to_string() };
+                        let state = if protocol == "tcp" {
+                            parts[5].to_string()
+                        } else {
+                            "N/A".to_string()
+                        };
 
                         connections.push(NetworkConnection {
                             protocol,
@@ -477,29 +467,29 @@ impl NetworkCollector {
     fn collect_generic_interfaces(&self) -> Vec<NetworkInterface> {
         local_ip_address::local_ip()
             .ok()
-            .map(|ip| vec![NetworkInterface {
-                name: "default".to_string(),
-                ip: ip.to_string(),
-                netmask: "255.255.255.0".to_string(),
-                mac: None,
-                ipv6: None,
-                is_up: true,
-                gateway: None,
-                dns_servers: Vec::new(),
-            }])
+            .map(|ip| {
+                vec![NetworkInterface {
+                    name: "default".to_string(),
+                    ip: ip.to_string(),
+                    netmask: "255.255.255.0".to_string(),
+                    mac: None,
+                    ipv6: None,
+                    is_up: true,
+                    gateway: None,
+                    dns_servers: Vec::new(),
+                }]
+            })
             .unwrap_or_default()
     }
 
     fn collect_generic_routes(&self) -> Vec<RouteEntry> {
-        vec![
-            RouteEntry {
-                destination: "0.0.0.0/0".to_string(),
-                gateway: "unknown".to_string(),
-                netmask: "0.0.0.0".to_string(),
-                metric: 0,
-                interface: "default".to_string(),
-            }
-        ]
+        vec![RouteEntry {
+            destination: "0.0.0.0/0".to_string(),
+            gateway: "unknown".to_string(),
+            netmask: "0.0.0.0".to_string(),
+            metric: 0,
+            interface: "default".to_string(),
+        }]
     }
 }
 
@@ -516,7 +506,11 @@ impl Default for NetworkCollector {
 fn parse_addr_port(addr_str: &str) -> (String, u16) {
     let parts: Vec<&str> = addr_str.rsplitn(2, ':').collect();
     if parts.len() == 2 {
-        let addr = if parts.len() > 1 { parts[1].to_string() } else { "0.0.0.0".to_string() };
+        let addr = if parts.len() > 1 {
+            parts[1].to_string()
+        } else {
+            "0.0.0.0".to_string()
+        };
         let port = parts[0].parse::<u16>().unwrap_or(0);
         (addr, port)
     } else {
@@ -528,7 +522,13 @@ fn parse_addr_port(addr_str: &str) -> (String, u16) {
 #[cfg(target_os = "linux")]
 fn hex_to_ip(hex: &str) -> String {
     if let Ok(num) = u32::from_str_radix(hex, 16) {
-        format!("{}.{}.{}.{}", num & 0xFF, (num >> 8) & 0xFF, (num >> 16) & 0xFF, (num >> 24) & 0xFF)
+        format!(
+            "{}.{}.{}.{}",
+            num & 0xFF,
+            (num >> 8) & 0xFF,
+            (num >> 16) & 0xFF,
+            (num >> 24) & 0xFF
+        )
     } else {
         "unknown".to_string()
     }
@@ -578,8 +578,16 @@ fn parse_macos_ifconfig(content: &str) -> Vec<NetworkInterface> {
 
             interfaces.push(NetworkInterface {
                 name: iface_name,
-                ip: if ip.is_empty() { "unknown".to_string() } else { ip },
-                netmask: if netmask.is_empty() { "255.255.255.0".to_string() } else { netmask },
+                ip: if ip.is_empty() {
+                    "unknown".to_string()
+                } else {
+                    ip
+                },
+                netmask: if netmask.is_empty() {
+                    "255.255.255.0".to_string()
+                } else {
+                    netmask
+                },
                 mac: if mac.is_empty() { None } else { Some(mac) },
                 ipv6: None,
                 is_up: line.contains("UP") || line.contains("RUNNING"),
@@ -690,17 +698,41 @@ fn parse_windows_ipconfig(content: &str) -> Vec<NetworkInterface> {
 
         // 新的适配器段落以缩进的标题开始
         // 例如: "以太网适配器 Ethernet0:" 或 "Wireless LAN adapter Wi-Fi:"
-        if !line.starts_with(' ') && !line.starts_with('\t') && trimmed.ends_with(':') && !trimmed.is_empty() {
+        if !line.starts_with(' ')
+            && !line.starts_with('\t')
+            && trimmed.ends_with(':')
+            && !trimmed.is_empty()
+        {
             // 保存上一个接口
             if !current_ip.is_empty() || !current_ipv6.is_empty() {
                 interfaces.push(NetworkInterface {
                     name: current_name.clone(),
-                    ip: if current_ip.is_empty() { current_ipv6.clone() } else { current_ip.clone() },
-                    netmask: if current_netmask.is_empty() { "255.255.255.0".to_string() } else { current_netmask.clone() },
-                    mac: if current_mac.is_empty() { None } else { Some(current_mac.clone()) },
-                    ipv6: if current_ipv6.is_empty() { None } else { Some(current_ipv6.clone()) },
+                    ip: if current_ip.is_empty() {
+                        current_ipv6.clone()
+                    } else {
+                        current_ip.clone()
+                    },
+                    netmask: if current_netmask.is_empty() {
+                        "255.255.255.0".to_string()
+                    } else {
+                        current_netmask.clone()
+                    },
+                    mac: if current_mac.is_empty() {
+                        None
+                    } else {
+                        Some(current_mac.clone())
+                    },
+                    ipv6: if current_ipv6.is_empty() {
+                        None
+                    } else {
+                        Some(current_ipv6.clone())
+                    },
                     is_up: true,
-                    gateway: if current_gateway.is_empty() { None } else { Some(current_gateway.clone()) },
+                    gateway: if current_gateway.is_empty() {
+                        None
+                    } else {
+                        Some(current_gateway.clone())
+                    },
                     dns_servers: current_dns.clone(),
                 });
             }
@@ -761,12 +793,32 @@ fn parse_windows_ipconfig(content: &str) -> Vec<NetworkInterface> {
     if !current_ip.is_empty() || !current_ipv6.is_empty() {
         interfaces.push(NetworkInterface {
             name: current_name,
-            ip: if current_ip.is_empty() { current_ipv6.clone() } else { current_ip },
-            netmask: if current_netmask.is_empty() { "255.255.255.0".to_string() } else { current_netmask },
-            mac: if current_mac.is_empty() { None } else { Some(current_mac) },
-            ipv6: if current_ipv6.is_empty() { None } else { Some(current_ipv6) },
+            ip: if current_ip.is_empty() {
+                current_ipv6.clone()
+            } else {
+                current_ip
+            },
+            netmask: if current_netmask.is_empty() {
+                "255.255.255.0".to_string()
+            } else {
+                current_netmask
+            },
+            mac: if current_mac.is_empty() {
+                None
+            } else {
+                Some(current_mac)
+            },
+            ipv6: if current_ipv6.is_empty() {
+                None
+            } else {
+                Some(current_ipv6)
+            },
             is_up: true,
-            gateway: if current_gateway.is_empty() { None } else { Some(current_gateway) },
+            gateway: if current_gateway.is_empty() {
+                None
+            } else {
+                Some(current_gateway)
+            },
             dns_servers: current_dns,
         });
     }
@@ -830,7 +882,11 @@ fn parse_windows_routes(content: &str) -> Vec<RouteEntry> {
                     gateway: parts[1].to_string(),
                     netmask: parts[2].to_string(),
                     metric: parts[3].parse().unwrap_or(0),
-                    interface: if parts.len() >= 5 { parts[4].to_string() } else { "default".to_string() },
+                    interface: if parts.len() >= 5 {
+                        parts[4].to_string()
+                    } else {
+                        "default".to_string()
+                    },
                 });
             }
         }

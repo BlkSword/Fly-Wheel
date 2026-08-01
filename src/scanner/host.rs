@@ -67,7 +67,10 @@ impl HostScanner {
     ///
     /// ARP 结果提供 MAC 地址，TCP 结果提供端口和延迟信息
     #[cfg(windows)]
-    fn merge_scan_results(mut tcp_results: Vec<HostResult>, arp_results: Vec<HostResult>) -> Vec<HostResult> {
+    fn merge_scan_results(
+        mut tcp_results: Vec<HostResult>,
+        arp_results: Vec<HostResult>,
+    ) -> Vec<HostResult> {
         // 建立 ARP MAC 地址映射
         let mut mac_map = std::collections::HashMap::new();
         for arp_result in &arp_results {
@@ -131,25 +134,20 @@ impl HostScanner {
     }
 
     /// 检查单个主机是否存活（并行探测多个端口）
-    async fn check_host_alive(
-        target: IpAddr,
-        ports: &[u16],
-        timeout_dur: Duration,
-    ) -> HostResult {
+    async fn check_host_alive(target: IpAddr, ports: &[u16], timeout_dur: Duration) -> HostResult {
         // 并行探测所有端口，任一成功即判定存活
-        let results = futures::future::join_all(
-            ports.iter().map(|&port| {
-                let addr = SocketAddr::new(target, port);
-                async move {
-                    let start = Instant::now();
-                    timeout(timeout_dur, TcpStream::connect(&addr))
-                        .await
-                        .ok()
-                        .and_then(|r| r.ok())
-                        .map(|_| start.elapsed().as_millis() as u64)
-                }
-            })
-        ).await;
+        let results = futures::future::join_all(ports.iter().map(|&port| {
+            let addr = SocketAddr::new(target, port);
+            async move {
+                let start = Instant::now();
+                timeout(timeout_dur, TcpStream::connect(&addr))
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .map(|_| start.elapsed().as_millis() as u64)
+            }
+        }))
+        .await;
 
         let latency = results.into_iter().find_map(|l| l);
 

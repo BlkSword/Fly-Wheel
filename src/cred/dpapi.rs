@@ -14,7 +14,7 @@
 //! 3. 解密Master Key获取Session Key
 //! 4. 使用Session Key解密目标blob
 
-use crate::cred::{Credential, CredType};
+use crate::cred::{CredType, Credential};
 use serde::{Deserialize, Serialize};
 
 /// DPAPI Master Key 信息
@@ -70,9 +70,7 @@ pub fn collect_dpapi_info() -> Result<Vec<Credential>, String> {
                 continue;
             }
 
-            let sid = sid_path.file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("");
+            let sid = sid_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             // 查找Master Key文件（不以Preferred结尾的GUID文件）
             if let Ok(key_entries) = std::fs::read_dir(&sid_path) {
@@ -82,9 +80,7 @@ pub fn collect_dpapi_info() -> Result<Vec<Credential>, String> {
                         continue;
                     }
 
-                    let filename = key_path.file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("");
+                    let filename = key_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
                     // Master Key文件是GUID格式（不以Preferred结尾）
                     if is_guid(filename) && filename != "Preferred" {
@@ -98,7 +94,10 @@ pub fn collect_dpapi_info() -> Result<Vec<Credential>, String> {
                                     .with_attribute("user_sid", sid)
                                     .with_attribute("path", &key_path.to_string_lossy())
                                     .with_attribute("key_size", &key_data.len().to_string())
-                                    .with_attribute("decrypted", &master_key.decrypted_key.is_some().to_string())
+                                    .with_attribute(
+                                        "decrypted",
+                                        &master_key.decrypted_key.is_some().to_string(),
+                                    ),
                             );
                         }
                     }
@@ -121,9 +120,15 @@ pub fn collect_dpapi_info() -> Result<Vec<Credential>, String> {
                         credentials.push(
                             Credential::new(CredType::DpapiBlob, "Windows凭据Blob")
                                 .with_target(&cred_path.to_string_lossy())
-                                .with_attribute("description", &blob.description.unwrap_or_default())
-                                .with_attribute("master_key_guid", &blob.master_key_guid.unwrap_or_default())
-                                .with_attribute("data_size", &cred_data.len().to_string())
+                                .with_attribute(
+                                    "description",
+                                    &blob.description.unwrap_or_default(),
+                                )
+                                .with_attribute(
+                                    "master_key_guid",
+                                    &blob.master_key_guid.unwrap_or_default(),
+                                )
+                                .with_attribute("data_size", &cred_data.len().to_string()),
                         );
                     }
                 }
@@ -202,7 +207,10 @@ fn is_guid(s: &str) -> bool {
         return false;
     }
     let lens = [8, 4, 4, 4, 12];
-    parts.iter().zip(lens.iter()).all(|(p, &l)| p.len() == l && p.chars().all(|c| c.is_ascii_hexdigit()))
+    parts
+        .iter()
+        .zip(lens.iter())
+        .all(|(p, &l)| p.len() == l && p.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 /// 尝试使用用户密码解密Master Key
@@ -288,11 +296,11 @@ pub fn decrypt_dpapi_blob(encrypted: &[u8]) -> Result<Vec<u8>, String> {
     let success = unsafe {
         CryptUnprotectData(
             &data_in,
-            ptr::null_mut(),   // ppszDataDescr — 不需要描述
-            ptr::null(),       // pOptionalEntropy — 无额外熵
-            ptr::null_mut(),   // pvReserved
-            ptr::null(),       // pPromptStruct — 不弹出UI提示
-            0,                 // dwFlags — 默认（当前用户上下文）
+            ptr::null_mut(), // ppszDataDescr — 不需要描述
+            ptr::null(),     // pOptionalEntropy — 无额外熵
+            ptr::null_mut(), // pvReserved
+            ptr::null(),     // pPromptStruct — 不弹出UI提示
+            0,               // dwFlags — 默认（当前用户上下文）
             &mut data_out,
         )
     };
@@ -306,9 +314,8 @@ pub fn decrypt_dpapi_blob(encrypted: &[u8]) -> Result<Vec<u8>, String> {
         return Err("CryptUnprotectData 返回空数据".to_string());
     }
 
-    let decrypted = unsafe {
-        std::slice::from_raw_parts(data_out.pb_data, data_out.cb_data as usize).to_vec()
-    };
+    let decrypted =
+        unsafe { std::slice::from_raw_parts(data_out.pb_data, data_out.cb_data as usize).to_vec() };
 
     // 释放CryptUnprotectData分配的内存
     unsafe {
@@ -348,7 +355,8 @@ mod tests {
     fn test_parse_credential_blob() {
         // 构造简单的blob：UTF-16LE描述 + 数据
         let desc = "test_cred";
-        let desc_utf16: Vec<u8> = desc.encode_utf16()
+        let desc_utf16: Vec<u8> = desc
+            .encode_utf16()
             .flat_map(|c| c.to_le_bytes())
             .chain(std::iter::once(0u8).chain(std::iter::once(0u8)))
             .collect();

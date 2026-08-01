@@ -45,11 +45,8 @@ impl ArpScanner {
                 // 获取信号量
                 let rt = tokio::runtime::Handle::current();
                 let _permit = rt.block_on(async {
-                    tokio::time::timeout(
-                        Duration::from_millis(timeout_ms),
-                        semaphore.acquire(),
-                    )
-                    .await
+                    tokio::time::timeout(Duration::from_millis(timeout_ms), semaphore.acquire())
+                        .await
                 });
 
                 // 执行 ARP 探测
@@ -89,8 +86,8 @@ impl ArpScanner {
 /// 返回 (IP, MAC) 如果主机存活
 #[cfg(windows)]
 fn probe_host(target: Ipv4Addr) -> Option<(Ipv4Addr, String)> {
-    use windows::Win32::Networking::WinSock::inet_addr;
     use std::ffi::CString;
+    use windows::Win32::Networking::WinSock::inet_addr;
 
     // 将 IP 转换为网络字节序
     let ip_str = CString::new(target.to_string()).ok()?;
@@ -104,15 +101,19 @@ fn probe_host(target: Ipv4Addr) -> Option<(Ipv4Addr, String)> {
 
     // 调用 SendARP
     let result = unsafe {
-        SendARP(dest_ip, 0, mac_addr.as_mut_ptr() as *mut core::ffi::c_void, &mut mac_len)
+        SendARP(
+            dest_ip,
+            0,
+            mac_addr.as_mut_ptr() as *mut core::ffi::c_void,
+            &mut mac_len,
+        )
     };
 
     if result == 0 && mac_len == 6 {
         // 成功获取 MAC 地址
         let mac = format!(
             "{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-            mac_addr[0], mac_addr[1], mac_addr[2],
-            mac_addr[3], mac_addr[4], mac_addr[5]
+            mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]
         );
         Some((target, mac))
     } else {

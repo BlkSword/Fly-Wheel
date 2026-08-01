@@ -2,8 +2,8 @@
 
 use crate::cli::{print_banner, InteractiveMenu};
 use crate::core::Result;
-use crate::output::color::{print_info, print_success};
 use crate::output::color::print_warning;
+use crate::output::color::{print_info, print_success};
 use std::path::PathBuf;
 
 pub fn run_report_cmd(
@@ -36,13 +36,17 @@ fn run_report_from_data(
 ) -> Result<()> {
     print_info(&format!("从数据文件生成报告: {}", input_file.display()));
 
-    let content = std::fs::read_to_string(input_file)
-        .map_err(|e| format!("读取数据文件失败: {}", e))?;
+    let content =
+        std::fs::read_to_string(input_file).map_err(|e| format!("读取数据文件失败: {}", e))?;
 
     // 尝试反序列化为 AttackChainReport
     let report = match serde_json::from_str::<crate::output::report::AttackChainReport>(&content) {
         Ok(r) => {
-            print_info(&format!("加载了 {} 个攻击步骤, {} 个发现", r.steps.len(), r.findings.len()));
+            print_info(&format!(
+                "加载了 {} 个攻击步骤, {} 个发现",
+                r.steps.len(),
+                r.findings.len()
+            ));
             r
         }
         Err(_) => {
@@ -69,7 +73,11 @@ fn run_report_from_data(
             "executive" | "full" => "md",
             _ => "html",
         };
-        PathBuf::from(format!("pentest_report_{}.{}", chrono::Utc::now().format("%Y%m%d_%H%M%S"), ext))
+        PathBuf::from(format!(
+            "pentest_report_{}.{}",
+            chrono::Utc::now().format("%Y%m%d_%H%M%S"),
+            ext
+        ))
     });
 
     std::fs::write(&out_path, &report_content)?;
@@ -79,7 +87,9 @@ fn run_report_from_data(
 }
 
 /// 从 JSON 数据构建报告（支持 AD 结果 + scan 结果混合输入）
-fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::output::report::AttackChainReport> {
+fn build_report_from_json_data(
+    content: &str,
+) -> crate::core::Result<crate::output::report::AttackChainReport> {
     let mut report = crate::output::report::AttackChainReport {
         title: "内网渗透测试报告".to_string(),
         target_organization: "（从数据中提取）".to_string(),
@@ -98,13 +108,23 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
     if let Ok(json) = serde_json::from_str::<serde_json::Value>(content) {
         if let Some(obj) = json.as_object() {
             // 提取目标组织
-            if let Some(name) = obj.get("domain_name").or_else(|| obj.get("target_organization")) {
+            if let Some(name) = obj
+                .get("domain_name")
+                .or_else(|| obj.get("target_organization"))
+            {
                 report.target_organization = name.as_str().unwrap_or("未知").to_string();
             }
 
             // 从 AD 枚举结果构建发现
             if let Some(users) = obj.get("users").and_then(|v| v.as_array()) {
-                let admin_count = users.iter().filter(|u| u.get("admin_count").and_then(|a| a.as_bool()).unwrap_or(false)).count();
+                let admin_count = users
+                    .iter()
+                    .filter(|u| {
+                        u.get("admin_count")
+                            .and_then(|a| a.as_bool())
+                            .unwrap_or(false)
+                    })
+                    .count();
                 if admin_count > 0 {
                     report.findings.push(crate::output::report::ReportFinding {
                         id: "F-AD-001".to_string(),
@@ -124,10 +144,19 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
                     report.findings.push(crate::output::report::ReportFinding {
                         id: "F-KERB-001".to_string(),
                         title: "发现 Kerberoasting 目标".to_string(),
-                        description: format!("发现 {} 个注册了 SPN 的用户账户，可进行 Kerberoasting 攻击", kerb.len()),
+                        description: format!(
+                            "发现 {} 个注册了 SPN 的用户账户，可进行 Kerberoasting 攻击",
+                            kerb.len()
+                        ),
                         severity: crate::output::report::FindingSeverity::High,
-                        affected_hosts: kerb.iter().filter_map(|k| k.get("spn").and_then(|s| s.as_str()).map(|s| s.to_string())).collect(),
-                        recommendation: "为服务账户设置强密码（>=25字符随机密码），定期轮换".to_string(),
+                        affected_hosts: kerb
+                            .iter()
+                            .filter_map(|k| {
+                                k.get("spn").and_then(|s| s.as_str()).map(|s| s.to_string())
+                            })
+                            .collect(),
+                        recommendation: "为服务账户设置强密码（>=25字符随机密码），定期轮换"
+                            .to_string(),
                         cvss_score: Some(7.5),
                     });
                 }
@@ -141,7 +170,14 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
                         title: "发现 AS-REP Roasting 目标".to_string(),
                         description: format!("发现 {} 个未启用 Kerberos 预认证的用户", asrep.len()),
                         severity: crate::output::report::FindingSeverity::High,
-                        affected_hosts: asrep.iter().filter_map(|a| a.get("username").and_then(|u| u.as_str()).map(|s| s.to_string())).collect(),
+                        affected_hosts: asrep
+                            .iter()
+                            .filter_map(|a| {
+                                a.get("username")
+                                    .and_then(|u| u.as_str())
+                                    .map(|s| s.to_string())
+                            })
+                            .collect(),
                         recommendation: "为这些用户账户启用 Kerberos 预认证".to_string(),
                         cvss_score: Some(7.0),
                     });
@@ -182,7 +218,10 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
             }
 
             // 凭据统计
-            if let Some(creds) = obj.get("credentials").or_else(|| obj.get("stolen_credentials")) {
+            if let Some(creds) = obj
+                .get("credentials")
+                .or_else(|| obj.get("stolen_credentials"))
+            {
                 report.stolen_credentials = creds.as_u64().unwrap_or(0) as usize;
             }
             if let Some(stats) = obj.get("stats") {
@@ -198,14 +237,19 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
 
             // ==================== 扫描结果聚合 ====================
             if let Some(hosts) = obj.get("hosts").and_then(|v| v.as_array()) {
-                let alive: Vec<_> = hosts.iter()
+                let alive: Vec<_> = hosts
+                    .iter()
                     .filter(|h| h.get("is_alive").and_then(|a| a.as_bool()).unwrap_or(false))
                     .collect();
 
                 if !alive.is_empty() {
                     report.timeline.push(crate::output::report::TimelineEntry {
                         timestamp: chrono::Utc::now().format("%H:%M").to_string(),
-                        event: format!("主机发现: {} 台存活（共 {} 台目标）", alive.len(), hosts.len()),
+                        event: format!(
+                            "主机发现: {} 台存活（共 {} 台目标）",
+                            alive.len(),
+                            hosts.len()
+                        ),
                         phase: "侦察".to_string(),
                         host: None,
                     });
@@ -217,7 +261,10 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
                     if let Some(ports) = host.get("open_ports").and_then(|p| p.as_array()) {
                         for port_info in ports {
                             let port = port_info.get("port").and_then(|p| p.as_u64()).unwrap_or(0);
-                            let service = port_info.get("service").and_then(|s| s.as_str()).unwrap_or("");
+                            let service = port_info
+                                .get("service")
+                                .and_then(|s| s.as_str())
+                                .unwrap_or("");
                             if !service.is_empty() {
                                 report.timeline.push(crate::output::report::TimelineEntry {
                                     timestamp: chrono::Utc::now().format("%H:%M").to_string(),
@@ -232,12 +279,18 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
 
                 // 扫描统计
                 if let Some(scan_stats) = obj.get("stats") {
-                    if let Some(total_targets) = scan_stats.get("total_targets").and_then(|t| t.as_u64()) {
+                    if let Some(total_targets) =
+                        scan_stats.get("total_targets").and_then(|t| t.as_u64())
+                    {
                         report.steps.push(crate::output::report::ReportStep {
                             step_number: report.steps.len() + 1,
                             phase: "侦察".to_string(),
                             title: "网络扫描".to_string(),
-                            description: format!("扫描 {} 个目标，发现 {} 台存活主机", total_targets, alive.len()),
+                            description: format!(
+                                "扫描 {} 个目标，发现 {} 台存活主机",
+                                total_targets,
+                                alive.len()
+                            ),
                             source_host: "攻击机".to_string(),
                             target_host: None,
                             technique: "T1046 - Network Service Discovery".to_string(),
@@ -252,7 +305,10 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
             // ==================== 爆破结果聚合 ====================
             if let Some(crack_success) = obj.get("is_success").and_then(|s| s.as_bool()) {
                 if crack_success {
-                    let target = obj.get("target").and_then(|t| t.as_str()).unwrap_or("unknown");
+                    let target = obj
+                        .get("target")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("unknown");
                     let port = obj.get("port").and_then(|p| p.as_u64()).unwrap_or(0);
                     let service = obj.get("service").and_then(|s| s.as_str()).unwrap_or("");
                     let username = obj.get("username").and_then(|u| u.as_str()).unwrap_or("");
@@ -260,10 +316,14 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
                     report.findings.push(crate::output::report::ReportFinding {
                         id: format!("F-CRACK-{}", target),
                         title: format!("弱口令: {}:{} ({})", target, port, service),
-                        description: format!("服务 {}:{} 存在弱口令，用户名: {}", target, port, username),
+                        description: format!(
+                            "服务 {}:{} 存在弱口令，用户名: {}",
+                            target, port, username
+                        ),
                         severity: crate::output::report::FindingSeverity::Critical,
                         affected_hosts: vec![target.to_string()],
-                        recommendation: "立即修改弱口令，启用账户锁定策略，限制远程访问".to_string(),
+                        recommendation: "立即修改弱口令，启用账户锁定策略，限制远程访问"
+                            .to_string(),
                         cvss_score: Some(9.8),
                     });
                     report.stolen_credentials += 1;
@@ -274,8 +334,15 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
             // 多组爆破结果（数组格式）
             if let Some(results) = obj.get("crack_results").and_then(|v| v.as_array()) {
                 for res in results {
-                    if res.get("is_success").and_then(|s| s.as_bool()).unwrap_or(false) {
-                        let target = res.get("target").and_then(|t| t.as_str()).unwrap_or("unknown");
+                    if res
+                        .get("is_success")
+                        .and_then(|s| s.as_bool())
+                        .unwrap_or(false)
+                    {
+                        let target = res
+                            .get("target")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("unknown");
                         report.stolen_credentials += 1;
                         report.findings.push(crate::output::report::ReportFinding {
                             id: format!("F-CRACK-{}", target),
@@ -293,11 +360,26 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
             // ==================== 提权检测结果聚合 ====================
             if let Some(findings) = obj.get("findings").and_then(|v| v.as_array()) {
                 for finding in findings {
-                    let title = finding.get("title").and_then(|t| t.as_str()).unwrap_or("未知提权风险");
-                    let category = finding.get("category").and_then(|c| c.as_str()).unwrap_or("");
-                    let severity_str = finding.get("severity").and_then(|s| s.as_str()).unwrap_or("medium");
-                    let description = finding.get("description").and_then(|d| d.as_str()).unwrap_or("");
-                    let remediation = finding.get("remediation").and_then(|r| r.as_str()).unwrap_or("");
+                    let title = finding
+                        .get("title")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("未知提权风险");
+                    let category = finding
+                        .get("category")
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("");
+                    let severity_str = finding
+                        .get("severity")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("medium");
+                    let description = finding
+                        .get("description")
+                        .and_then(|d| d.as_str())
+                        .unwrap_or("");
+                    let remediation = finding
+                        .get("remediation")
+                        .and_then(|r| r.as_str())
+                        .unwrap_or("");
 
                     let severity = match severity_str {
                         "critical" => crate::output::report::FindingSeverity::Critical,
@@ -312,7 +394,11 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
                         title: format!("[提权] {}", title),
                         description: description.to_string(),
                         severity,
-                        affected_hosts: vec![obj.get("hostname").and_then(|h| h.as_str()).unwrap_or("localhost").to_string()],
+                        affected_hosts: vec![obj
+                            .get("hostname")
+                            .and_then(|h| h.as_str())
+                            .unwrap_or("localhost")
+                            .to_string()],
                         recommendation: remediation.to_string(),
                         cvss_score: None,
                     });
@@ -320,12 +406,28 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
             }
 
             // ==================== 漏洞扫描结果聚合 ====================
-            if let Some(vuln_findings) = obj.get("vuln_findings").or_else(|| obj.get("vulnerabilities")).and_then(|v| v.as_array()) {
+            if let Some(vuln_findings) = obj
+                .get("vuln_findings")
+                .or_else(|| obj.get("vulnerabilities"))
+                .and_then(|v| v.as_array())
+            {
                 for vf in vuln_findings {
-                    let vuln_id = vf.get("vuln_id").and_then(|v| v.as_str()).unwrap_or("unknown");
-                    let vuln_name = vf.get("vuln_name").and_then(|v| v.as_str()).unwrap_or("未知漏洞");
-                    let target = vf.get("target").and_then(|t| t.as_str()).unwrap_or("unknown");
-                    let sev = vf.get("severity").and_then(|s| s.as_str()).unwrap_or("medium");
+                    let vuln_id = vf
+                        .get("vuln_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("unknown");
+                    let vuln_name = vf
+                        .get("vuln_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("未知漏洞");
+                    let target = vf
+                        .get("target")
+                        .and_then(|t| t.as_str())
+                        .unwrap_or("unknown");
+                    let sev = vf
+                        .get("severity")
+                        .and_then(|s| s.as_str())
+                        .unwrap_or("medium");
 
                     let severity = match sev {
                         "critical" => crate::output::report::FindingSeverity::Critical,
@@ -338,30 +440,45 @@ fn build_report_from_json_data(content: &str) -> crate::core::Result<crate::outp
                     report.findings.push(crate::output::report::ReportFinding {
                         id: format!("F-VULN-{}", vuln_id),
                         title: format!("[漏洞] {}", vuln_name),
-                        description: vf.get("description").and_then(|d| d.as_str()).unwrap_or("").to_string(),
+                        description: vf
+                            .get("description")
+                            .and_then(|d| d.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                         severity,
                         affected_hosts: vec![target.to_string()],
-                        recommendation: vf.get("remediation").and_then(|r| r.as_str()).unwrap_or("修复漏洞").to_string(),
+                        recommendation: vf
+                            .get("remediation")
+                            .and_then(|r| r.as_str())
+                            .unwrap_or("修复漏洞")
+                            .to_string(),
                         cvss_score: None,
                     });
                 }
             }
 
             // 计算风险评分
-            let critical: usize = report.findings.iter().filter(|f| f.severity == crate::output::report::FindingSeverity::Critical).count();
-            let high: usize = report.findings.iter().filter(|f| f.severity == crate::output::report::FindingSeverity::High).count();
-            report.risk_score = std::cmp::min(100u32, 10 + (critical * 25) as u32 + (high * 15) as u32 + report.stolen_credentials as u32);
+            let critical: usize = report
+                .findings
+                .iter()
+                .filter(|f| f.severity == crate::output::report::FindingSeverity::Critical)
+                .count();
+            let high: usize = report
+                .findings
+                .iter()
+                .filter(|f| f.severity == crate::output::report::FindingSeverity::High)
+                .count();
+            report.risk_score = std::cmp::min(
+                100u32,
+                10 + (critical * 25) as u32 + (high * 15) as u32 + report.stolen_credentials as u32,
+            );
         }
     }
 
     Ok(report)
 }
 
-fn run_report_direct(
-    format: &str,
-    _mitre: bool,
-    output: PathBuf,
-) -> Result<()> {
+fn run_report_direct(format: &str, _mitre: bool, output: PathBuf) -> Result<()> {
     print_info("生成渗透测试报告...");
     print_warning("未提供输入数据，生成空报告模板。使用 --input <JSON文件> 加载实际数据。");
 
@@ -401,7 +518,11 @@ fn run_report_interactive(format: &str, _mitre: bool) -> Result<()> {
 
     InteractiveMenu::print_step(2, 4, "报告信息");
     let org = InteractiveMenu::read_input("目标组织名称 [默认: 目标组织]: ");
-    let org = if org.is_empty() { "目标组织".to_string() } else { org };
+    let org = if org.is_empty() {
+        "目标组织".to_string()
+    } else {
+        org
+    };
 
     let entry = InteractiveMenu::read_input("攻击入口描述（可选）: ");
     let objective = InteractiveMenu::read_input("最终目标描述（可选）: ");
@@ -424,7 +545,11 @@ fn run_report_interactive(format: &str, _mitre: bool) -> Result<()> {
     };
     let default_path = format!("pentest_report.{}", ext);
     let output_path = InteractiveMenu::read_input(&format!("输出路径 [默认: {}]: ", default_path));
-    let output = PathBuf::from(if output_path.is_empty() { default_path } else { output_path });
+    let output = PathBuf::from(if output_path.is_empty() {
+        default_path
+    } else {
+        output_path
+    });
 
     if !InteractiveMenu::confirm("确认生成报告? [Y/n]: ") {
         print_info("已取消");
@@ -445,8 +570,16 @@ fn run_report_interactive(format: &str, _mitre: bool) -> Result<()> {
             title: format!("{} 渗透测试报告", org),
             target_organization: org,
             report_date: chrono::Utc::now().format("%Y-%m-%d").to_string(),
-            entry_point: if entry.is_empty() { "（待补充）".to_string() } else { entry },
-            final_objective: if objective.is_empty() { "（待补充）".to_string() } else { objective },
+            entry_point: if entry.is_empty() {
+                "（待补充）".to_string()
+            } else {
+                entry
+            },
+            final_objective: if objective.is_empty() {
+                "（待补充）".to_string()
+            } else {
+                objective
+            },
             steps: Vec::new(),
             findings: Vec::new(),
             timeline: Vec::new(),
@@ -456,7 +589,9 @@ fn run_report_interactive(format: &str, _mitre: bool) -> Result<()> {
         };
 
         let content = match fmt {
-            "executive" => crate::output::report::ReportGenerator::generate_executive_summary(&report),
+            "executive" => {
+                crate::output::report::ReportGenerator::generate_executive_summary(&report)
+            }
             "html" => crate::output::report::ReportGenerator::generate_html_report(&report),
             _ => crate::output::report::ReportGenerator::generate_full_report(&report),
         };

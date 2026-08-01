@@ -7,11 +7,11 @@ use crate::tunnel::config::TunnelConfig;
 use crate::tunnel::models::{ConnectionInfo, TunnelEvent, TunnelEventHandler, TunnelStatus};
 use crate::tunnel::shutdown::Shutdown;
 use std::sync::Arc;
-use tracing;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::Semaphore;
 use tokio::time::{sleep, Duration};
+use tracing;
 use uuid::Uuid;
 
 /// 反向隧道
@@ -22,10 +22,7 @@ pub struct ReverseTunnel {
 }
 
 impl ReverseTunnel {
-    pub fn new(
-        config: TunnelConfig,
-        event_handler: Arc<dyn TunnelEventHandler>,
-    ) -> Self {
+    pub fn new(config: TunnelConfig, event_handler: Arc<dyn TunnelEventHandler>) -> Self {
         Self {
             config,
             status: Arc::new(tokio::sync::RwLock::new(TunnelStatus::new())),
@@ -38,10 +35,13 @@ impl ReverseTunnel {
         // 验证配置
         self.config.validate()?;
 
-        let control_addr = self.config.remote_target.clone()
-            .ok_or_else(|| IntraSweepError::Config {
-                message: "反向隧道需要指定控制端地址".to_string(),
-            })?;
+        let control_addr =
+            self.config
+                .remote_target
+                .clone()
+                .ok_or_else(|| IntraSweepError::Config {
+                    message: "反向隧道需要指定控制端地址".to_string(),
+                })?;
 
         {
             let mut status = self.status.write().await;
@@ -85,18 +85,17 @@ impl ReverseTunnel {
         let timeout_dur = Duration::from_secs(self.config.timeout_secs);
 
         // 连接到控制端
-        let control_stream = tokio::time::timeout(
-            timeout_dur,
-            TcpStream::connect(control_addr)
-        ).await
-        .map_err(|_| IntraSweepError::Timeout {
-            operation: format!("连接超时: {}", control_addr),
-        })?
-        .map_err(|e| IntraSweepError::Network {
-            message: format!("无法连接到 {}: {}", control_addr, e),
-        })?;
+        let control_stream = tokio::time::timeout(timeout_dur, TcpStream::connect(control_addr))
+            .await
+            .map_err(|_| IntraSweepError::Timeout {
+                operation: format!("连接超时: {}", control_addr),
+            })?
+            .map_err(|e| IntraSweepError::Network {
+                message: format!("无法连接到 {}: {}", control_addr, e),
+            })?;
 
-        let local_addr = control_stream.local_addr()
+        let local_addr = control_stream
+            .local_addr()
             .map_err(|e| IntraSweepError::Network {
                 message: format!("获取本地地址失败: {}", e),
             })?;
@@ -121,7 +120,9 @@ impl ReverseTunnel {
         println!("[连接] 已连接到控制端: {}", control_addr);
 
         // 处理控制端的指令
-        let result = self.handle_control_connection(control_stream, &conn_id).await;
+        let result = self
+            .handle_control_connection(control_stream, &conn_id)
+            .await;
 
         {
             let mut status = self.status.write().await;
@@ -147,16 +148,14 @@ impl ReverseTunnel {
 
         loop {
             // 读取控制端指令
-            let n = tokio::time::timeout(
-                Duration::from_secs(60),
-                control_stream.read(&mut buf)
-            ).await
-            .map_err(|_| IntraSweepError::Timeout {
-                operation: "读取控制端指令超时".to_string(),
-            })?
-            .map_err(|e| IntraSweepError::Network {
-                message: format!("读取控制端指令失败: {}", e),
-            })?;
+            let n = tokio::time::timeout(Duration::from_secs(60), control_stream.read(&mut buf))
+                .await
+                .map_err(|_| IntraSweepError::Timeout {
+                    operation: "读取控制端指令超时".to_string(),
+                })?
+                .map_err(|e| IntraSweepError::Network {
+                    message: format!("读取控制端指令失败: {}", e),
+                })?;
 
             if n == 0 {
                 // 控制端关闭连接
@@ -185,7 +184,8 @@ impl ReverseTunnel {
                         let data = &buf[3..n];
 
                         // 连接到本地端口并转发数据
-                        if let Err(e) = self.forward_to_local(port, data, &mut control_stream).await {
+                        if let Err(e) = self.forward_to_local(port, data, &mut control_stream).await
+                        {
                             tracing::error!("转发到本地端口 {} 失败: {}", port, e);
                         }
                     }
@@ -209,13 +209,17 @@ impl ReverseTunnel {
     ) -> Result<()> {
         let local_target = format!("127.0.0.1:{}", port);
 
-        let mut local_stream = TcpStream::connect(&local_target).await
-            .map_err(|e| IntraSweepError::Network {
-                message: format!("连接本地 {} 失败: {}", local_target, e),
-            })?;
+        let mut local_stream =
+            TcpStream::connect(&local_target)
+                .await
+                .map_err(|e| IntraSweepError::Network {
+                    message: format!("连接本地 {} 失败: {}", local_target, e),
+                })?;
 
         // 发送数据
-        local_stream.write_all(data).await
+        local_stream
+            .write_all(data)
+            .await
             .map_err(|e| IntraSweepError::Network {
                 message: format!("写入本地端口失败: {}", e),
             })?;
@@ -225,8 +229,9 @@ impl ReverseTunnel {
         loop {
             let n = tokio::time::timeout(
                 Duration::from_secs(30),
-                local_stream.read(&mut response_buf)
-            ).await
+                local_stream.read(&mut response_buf),
+            )
+            .await
             .map_err(|_| IntraSweepError::Timeout {
                 operation: "读取本地端口响应超时".to_string(),
             })?
@@ -243,7 +248,9 @@ impl ReverseTunnel {
             packet[0] = 0x03; // 响应标记
             packet[1..].copy_from_slice(&response_buf[..n]);
 
-            control_stream.write_all(&packet).await
+            control_stream
+                .write_all(&packet)
+                .await
                 .map_err(|e| IntraSweepError::Network {
                     message: format!("发送响应到控制端失败: {}", e),
                 })?;
@@ -257,7 +264,8 @@ impl ReverseTunnel {
     pub async fn start_server(&self) -> Result<()> {
         use tokio::net::TcpListener;
 
-        let listener = TcpListener::bind(&self.config.local_addr).await
+        let listener = TcpListener::bind(&self.config.local_addr)
+            .await
             .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
@@ -332,24 +340,29 @@ impl ReverseTunnel {
 
     /// 启动反向隧道（客户端模式，支持优雅关闭）
     pub async fn start_client_with_shutdown(&self, shutdown: &Shutdown) -> Result<()> {
-        use crate::tunnel::crypto::{CryptoLayer, derive_key};
+        use crate::tunnel::crypto::{derive_key, CryptoLayer};
         use std::sync::Arc as StdArc;
 
         self.config.validate()?;
 
-        let control_addr = self.config.remote_target.clone()
-            .ok_or_else(|| IntraSweepError::Config {
-                message: "反向隧道需要指定控制端地址".to_string(),
-            })?;
+        let control_addr =
+            self.config
+                .remote_target
+                .clone()
+                .ok_or_else(|| IntraSweepError::Config {
+                    message: "反向隧道需要指定控制端地址".to_string(),
+                })?;
 
         {
             let mut status = self.status.write().await;
             status.start();
         }
 
-        let crypto = self.config.encryption_key.as_ref().map(|k| {
-            StdArc::new(CryptoLayer::new(&derive_key(k)))
-        });
+        let crypto = self
+            .config
+            .encryption_key
+            .as_ref()
+            .map(|k| StdArc::new(CryptoLayer::new(&derive_key(k))));
 
         self.event_handler.on_event(TunnelEvent::Started);
         println!();
@@ -357,7 +370,14 @@ impl ReverseTunnel {
         println!("║  反向隧道启动（客户端模式）");
         println!("║  控制端地址: {}", control_addr);
         println!("║  监听端口: {}", self.config.local_addr.port());
-        println!("║  加密: {}", if crypto.is_some() { "XChaCha20-Poly1305" } else { "无" });
+        println!(
+            "║  加密: {}",
+            if crypto.is_some() {
+                "XChaCha20-Poly1305"
+            } else {
+                "无"
+            }
+        );
         println!("╚════════════════════════════════════════════════════════════════════════════╝");
         println!();
         println!("按 Ctrl+C 优雅关闭隧道");
@@ -393,5 +413,4 @@ impl ReverseTunnel {
         println!("反向隧道已关闭");
         Ok(())
     }
-
 }

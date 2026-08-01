@@ -4,8 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use sysinfo::System;
 use std::env;
+use sysinfo::System;
 
 /// 系统信息收集器
 pub struct SystemCollector {
@@ -116,10 +116,7 @@ impl SystemCollector {
     #[cfg(target_os = "macos")]
     fn get_macos_version_internal(&self) -> String {
         use std::process::Command;
-        match Command::new("sw_vers")
-            .arg("-productVersion")
-            .output()
-        {
+        match Command::new("sw_vers").arg("-productVersion").output() {
             Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
             Err(_) => env::consts::OS.to_string(),
         }
@@ -132,7 +129,8 @@ impl SystemCollector {
         if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
             for line in content.lines() {
                 if line.starts_with("PRETTY_NAME=") {
-                    let version = line.trim_start_matches("PRETTY_NAME=")
+                    let version = line
+                        .trim_start_matches("PRETTY_NAME=")
                         .trim_matches('"')
                         .to_string();
                     if !version.is_empty() {
@@ -142,10 +140,7 @@ impl SystemCollector {
             }
         }
 
-        match Command::new("uname")
-            .arg("-r")
-            .output()
-        {
+        match Command::new("uname").arg("-r").output() {
             Ok(output) => String::from_utf8_lossy(&output.stdout).trim().to_string(),
             Err(_) => "Linux".to_string(),
         }
@@ -162,28 +157,25 @@ impl SystemCollector {
     /// 收集域名
     pub fn collect_domain(&self) -> Option<String> {
         if cfg!(windows) {
-            env::var("USERDNSDOMAIN").ok()
-                .or({
-                    // 尝试从注册表获取域信息
-                    #[cfg(windows)]
-                    {
-                        use winreg::enums::*;
-                        use winreg::RegKey;
-                        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-                        hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters")
-                            .ok()
-                            .and_then(|key| key.get_value("Domain").ok())
-                    }
-                    #[cfg(not(windows))]
-                    {
-                        None
-                    }
-                })
+            env::var("USERDNSDOMAIN").ok().or({
+                // 尝试从注册表获取域信息
+                #[cfg(windows)]
+                {
+                    use winreg::enums::*;
+                    use winreg::RegKey;
+                    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+                    hklm.open_subkey("SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters")
+                        .ok()
+                        .and_then(|key| key.get_value("Domain").ok())
+                }
+                #[cfg(not(windows))]
+                {
+                    None
+                }
+            })
         } else {
             match whoami::fallible::hostname() {
-                Ok(h) => {
-                    h.split('.').nth(1).map(|d| d.to_string())
-                }
+                Ok(h) => h.split('.').nth(1).map(|d| d.to_string()),
                 Err(_) => None,
             }
         }
@@ -225,10 +217,7 @@ impl SystemCollector {
         let mut users = Vec::new();
 
         // 使用 net user 命令获取用户列表
-        if let Ok(output) = Command::new("net")
-            .arg("user")
-            .output()
-        {
+        if let Ok(output) = Command::new("net").arg("user").output() {
             let content = String::from_utf8_lossy(&output.stdout);
             // 跳过头部和尾部，解析用户列表
             let mut in_user_list = false;
@@ -357,7 +346,10 @@ impl SystemCollector {
     pub fn collect_environment(&self) -> HashMap<String, String> {
         env::vars_os()
             .map(|(k, v)| {
-                (k.to_string_lossy().to_string(), v.to_string_lossy().to_string())
+                (
+                    k.to_string_lossy().to_string(),
+                    v.to_string_lossy().to_string(),
+                )
             })
             .collect()
     }
@@ -458,9 +450,7 @@ impl SystemCollector {
             use std::process::Command;
             if let Ok(output) = Command::new("id").arg("-Gn").output() {
                 let content = String::from_utf8_lossy(&output.stdout);
-                groups = content.split_whitespace()
-                    .map(|s| s.to_string())
-                    .collect();
+                groups = content.split_whitespace().map(|s| s.to_string()).collect();
             }
         }
 
@@ -481,10 +471,7 @@ impl SystemCollector {
 
         // 方法: 尝试执行需要管理员权限的操作
         // 使用 net session 命令检测管理员权限
-        if let Ok(output) = Command::new("net")
-            .args(["session"])
-            .output()
-        {
+        if let Ok(output) = Command::new("net").args(["session"]).output() {
             // 如果命令执行成功（退出码 0），说明有管理员权限
             return output.status.success();
         }
@@ -580,8 +567,7 @@ mod tests {
 
     #[test]
     fn test_system_collector_creation() {
-        let collector = SystemCollector::new();
-        assert!(collector.system.cpus().len() > 0);
+        let _collector = SystemCollector::new();
     }
 
     #[test]

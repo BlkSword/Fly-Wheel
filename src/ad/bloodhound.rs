@@ -175,7 +175,11 @@ pub fn export_bloodhound(result: &AdEnumResult, output_dir: &Path) -> crate::cor
     write_bh_file(&output_dir.join("users.json"), &meta, &users)?;
 
     // 组
-    let groups: Vec<BhGroup> = result.groups.iter().map(|g| group_to_bh(g, domain)).collect();
+    let groups: Vec<BhGroup> = result
+        .groups
+        .iter()
+        .map(|g| group_to_bh(g, domain))
+        .collect();
     write_bh_file(&output_dir.join("groups.json"), &meta, &groups)?;
 
     // 计算机
@@ -220,14 +224,14 @@ fn write_bh_file<T: Serialize + Clone>(
 }
 
 fn user_to_bh(user: &AdUser, domain: &str) -> BhUser {
-    let dont_req_preauth = !user
-        .spn
-        .is_empty(); // simplified; actual check needs UAC flag
+    let dont_req_preauth = !user.spn.is_empty(); // simplified; actual check needs UAC flag
     let has_spn = !user.spn.is_empty();
 
     BhUser {
         // 使用真实 objectSid（来自 LDAP），无 SID 时回退到伪造标识
-        object_identifier: user.sid.clone()
+        object_identifier: user
+            .sid
+            .clone()
             .unwrap_or_else(|| format!("S-1-5-21-UNKNOWN-{}", user.sam_account_name)),
         object_type: "User".to_string(),
         Properties: BhUserProps {
@@ -258,7 +262,9 @@ fn user_to_bh(user: &AdUser, domain: &str) -> BhUser {
 
 fn group_to_bh(group: &AdGroup, domain: &str) -> BhGroup {
     BhGroup {
-        object_identifier: group.sid.clone()
+        object_identifier: group
+            .sid
+            .clone()
             .unwrap_or_else(|| format!("S-1-5-21-UNKNOWN-{}", group.name)),
         object_type: "Group".to_string(),
         Properties: BhGroupProps {
@@ -287,7 +293,9 @@ fn group_to_bh(group: &AdGroup, domain: &str) -> BhGroup {
 fn computer_to_bh(computer: &AdComputer, domain: &str) -> BhComputer {
     let name = computer.name.trim_end_matches('$');
     BhComputer {
-        object_identifier: computer.sid.clone()
+        object_identifier: computer
+            .sid
+            .clone()
             .unwrap_or_else(|| format!("S-1-5-21-UNKNOWN-{}", computer.name)),
         object_type: "Computer".to_string(),
         Properties: BhComputerProps {
@@ -353,7 +361,10 @@ mod tests {
     #[test]
     fn test_extract_cn() {
         assert_eq!(extract_cn("CN=Admin,CN=Users,DC=corp,DC=local"), "Admin");
-        assert_eq!(extract_cn("CN=Domain Admins,CN=Users,DC=corp"), "Domain Admins");
+        assert_eq!(
+            extract_cn("CN=Domain Admins,CN=Users,DC=corp"),
+            "Domain Admins"
+        );
     }
 
     #[test]

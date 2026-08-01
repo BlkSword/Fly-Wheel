@@ -76,7 +76,18 @@ fn run_cmd_str(cmd: &str, args: &[&str]) -> String {
 fn check_suid_binaries() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
 
-    let output = run_cmd_str("find", &["/", "-perm", "-4000", "-type", "f", "-executable", "2>/dev/null"]);
+    let output = run_cmd_str(
+        "find",
+        &[
+            "/",
+            "-perm",
+            "-4000",
+            "-type",
+            "f",
+            "-executable",
+            "2>/dev/null",
+        ],
+    );
     if output.is_empty() {
         return findings;
     }
@@ -125,7 +136,10 @@ fn check_suid_binaries() -> Vec<PrivescFinding> {
             category: "SUID".to_string(),
             severity: PrivescSeverity::High,
             title: "可利用的 SUID 二进制".to_string(),
-            description: format!("发现 {} 个已知可利用的 SUID 二进制文件", found_exploitable.len()),
+            description: format!(
+                "发现 {} 个已知可利用的 SUID 二进制文件",
+                found_exploitable.len()
+            ),
             detail: found_exploitable.join("\n"),
             remediation: "移除不必要的 SUID 权限: chmod u-s <path>".to_string(),
         });
@@ -133,13 +147,20 @@ fn check_suid_binaries() -> Vec<PrivescFinding> {
 
     // 报告非标准 SUID
     let standard_suids = [
-        "/usr/bin/passwd", "/usr/bin/sudo", "/usr/bin/su",
-        "/usr/bin/chsh", "/usr/bin/chfn", "/usr/bin/newgrp",
-        "/usr/bin/gpasswd", "/usr/bin/mount", "/usr/bin/umount",
+        "/usr/bin/passwd",
+        "/usr/bin/sudo",
+        "/usr/bin/su",
+        "/usr/bin/chsh",
+        "/usr/bin/chfn",
+        "/usr/bin/newgrp",
+        "/usr/bin/gpasswd",
+        "/usr/bin/mount",
+        "/usr/bin/umount",
         "/usr/bin/pkexec",
     ];
 
-    let non_standard: Vec<&str> = output.lines()
+    let non_standard: Vec<&str> = output
+        .lines()
         .map(|l| l.trim())
         .filter(|p| !exploitable.iter().any(|(ep, _)| *ep == *p))
         .filter(|p| !standard_suids.contains(&(*p).to_string().as_str()))
@@ -152,7 +173,11 @@ fn check_suid_binaries() -> Vec<PrivescFinding> {
             severity: PrivescSeverity::Medium,
             title: "非标准 SUID 二进制".to_string(),
             description: format!("发现 {} 个非标准 SUID 文件", non_standard.len()),
-            detail: non_standard.iter().map(|s| s.to_string()).collect::<Vec<_>>().join("\n"),
+            detail: non_standard
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join("\n"),
             remediation: "审查这些文件的来源和必要性".to_string(),
         });
     }
@@ -197,7 +222,10 @@ fn check_capabilities() -> Vec<PrivescFinding> {
             category: "Capabilities".to_string(),
             severity: PrivescSeverity::High,
             title: "危险的文件 Capabilities".to_string(),
-            description: format!("发现 {} 个具有危险 capabilities 的文件", found_dangerous.len()),
+            description: format!(
+                "发现 {} 个具有危险 capabilities 的文件",
+                found_dangerous.len()
+            ),
             detail: found_dangerous.join("\n"),
             remediation: "使用 setcap -r <path> 移除不必要的 capabilities".to_string(),
         });
@@ -213,11 +241,7 @@ fn check_capabilities() -> Vec<PrivescFinding> {
 fn check_cron_jobs() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
 
-    let cron_paths = [
-        "/etc/crontab",
-        "/etc/cron.d/",
-        "/var/spool/cron/",
-    ];
+    let cron_paths = ["/etc/crontab", "/etc/cron.d/", "/var/spool/cron/"];
 
     for path in &cron_paths {
         let meta = if path.ends_with('/') {
@@ -230,7 +254,6 @@ fn check_cron_jobs() -> Vec<PrivescFinding> {
             // 检查是否可写 — 尝试以追加方式打开
             let test_path = format!("{}.intrasweep_test", path);
             let writable = std::fs::OpenOptions::new()
-                
                 .append(true)
                 .open(&test_path)
                 .is_ok();
@@ -284,7 +307,6 @@ fn check_writable_etc() -> Vec<PrivescFinding> {
             // 尝试写入检测
             let test_path = format!("{}.intrasweep_test", path);
             let writable = std::fs::OpenOptions::new()
-                
                 .append(true)
                 .open(&test_path)
                 .is_ok();
@@ -342,18 +364,66 @@ fn check_sudo_rules() -> Vec<PrivescFinding> {
 
     // 检查危险 sudo 规则
     let dangerous_commands = [
-        ("(ALL) NOPASSWD: ALL", "无密码全权限 sudo", PrivescSeverity::Critical),
-        ("NOPASSWD: /bin/bash", "无密码 root shell", PrivescSeverity::Critical),
-        ("NOPASSWD: /bin/sh", "无密码 root shell", PrivescSeverity::Critical),
-        ("NOPASSWD: /usr/bin/find", "可通过 find 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/vim", "可通过 vim 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/python", "可通过 python 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/perl", "可通过 perl 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/less", "可通过 less 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/tar", "可通过 tar 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/apt", "可通过 apt 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/yum", "可通过 yum 提权", PrivescSeverity::High),
-        ("NOPASSWD: /usr/bin/systemctl", "可通过 systemctl 提权", PrivescSeverity::High),
+        (
+            "(ALL) NOPASSWD: ALL",
+            "无密码全权限 sudo",
+            PrivescSeverity::Critical,
+        ),
+        (
+            "NOPASSWD: /bin/bash",
+            "无密码 root shell",
+            PrivescSeverity::Critical,
+        ),
+        (
+            "NOPASSWD: /bin/sh",
+            "无密码 root shell",
+            PrivescSeverity::Critical,
+        ),
+        (
+            "NOPASSWD: /usr/bin/find",
+            "可通过 find 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/vim",
+            "可通过 vim 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/python",
+            "可通过 python 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/perl",
+            "可通过 perl 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/less",
+            "可通过 less 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/tar",
+            "可通过 tar 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/apt",
+            "可通过 apt 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/yum",
+            "可通过 yum 提权",
+            PrivescSeverity::High,
+        ),
+        (
+            "NOPASSWD: /usr/bin/systemctl",
+            "可通过 systemctl 提权",
+            PrivescSeverity::High,
+        ),
     ];
 
     for (pattern, desc, severity) in &dangerous_commands {
@@ -407,7 +477,10 @@ fn check_ssh_keys() -> Vec<PrivescFinding> {
     let auth_keys = format!("{}/authorized_keys", ssh_dir);
     if std::fs::metadata(&auth_keys).is_ok() {
         if let Ok(content) = std::fs::read_to_string(&auth_keys) {
-            let key_count = content.lines().filter(|l| !l.is_empty() && !l.starts_with('#')).count();
+            let key_count = content
+                .lines()
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+                .count();
             if key_count > 0 {
                 findings.push(PrivescFinding {
                     category: "SSH".to_string(),
@@ -457,11 +530,36 @@ fn check_kernel_exploits() -> Vec<PrivescFinding> {
 
     // 已知内核漏洞
     let kernel_exploits = [
-        ("3.10.0", "3.10.999", "CVE-2021-4034 (PwnKit)", PrivescSeverity::Critical),
-        ("4.4.0", "4.4.999", "CVE-2022-0847 (Dirty Pipe)", PrivescSeverity::Critical),
-        ("4.1.0", "5.8.13", "CVE-2021-3156 (Baron Samedit)", PrivescSeverity::Critical),
-        ("2.6.22", "4.8.2", "CVE-2016-5195 (Dirty Cow)", PrivescSeverity::Critical),
-        ("4.10.0", "5.1.16", "CVE-2019-18634 (sudo pwfeedback)", PrivescSeverity::High),
+        (
+            "3.10.0",
+            "3.10.999",
+            "CVE-2021-4034 (PwnKit)",
+            PrivescSeverity::Critical,
+        ),
+        (
+            "4.4.0",
+            "4.4.999",
+            "CVE-2022-0847 (Dirty Pipe)",
+            PrivescSeverity::Critical,
+        ),
+        (
+            "4.1.0",
+            "5.8.13",
+            "CVE-2021-3156 (Baron Samedit)",
+            PrivescSeverity::Critical,
+        ),
+        (
+            "2.6.22",
+            "4.8.2",
+            "CVE-2016-5195 (Dirty Cow)",
+            PrivescSeverity::Critical,
+        ),
+        (
+            "4.10.0",
+            "5.1.16",
+            "CVE-2019-18634 (sudo pwfeedback)",
+            PrivescSeverity::High,
+        ),
     ];
 
     for (min_ver, max_ver, cve, severity) in &kernel_exploits {
@@ -502,10 +600,25 @@ fn parse_kernel_version(version: &str) -> Vec<u32> {
 fn compute_stats(findings: &[PrivescFinding]) -> PrivescStats {
     PrivescStats {
         total_checks: findings.len(),
-        critical_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Critical).count(),
-        high_count: findings.iter().filter(|f| f.severity == PrivescSeverity::High).count(),
-        medium_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Medium).count(),
-        low_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Low).count(),
-        info_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Info).count(),
+        critical_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Critical)
+            .count(),
+        high_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::High)
+            .count(),
+        medium_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Medium)
+            .count(),
+        low_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Low)
+            .count(),
+        info_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Info)
+            .count(),
     }
 }

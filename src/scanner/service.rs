@@ -80,16 +80,24 @@ impl ServiceIdentifier {
         // 根据端口发送探测数据
         let probe_data = Self::get_probe_data(port);
         if !probe_data.is_empty()
-            && timeout(self.banner_timeout, tokio::io::AsyncWriteExt::write_all(&mut stream, probe_data.as_bytes()))
-                .await
-                .is_err()
-            {
-                // 写入失败，继续尝试读取
-            }
+            && timeout(
+                self.banner_timeout,
+                tokio::io::AsyncWriteExt::write_all(&mut stream, probe_data.as_bytes()),
+            )
+            .await
+            .is_err()
+        {
+            // 写入失败，继续尝试读取
+        }
 
         // 读取响应
         let mut buffer = vec![0u8; 4096];
-        let n = match timeout(self.banner_timeout, tokio::io::AsyncReadExt::read(&mut stream, &mut buffer)).await {
+        let n = match timeout(
+            self.banner_timeout,
+            tokio::io::AsyncReadExt::read(&mut stream, &mut buffer),
+        )
+        .await
+        {
             Ok(Ok(n)) => n,
             _ => 0,
         };
@@ -195,7 +203,8 @@ impl ServiceIdentifier {
             (27017, "mongodb"),
         ];
 
-        services.iter()
+        services
+            .iter()
             .find(|(p, _)| *p == port)
             .map(|(_, name)| name.to_string())
     }
@@ -226,35 +235,37 @@ impl ServiceIdentifier {
         }
 
         // POP3
-        if port == 110
-            && (banner_lower.contains("pop3") || banner.starts_with('+')) {
-                info.product = "POP3".to_string();
-                if banner_lower.contains("dovecot") {
-                    info.product = "Dovecot POP3".to_string();
-                } else if banner_lower.contains("courier") {
-                    info.product = "Courier POP3".to_string();
-                } else if banner_lower.contains("exchange") {
-                    info.product = "Microsoft Exchange POP3".to_string();
-                }
+        if port == 110 && (banner_lower.contains("pop3") || banner.starts_with('+')) {
+            info.product = "POP3".to_string();
+            if banner_lower.contains("dovecot") {
+                info.product = "Dovecot POP3".to_string();
+            } else if banner_lower.contains("courier") {
+                info.product = "Courier POP3".to_string();
+            } else if banner_lower.contains("exchange") {
+                info.product = "Microsoft Exchange POP3".to_string();
             }
+        }
 
         // IMAP
-        if port == 143
-            && (banner_lower.contains("imap") || banner.starts_with('*')) {
-                info.product = "IMAP".to_string();
-                if banner_lower.contains("dovecot") {
-                    info.product = "Dovecot IMAP".to_string();
-                } else if banner_lower.contains("courier") {
-                    info.product = "Courier IMAP".to_string();
-                } else if banner_lower.contains("exchange") {
-                    info.product = "Microsoft Exchange IMAP".to_string();
-                }
-                // 提取版本号
-                if let Some(pos) = banner.find("IMAP4rev1 ") {
-                    let remaining = &banner[pos + 10..];
-                    info.version = remaining.split_whitespace().next().unwrap_or("").to_string();
-                }
+        if port == 143 && (banner_lower.contains("imap") || banner.starts_with('*')) {
+            info.product = "IMAP".to_string();
+            if banner_lower.contains("dovecot") {
+                info.product = "Dovecot IMAP".to_string();
+            } else if banner_lower.contains("courier") {
+                info.product = "Courier IMAP".to_string();
+            } else if banner_lower.contains("exchange") {
+                info.product = "Microsoft Exchange IMAP".to_string();
             }
+            // 提取版本号
+            if let Some(pos) = banner.find("IMAP4rev1 ") {
+                let remaining = &banner[pos + 10..];
+                info.version = remaining
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+            }
+        }
 
         // 数据库服务
         if port == 3306 {
@@ -299,15 +310,18 @@ impl ServiceIdentifier {
         }
 
         // VNC
-        if port == 5900
-            && banner_lower.contains("rfb") {
-                info.product = "VNC".to_string();
-                // RFB 协议版本: RFB 003.008
-                if let Some(pos) = banner.find("RFB ") {
-                    let remaining = &banner[pos + 4..];
-                    info.version = remaining.split_whitespace().next().unwrap_or("").to_string();
-                }
+        if port == 5900 && banner_lower.contains("rfb") {
+            info.product = "VNC".to_string();
+            // RFB 协议版本: RFB 003.008
+            if let Some(pos) = banner.find("RFB ") {
+                let remaining = &banner[pos + 4..];
+                info.version = remaining
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
             }
+        }
 
         // RDP
         if port == 3389 {
@@ -339,7 +353,11 @@ impl ServiceIdentifier {
                 info.product = "Samba".to_string();
                 if let Some(pos) = banner_lower.find("samba ") {
                     let remaining = &banner[pos + 6..];
-                    info.version = remaining.split_whitespace().next().unwrap_or("").to_string();
+                    info.version = remaining
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or("")
+                        .to_string();
                 }
             }
         }
@@ -372,10 +390,9 @@ impl ServiceIdentifier {
         }
 
         // 通用 Telnet 检测
-        if port == 23
-            && banner_lower.contains("login:") {
-                info.product = "Telnet".to_string();
-            }
+        if port == 23 && banner_lower.contains("login:") {
+            info.product = "Telnet".to_string();
+        }
     }
 
     /// 解析 HTTP Banner
@@ -423,7 +440,9 @@ impl ServiceIdentifier {
     fn extract_version_after(info: &mut ServiceInfo, text: &str, prefix: &str) {
         if let Some(pos) = text.find(prefix) {
             let remaining = &text[pos + prefix.len()..];
-            let end = remaining.find(|c: char| !c.is_numeric() && c != '.').unwrap_or(remaining.len());
+            let end = remaining
+                .find(|c: char| !c.is_numeric() && c != '.')
+                .unwrap_or(remaining.len());
             if end > 0 {
                 info.version = remaining[..end].to_string();
             }
@@ -445,7 +464,8 @@ impl ServiceIdentifier {
                     if server_name.to_lowercase().starts_with("openssh") {
                         info.product = "OpenSSH".to_string();
                         if let Some(vpos) = server_name.find('_') {
-                            info.version = format!("SSH-{} {}", info.version, &server_name[vpos + 1..]);
+                            info.version =
+                                format!("SSH-{} {}", info.version, &server_name[vpos + 1..]);
                         }
                     } else if server_name.to_lowercase().starts_with("dropbear") {
                         info.product = "Dropbear SSH".to_string();
@@ -508,7 +528,9 @@ impl ServiceIdentifier {
     fn parse_mysql_banner(info: &mut ServiceInfo, _banner: &str, banner_lower: &str) {
         info.product = "MySQL".to_string();
         // MySQL 服务器握手包是二进制的，但有些版本信息可能在文本中
-        for ver_prefix in &["5.0", "5.1", "5.5", "5.6", "5.7", "8.0", "8.1", "8.2", "8.3", "8.4"] {
+        for ver_prefix in &[
+            "5.0", "5.1", "5.5", "5.6", "5.7", "8.0", "8.1", "8.2", "8.3", "8.4",
+        ] {
             if let Some(pos) = banner_lower.find(*ver_prefix) {
                 let remaining = &banner_lower[pos..];
                 if let Some(end) = remaining.find(['\n', '\r', '\0']) {
@@ -528,7 +550,11 @@ impl ServiceIdentifier {
     }
 
     /// 批量识别多个端口的服务（并行探测）
-    pub async fn identify_batch(&self, ip: IpAddr, ports: Vec<u16>) -> Vec<(u16, Option<ServiceInfo>)> {
+    pub async fn identify_batch(
+        &self,
+        ip: IpAddr,
+        ports: Vec<u16>,
+    ) -> Vec<(u16, Option<ServiceInfo>)> {
         let probes: Vec<_> = ports
             .into_iter()
             .map(|port| async move {
@@ -559,24 +585,38 @@ mod tests {
 
     #[test]
     fn test_with_timeout() {
-        let identifier = ServiceIdentifier::new()
-            .with_timeout(500, 2000);
+        let identifier = ServiceIdentifier::new().with_timeout(500, 2000);
         assert_eq!(identifier.connect_timeout.as_millis(), 500);
         assert_eq!(identifier.banner_timeout.as_millis(), 2000);
     }
 
     #[test]
     fn test_guess_service_by_port() {
-        assert_eq!(ServiceIdentifier::guess_service_by_port(80), Some("http".to_string()));
-        assert_eq!(ServiceIdentifier::guess_service_by_port(443), Some("https".to_string()));
-        assert_eq!(ServiceIdentifier::guess_service_by_port(22), Some("ssh".to_string()));
+        assert_eq!(
+            ServiceIdentifier::guess_service_by_port(80),
+            Some("http".to_string())
+        );
+        assert_eq!(
+            ServiceIdentifier::guess_service_by_port(443),
+            Some("https".to_string())
+        );
+        assert_eq!(
+            ServiceIdentifier::guess_service_by_port(22),
+            Some("ssh".to_string())
+        );
         assert_eq!(ServiceIdentifier::guess_service_by_port(0), None);
     }
 
     #[test]
     fn test_get_probe_data() {
-        assert_eq!(ServiceIdentifier::get_probe_data(80), "GET / HTTP/1.0\r\nHost: \r\n\r\n");
+        assert_eq!(
+            ServiceIdentifier::get_probe_data(80),
+            "GET / HTTP/1.0\r\nHost: \r\n\r\n"
+        );
         assert_eq!(ServiceIdentifier::get_probe_data(22), "");
-        assert_eq!(ServiceIdentifier::get_probe_data(6379), "*1\r\n$4\r\nPING\r\n");
+        assert_eq!(
+            ServiceIdentifier::get_probe_data(6379),
+            "*1\r\n$4\r\nPING\r\n"
+        );
     }
 }

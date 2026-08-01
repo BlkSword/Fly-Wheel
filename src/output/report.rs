@@ -161,7 +161,9 @@ impl ReportGenerator {
         ));
 
         summary.push_str("## 关键发现\n\n");
-        let critical_findings: Vec<_> = report.findings.iter()
+        let critical_findings: Vec<_> = report
+            .findings
+            .iter()
             .filter(|f| f.severity >= FindingSeverity::High)
             .collect();
 
@@ -197,7 +199,10 @@ impl ReportGenerator {
         let mut md = String::new();
 
         // 标题页
-        md.push_str(&format!("# {} 渗透测试报告\n\n", report.target_organization));
+        md.push_str(&format!(
+            "# {} 渗透测试报告\n\n",
+            report.target_organization
+        ));
         md.push_str(&format!("**报告日期**: {}\n\n", report.report_date));
         md.push_str("---\n\n");
 
@@ -223,7 +228,10 @@ impl ReportGenerator {
 
         md.push_str("## 攻击步骤\n\n");
         for step in &report.steps {
-            md.push_str(&format!("### 步骤 {}: {} ({})\n\n", step.step_number, step.title, step.phase));
+            md.push_str(&format!(
+                "### 步骤 {}: {} ({})\n\n",
+                step.step_number, step.title, step.phase
+            ));
             md.push_str(&format!("**描述**: {}\n\n", step.description));
             md.push_str(&format!("**来源主机**: {}\n", step.source_host));
             if let Some(ref target) = step.target_host {
@@ -268,7 +276,10 @@ impl ReportGenerator {
                 emoji, finding.id, finding.title, finding.severity
             ));
             md.push_str(&format!("**描述**: {}\n\n", finding.description));
-            md.push_str(&format!("**影响主机**: {}\n\n", finding.affected_hosts.join(", ")));
+            md.push_str(&format!(
+                "**影响主机**: {}\n\n",
+                finding.affected_hosts.join(", ")
+            ));
             if let Some(cvss) = finding.cvss_score {
                 md.push_str(&format!("**CVSS评分**: {}\n\n", cvss));
             }
@@ -287,19 +298,31 @@ impl ReportGenerator {
                 host.os,
                 host.compromise_method,
                 host.level,
-                if host.credentials_extracted { "是" } else { "否" },
+                if host.credentials_extracted {
+                    "是"
+                } else {
+                    "否"
+                },
             ));
         }
 
         // 修复建议
         md.push_str("\n# 修复建议\n\n");
         md.push_str("## 即时修复（0-7天）\n\n");
-        for finding in report.findings.iter().filter(|f| f.severity >= FindingSeverity::High) {
+        for finding in report
+            .findings
+            .iter()
+            .filter(|f| f.severity >= FindingSeverity::High)
+        {
             md.push_str(&format!("- {}\n", finding.recommendation));
         }
 
         md.push_str("\n## 短期修复（7-30天）\n\n");
-        for finding in report.findings.iter().filter(|f| f.severity == FindingSeverity::Medium) {
+        for finding in report
+            .findings
+            .iter()
+            .filter(|f| f.severity == FindingSeverity::Medium)
+        {
             md.push_str(&format!("- {}\n", finding.recommendation));
         }
 
@@ -312,7 +335,9 @@ impl ReportGenerator {
 
         // MITRE ATT&CK映射
         md.push_str("\n# 附录: MITRE ATT&CK映射\n\n");
-        let unique_mitre: std::collections::BTreeSet<_> = report.steps.iter()
+        let unique_mitre: std::collections::BTreeSet<_> = report
+            .steps
+            .iter()
             .filter_map(|s| s.mitre_id.as_ref())
             .collect();
 
@@ -364,8 +389,7 @@ pre {{ background-color: #1a1a2e; color: #0f0; padding: 15px; border-radius: 5px
 </footer>
 </body>
 </html>"#,
-            report.target_organization,
-            md_content,
+            report.target_organization, md_content,
         )
     }
 
@@ -422,29 +446,34 @@ mod tests {
             final_objective: "域控制器 (DC01)".to_string(),
             steps: vec![
                 ReportStep {
-                    step_number: 1, phase: "初始访问".to_string(),
+                    step_number: 1,
+                    phase: "初始访问".to_string(),
                     title: "Web漏洞利用".to_string(),
                     description: "利用CMS文件上传漏洞获取WebShell".to_string(),
                     source_host: "攻击者 (138.68.164.54)".to_string(),
                     target_host: Some("WEB01 (10.10.10.10)".to_string()),
                     technique: "Metasploit exploit".to_string(),
                     mitre_id: Some("T1190".to_string()),
-                    success: true, evidence: Some("Meterpreter session opened".to_string()),
+                    success: true,
+                    evidence: Some("Meterpreter session opened".to_string()),
                 },
                 ReportStep {
-                    step_number: 2, phase: "横向移动".to_string(),
+                    step_number: 2,
+                    phase: "横向移动".to_string(),
                     title: "PsExec横向移动".to_string(),
                     description: "使用获取的Administrator哈希横向到DC01".to_string(),
                     source_host: "WEB01 (10.10.10.10)".to_string(),
                     target_host: Some("DC01 (10.10.10.2)".to_string()),
                     technique: "Pass-the-Hash + PsExec".to_string(),
                     mitre_id: Some("T1550.002".to_string()),
-                    success: true, evidence: Some("SYSTEM beacon on DC01".to_string()),
+                    success: true,
+                    evidence: Some("SYSTEM beacon on DC01".to_string()),
                 },
             ],
             findings: vec![
                 ReportFinding {
-                    id: "F-001".to_string(), title: "文件上传漏洞".to_string(),
+                    id: "F-001".to_string(),
+                    title: "文件上传漏洞".to_string(),
                     description: "CMS允许未限制的文件上传".to_string(),
                     severity: FindingSeverity::Critical,
                     affected_hosts: vec!["WEB01".to_string()],
@@ -452,7 +481,8 @@ mod tests {
                     cvss_score: Some(9.8),
                 },
                 ReportFinding {
-                    id: "F-002".to_string(), title: "密码复用".to_string(),
+                    id: "F-002".to_string(),
+                    title: "密码复用".to_string(),
                     description: "多台服务器使用相同的本地管理员密码".to_string(),
                     severity: FindingSeverity::High,
                     affected_hosts: vec!["WEB01".to_string(), "DC01".to_string()],
@@ -462,36 +492,48 @@ mod tests {
             ],
             timeline: vec![
                 TimelineEntry {
-                    timestamp: "09:00".to_string(), event: "发现Web漏洞".to_string(),
-                    phase: "侦察".to_string(), host: Some("WEB01".to_string()),
+                    timestamp: "09:00".to_string(),
+                    event: "发现Web漏洞".to_string(),
+                    phase: "侦察".to_string(),
+                    host: Some("WEB01".to_string()),
                 },
                 TimelineEntry {
-                    timestamp: "09:15".to_string(), event: "获取WebShell".to_string(),
-                    phase: "初始访问".to_string(), host: Some("WEB01".to_string()),
+                    timestamp: "09:15".to_string(),
+                    event: "获取WebShell".to_string(),
+                    phase: "初始访问".to_string(),
+                    host: Some("WEB01".to_string()),
                 },
                 TimelineEntry {
-                    timestamp: "09:45".to_string(), event: "提取凭据".to_string(),
-                    phase: "凭据收集".to_string(), host: Some("WEB01".to_string()),
+                    timestamp: "09:45".to_string(),
+                    event: "提取凭据".to_string(),
+                    phase: "凭据收集".to_string(),
+                    host: Some("WEB01".to_string()),
                 },
                 TimelineEntry {
-                    timestamp: "10:10".to_string(), event: "横向移动到DC01".to_string(),
-                    phase: "横向移动".to_string(), host: Some("DC01".to_string()),
+                    timestamp: "10:10".to_string(),
+                    event: "横向移动到DC01".to_string(),
+                    phase: "横向移动".to_string(),
+                    host: Some("DC01".to_string()),
                 },
                 TimelineEntry {
-                    timestamp: "10:15".to_string(), event: "完全控制域控制器".to_string(),
-                    phase: "达成目标".to_string(), host: Some("DC01".to_string()),
+                    timestamp: "10:15".to_string(),
+                    event: "完全控制域控制器".to_string(),
+                    phase: "达成目标".to_string(),
+                    host: Some("DC01".to_string()),
                 },
             ],
             compromised_hosts: vec![
                 CompromisedHost {
-                    hostname: "WEB01".to_string(), ip_address: Some("10.10.10.10".to_string()),
+                    hostname: "WEB01".to_string(),
+                    ip_address: Some("10.10.10.10".to_string()),
                     os: "Windows Server 2016".to_string(),
                     compromise_method: "文件上传漏洞".to_string(),
                     level: AccessLevel::System,
                     credentials_extracted: true,
                 },
                 CompromisedHost {
-                    hostname: "DC01".to_string(), ip_address: Some("10.10.10.2".to_string()),
+                    hostname: "DC01".to_string(),
+                    ip_address: Some("10.10.10.2".to_string()),
                     os: "Windows Server 2019".to_string(),
                     compromise_method: "Pass-the-Hash + PsExec".to_string(),
                     level: AccessLevel::DomainAdmin,
@@ -542,7 +584,10 @@ mod tests {
 
     #[test]
     fn test_mitre_names() {
-        assert_eq!(mitre_technique_name("T1550.002"), "哈希传递 (Pass-the-Hash)");
+        assert_eq!(
+            mitre_technique_name("T1550.002"),
+            "哈希传递 (Pass-the-Hash)"
+        );
         assert_eq!(mitre_technique_name("T1208"), "Kerberoasting");
         assert_eq!(mitre_technique_name("T1558.001"), "Golden Ticket");
     }

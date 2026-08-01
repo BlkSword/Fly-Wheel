@@ -48,7 +48,8 @@ impl ConnectionInfo {
         self.bytes_sent += sent;
         self.bytes_received += received;
         if self.is_active {
-            self.duration = chrono::Utc::now().signed_duration_since(self.connected_at)
+            self.duration = chrono::Utc::now()
+                .signed_duration_since(self.connected_at)
                 .to_std()
                 .unwrap_or_default();
         }
@@ -57,7 +58,8 @@ impl ConnectionInfo {
     /// 关闭连接
     pub fn close(&mut self) {
         self.is_active = false;
-        self.duration = chrono::Utc::now().signed_duration_since(self.connected_at)
+        self.duration = chrono::Utc::now()
+            .signed_duration_since(self.connected_at)
             .to_std()
             .unwrap_or_default();
     }
@@ -162,10 +164,12 @@ impl TunnelStatus {
     /// 获取运行时间
     #[allow(dead_code)]
     pub fn uptime(&self) -> Option<Duration> {
-        self.started_at.map(|started| chrono::Utc::now()
-                    .signed_duration_since(started)
-                    .to_std()
-                    .unwrap_or_default())
+        self.started_at.map(|started| {
+            chrono::Utc::now()
+                .signed_duration_since(started)
+                .to_std()
+                .unwrap_or_default()
+        })
     }
 
     /// 格式化运行时间
@@ -282,6 +286,8 @@ impl TunnelEventHandler for LogEventHandler {
 
 #[cfg(test)]
 mod tests {
+    // 测试构造数据多为字段赋值模式，与进度条/默认值构建风格一致
+    #![allow(clippy::field_reassign_with_default)]
     use super::*;
 
     #[test]
@@ -290,7 +296,7 @@ mod tests {
         let remote: SocketAddr = "192.168.1.100:80".parse().unwrap();
 
         let mut conn = ConnectionInfo::new("test-id".to_string(), local, remote);
-        assert_eq!(conn.is_active, true);
+        assert!(conn.is_active);
         assert_eq!(conn.bytes_sent, 0);
         assert_eq!(conn.bytes_received, 0);
 
@@ -299,17 +305,17 @@ mod tests {
         assert_eq!(conn.bytes_received, 2048);
 
         conn.close();
-        assert_eq!(conn.is_active, false);
+        assert!(!conn.is_active);
     }
 
     #[test]
     fn test_tunnel_status() {
         let mut status = TunnelStatus::new();
-        assert_eq!(status.is_running, false);
+        assert!(!status.is_running);
         assert_eq!(status.active_connections, 0);
 
         status.start();
-        assert_eq!(status.is_running, true);
+        assert!(status.is_running);
         assert!(status.started_at.is_some());
 
         let local: SocketAddr = "127.0.0.1:8080".parse().unwrap();

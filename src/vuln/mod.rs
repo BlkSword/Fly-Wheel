@@ -155,11 +155,26 @@ impl VulnScanner {
             total_pocs: self.config.pocs.len(),
             total_requests,
             vulnerabilities_found: findings.len(),
-            critical_count: findings.iter().filter(|f| f.severity == Severity::Critical).count(),
-            high_count: findings.iter().filter(|f| f.severity == Severity::High).count(),
-            medium_count: findings.iter().filter(|f| f.severity == Severity::Medium).count(),
-            low_count: findings.iter().filter(|f| f.severity == Severity::Low).count(),
-            info_count: findings.iter().filter(|f| f.severity == Severity::Info).count(),
+            critical_count: findings
+                .iter()
+                .filter(|f| f.severity == Severity::Critical)
+                .count(),
+            high_count: findings
+                .iter()
+                .filter(|f| f.severity == Severity::High)
+                .count(),
+            medium_count: findings
+                .iter()
+                .filter(|f| f.severity == Severity::Medium)
+                .count(),
+            low_count: findings
+                .iter()
+                .filter(|f| f.severity == Severity::Low)
+                .count(),
+            info_count: findings
+                .iter()
+                .filter(|f| f.severity == Severity::Info)
+                .count(),
         };
 
         VulnScanResult {
@@ -215,11 +230,17 @@ async fn execute_poc(
     vars.insert("port".to_string(), port.to_string());
 
     for request in &poc.rules {
-        let actual_port = if port > 0 { port } else { poc.default_port.unwrap_or(80) };
+        let actual_port = if port > 0 {
+            port
+        } else {
+            poc.default_port.unwrap_or(80)
+        };
 
         let matched = match poc.transport {
             Transport::Http => {
-                match engine::execute_http_request(target, actual_port, request, timeout, &vars).await {
+                match engine::execute_http_request(target, actual_port, request, timeout, &vars)
+                    .await
+                {
                     Ok(ctx) => {
                         // 先提取变量 (无论是否匹配都提取，供后续步骤使用)
                         let extracted = engine::extract_http_vars(&ctx, &request.extractors);
@@ -250,7 +271,9 @@ async fn execute_poc(
                 }
             }
             Transport::Tcp => {
-                match engine::execute_tcp_request(target, actual_port, request, timeout, &vars).await {
+                match engine::execute_tcp_request(target, actual_port, request, timeout, &vars)
+                    .await
+                {
                     Ok(ctx) => {
                         let extracted = engine::extract_tcp_vars(&ctx.data, &request.extractors);
                         vars.extend(extracted);
@@ -261,8 +284,10 @@ async fn execute_poc(
                             &ctx.data,
                         );
                         if matched && poc.rules.last() == Some(request) {
-                            let evidence: String =
-                                String::from_utf8_lossy(&ctx.data).chars().take(200).collect();
+                            let evidence: String = String::from_utf8_lossy(&ctx.data)
+                                .chars()
+                                .take(200)
+                                .collect();
                             return Some(VulnResult {
                                 target: target.to_string(),
                                 port: actual_port,
@@ -342,9 +367,7 @@ pub fn expand_targets(targets: &[String]) -> Vec<String> {
                 ) {
                     let start_octets = start_ip.octets();
                     let end_octets = end_ip.octets();
-                    if start_octets[0..3] == end_octets[0..3]
-                        && start_octets[3] <= end_octets[3]
-                    {
+                    if start_octets[0..3] == end_octets[0..3] && start_octets[3] <= end_octets[3] {
                         for last in start_octets[3]..=end_octets[3] {
                             let mut octets = start_octets;
                             octets[3] = last;

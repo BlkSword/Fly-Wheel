@@ -157,7 +157,12 @@ fn get_disk_info() -> Vec<DiskInfo> {
 
     if cfg!(windows) {
         if let Ok(output) = std::process::Command::new("wmic")
-            .args(["logicaldisk", "get", "DeviceID,Size,FreeSpace,FileSystem", "/format:csv"])
+            .args([
+                "logicaldisk",
+                "get",
+                "DeviceID,Size,FreeSpace,FileSystem",
+                "/format:csv",
+            ])
             .output()
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -168,8 +173,10 @@ fn get_disk_info() -> Vec<DiskInfo> {
                 if parts.len() >= 5 {
                     let drive = parts[1].trim().to_string();
                     let fs = parts[2].trim().to_string();
-                    let free: f64 = parts[3].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
-                    let total: f64 = parts[4].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
+                    let free: f64 =
+                        parts[3].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
+                    let total: f64 =
+                        parts[4].trim().parse().unwrap_or(0) as f64 / 1024.0 / 1024.0 / 1024.0;
 
                     if total > 0.0 {
                         disks.push(DiskInfo {
@@ -224,7 +231,12 @@ fn get_key_software() -> Vec<KeySoftware> {
 
     if cfg!(windows) {
         if let Ok(output) = std::process::Command::new("wmic")
-            .args(["product", "get", "Name,Version,Vendor,InstallDate", "/format:csv"])
+            .args([
+                "product",
+                "get",
+                "Name,Version,Vendor,InstallDate",
+                "/format:csv",
+            ])
             .output()
         {
             let stdout = String::from_utf8_lossy(&output.stdout);
@@ -414,9 +426,7 @@ fn get_local_groups() -> Vec<LocalGroup> {
 
 fn get_uptime() -> Option<String> {
     if cfg!(windows) {
-        let output = std::process::Command::new("systeminfo")
-            .output()
-            .ok()?;
+        let output = std::process::Command::new("systeminfo").output().ok()?;
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines() {
             if line.contains("启动时间") || line.contains("Boot Time") {

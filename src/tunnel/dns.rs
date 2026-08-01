@@ -39,10 +39,7 @@ impl DnsEncoder {
             let chunk_str = String::from_utf8_lossy(chunk);
             let query = format!(
                 "{:04x}.{:08x}.{}.{}",
-                seq,
-                self.session_id,
-                chunk_str,
-                self.domain
+                seq, self.session_id, chunk_str, self.domain
             );
             queries.push(query);
         }
@@ -200,7 +197,7 @@ mod tests {
         assert!(!queries.is_empty());
         for q in &queries {
             assert!(q.ends_with(".tunnel.example.com"));
-            assert!(q.contains("0001."));  // seq=1 → "0001"
+            assert!(q.contains("0001.")); // seq=1 → "0001"
             assert!(q.contains("12345678.")); // session
         }
     }

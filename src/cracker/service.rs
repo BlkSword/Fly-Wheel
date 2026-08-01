@@ -239,5 +239,6 @@ pub trait Cracker: Send + Sync {
     async fn crack(&self, config: &CrackConfig) -> CrackResult;
 
     /// 验证单个凭据
-    async fn verify(&self, target: &str, port: u16, username: Option<&str>, password: &str) -> bool;
+    async fn verify(&self, target: &str, port: u16, username: Option<&str>, password: &str)
+        -> bool;
 }

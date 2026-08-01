@@ -8,11 +8,11 @@ use crate::tunnel::models::{ConnectionInfo, TunnelEvent, TunnelEventHandler, Tun
 use crate::tunnel::relay;
 use crate::tunnel::shutdown::Shutdown;
 use std::sync::Arc;
-use tracing;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Semaphore;
 use tokio::time::{timeout, Duration};
+use tracing;
 
 /// 链式隧道
 pub struct ChainTunnel {
@@ -23,10 +23,7 @@ pub struct ChainTunnel {
 
 impl ChainTunnel {
     /// 创建新的链式隧道
-    pub fn new(
-        config: TunnelConfig,
-        event_handler: Arc<dyn TunnelEventHandler>,
-    ) -> Self {
+    pub fn new(config: TunnelConfig, event_handler: Arc<dyn TunnelEventHandler>) -> Self {
         Self {
             config,
             status: Arc::new(tokio::sync::RwLock::new(TunnelStatus::new())),
@@ -39,7 +36,10 @@ impl ChainTunnel {
         // 验证配置
         self.config.validate()?;
 
-        let target = self.config.remote_target.clone()
+        let target = self
+            .config
+            .remote_target
+            .clone()
             .ok_or_else(|| IntraSweepError::Config {
                 message: "链式隧道需要指定最终目标".to_string(),
             })?;
@@ -64,7 +64,8 @@ impl ChainTunnel {
         println!("按 Ctrl+C 停止隧道");
         println!();
 
-        let listener = TcpListener::bind(&self.config.local_addr).await
+        let listener = TcpListener::bind(&self.config.local_addr)
+            .await
             .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
@@ -199,10 +200,9 @@ impl ChainTunnel {
             }
 
             let host = addr_parts[0];
-            let port: u16 = addr_parts[1].parse()
-                .map_err(|_| IntraSweepError::Config {
-                    message: format!("无效的端口号: {}", addr_parts[1]),
-                })?;
+            let port: u16 = addr_parts[1].parse().map_err(|_| IntraSweepError::Config {
+                message: format!("无效的端口号: {}", addr_parts[1]),
+            })?;
 
             let mut packet = vec![0u8; 4 + host.len()];
             packet[0] = 0x10; // 连接下一跳指令
@@ -242,10 +242,9 @@ impl ChainTunnel {
         }
 
         let host = addr_parts[0];
-        let port: u16 = addr_parts[1].parse()
-            .map_err(|_| IntraSweepError::Config {
-                message: format!("无效的端口号: {}", addr_parts[1]),
-            })?;
+        let port: u16 = addr_parts[1].parse().map_err(|_| IntraSweepError::Config {
+            message: format!("无效的端口号: {}", addr_parts[1]),
+        })?;
 
         let mut packet = vec![0u8; 4 + host.len()];
         packet[0] = 0x11; // 连接目标指令
@@ -282,7 +281,10 @@ impl ChainTunnel {
     pub async fn start_with_shutdown(&self, shutdown: &Shutdown) -> Result<()> {
         self.config.validate()?;
 
-        let target = self.config.remote_target.clone()
+        let target = self
+            .config
+            .remote_target
+            .clone()
             .ok_or_else(|| IntraSweepError::Config {
                 message: "链式隧道需要指定最终目标".to_string(),
             })?;
@@ -307,7 +309,8 @@ impl ChainTunnel {
         println!("按 Ctrl+C 优雅关闭隧道");
         println!();
 
-        let listener = TcpListener::bind(&self.config.local_addr).await
+        let listener = TcpListener::bind(&self.config.local_addr)
+            .await
             .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
@@ -393,7 +396,6 @@ impl ChainTunnel {
         println!("链式隧道已关闭");
         Ok(())
     }
-
 }
 
 #[cfg(test)]
@@ -404,12 +406,9 @@ mod tests {
     #[tokio::test]
     async fn test_chain_tunnel_creation() {
         let local: std::net::SocketAddr = "127.0.0.1:0".parse().unwrap();
-        let config = TunnelConfig::new(
-            crate::tunnel::config::TunnelType::Chain,
-            local,
-        )
-        .with_hops(vec!["hop1:2222".to_string(), "hop2:3333".to_string()])
-        .with_remote_target("target:80".to_string());
+        let config = TunnelConfig::new(crate::tunnel::config::TunnelType::Chain, local)
+            .with_hops(vec!["hop1:2222".to_string(), "hop2:3333".to_string()])
+            .with_remote_target("target:80".to_string());
 
         let event_handler = Arc::new(LogEventHandler::new(true));
         let tunnel = ChainTunnel::new(config, event_handler);
@@ -421,10 +420,7 @@ mod tests {
     #[tokio::test]
     async fn test_chain_tunnel_validation() {
         let local: std::net::SocketAddr = "127.0.0.1:0".parse().unwrap();
-        let config = TunnelConfig::new(
-            crate::tunnel::config::TunnelType::Chain,
-            local,
-        );
+        let config = TunnelConfig::new(crate::tunnel::config::TunnelType::Chain, local);
 
         assert!(config.validate().is_err());
 

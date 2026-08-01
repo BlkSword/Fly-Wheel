@@ -84,7 +84,8 @@ fn shiro_550_detect() -> PoCRule {
             name: "Apache Shiro 反序列化检测".to_string(),
             severity: Severity::High,
             category: "反序列化".to_string(),
-            description: "通过rememberMe Cookie检测Shiro框架，可能存在默认密钥反序列化漏洞".to_string(),
+            description: "通过rememberMe Cookie检测Shiro框架，可能存在默认密钥反序列化漏洞"
+                .to_string(),
             tags: vec!["shiro".to_string(), "deserialization".to_string()],
             remediation: "升级Shiro至最新版本，更换默认密钥".to_string(),
         },
@@ -411,7 +412,8 @@ fn spring_boot_actuator() -> PoCRule {
             category: "信息泄露".to_string(),
             description: "Spring Boot Actuator敏感端点暴露".to_string(),
             tags: vec!["spring".to_string(), "actuator".to_string()],
-            remediation: "限制Actuator端点暴露，配置management.endpoints.web.exposure.exclude".to_string(),
+            remediation: "限制Actuator端点暴露，配置management.endpoints.web.exposure.exclude"
+                .to_string(),
         },
         transport: Transport::Http,
         default_port: None,
@@ -800,9 +802,7 @@ fn mongodb_unauth() -> PoCRule {
             path: String::new(),
             headers: HashMap::new(),
             body: None,
-            data: Some(
-                bson_list_databases(),
-            ),
+            data: Some(bson_list_databases()),
             read_size: Some(4096),
             matchers_condition: "and".to_string(),
             matchers: vec![Matcher {
@@ -826,8 +826,9 @@ fn bson_list_databases() -> String {
     // 实际BSON: {listDatabases: 1}
     let bson_bytes: Vec<u8> = vec![
         0x29, 0x00, 0x00, 0x00, // document length (41 bytes)
-        0x01,                   // type: double
-        0x6C, 0x69, 0x73, 0x74, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x73, 0x00, // "listDatabases\0"
+        0x01, // type: double
+        0x6C, 0x69, 0x73, 0x74, 0x44, 0x61, 0x74, 0x61, 0x62, 0x61, 0x73, 0x65, 0x73,
+        0x00, // "listDatabases\0"
         0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // 1.0 as double
         0x00, // end
     ];
@@ -1086,35 +1087,28 @@ fn smb_negotiate_packet() -> String {
         0x00, 0x00, 0x00, 0x85, // length = 133
         // SMB Command: Negotiate
         0xFF, 0x53, 0x4D, 0x42, // \xffSMB
-        0x72,                   // Command: Negotiate
+        0x72, // Command: Negotiate
         0x00, 0x00, 0x00, 0x00, // Status
-        0x18,                   // Flags
-        0x01, 0x28,             // Flags2
-        0x00, 0x00,             // PID High
+        0x18, // Flags
+        0x01, 0x28, // Flags2
+        0x00, 0x00, // PID High
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Signature
-        0x00, 0x00,             // Reserved
-        0x00, 0x00,             // TID
-        0x00, 0x00,             // PID
-        0x00, 0x00,             // UID
-        0x00, 0x00,             // MID
+        0x00, 0x00, // Reserved
+        0x00, 0x00, // TID
+        0x00, 0x00, // PID
+        0x00, 0x00, // UID
+        0x00, 0x00, // MID
         // Negotiate request
-        0x00,                   // WordCount
-        0x62, 0x00,             // ByteCount
+        0x00, // WordCount
+        0x62, 0x00, // ByteCount
         // Dialect strings
-        0x02,                   // Dialect marker
-        b'N', b'T', b' ', b'L', b'M', b' ', b'0', b'.', b'1', b'2', 0x00,
-        0x02,
-        b'S', b'M', b'B', b' ', b'1', b'.', b'0', b'0', b'0', 0x00,
-        0x02,
-        b'S', b'M', b'B', b' ', b'1', b'.', b'0', b'2', b'0', 0x00,
-        0x02,
-        b'S', b'M', b'B', b' ', b'1', b'.', b'2', b'1', b'0', 0x00,
-        0x02,
-        b'S', b'M', b'B', b' ', b'1', b'.', b'3', b'1', b'2', 0x00,
-        0x02,
-        b'S', b'M', b'B', b' ', b'2', b'.', b'0', b'0', b'2', 0x00,
-        0x02,
-        b'S', b'M', b'B', b' ', b'2', b'.', b'?', b'?', b'?', 0x00,
+        0x02, // Dialect marker
+        b'N', b'T', b' ', b'L', b'M', b' ', b'0', b'.', b'1', b'2', 0x00, 0x02, b'S', b'M', b'B',
+        b' ', b'1', b'.', b'0', b'0', b'0', 0x00, 0x02, b'S', b'M', b'B', b' ', b'1', b'.', b'0',
+        b'2', b'0', 0x00, 0x02, b'S', b'M', b'B', b' ', b'1', b'.', b'2', b'1', b'0', 0x00, 0x02,
+        b'S', b'M', b'B', b' ', b'1', b'.', b'3', b'1', b'2', 0x00, 0x02, b'S', b'M', b'B', b' ',
+        b'2', b'.', b'0', b'0', b'2', 0x00, 0x02, b'S', b'M', b'B', b' ', b'2', b'.', b'?', b'?',
+        b'?', 0x00,
     ];
     String::from_utf8_lossy(&packet).to_string()
 }
@@ -1140,19 +1134,17 @@ fn ldap_null_bind() -> PoCRule {
             data: Some(ldap_bind_request()),
             read_size: Some(4096),
             matchers_condition: "and".to_string(),
-            matchers: vec![
-                Matcher {
-                    matcher_type: MatcherType::Binary,
-                    part: String::new(),
-                    words: vec![],
-                    regex: vec![],
-                    status: vec![],
-                    // LDAP bindResponse with success (resultCode = 0)
-                    // 30 0C 02 01 01 61 07 0A 01 00 04 00 04 00
-                    binary: vec!["0a0100".to_string()], // resultCode = success in bindResponse
-                    negative: false,
-                },
-            ],
+            matchers: vec![Matcher {
+                matcher_type: MatcherType::Binary,
+                part: String::new(),
+                words: vec![],
+                regex: vec![],
+                status: vec![],
+                // LDAP bindResponse with success (resultCode = 0)
+                // 30 0C 02 01 01 61 07 0A 01 00 04 00 04 00
+                binary: vec!["0a0100".to_string()], // resultCode = success in bindResponse
+                negative: false,
+            }],
             extractors: vec![],
         }],
         script: None,
@@ -1166,12 +1158,12 @@ fn ldap_bind_request() -> String {
     // DER encoding:
     // 30 = SEQUENCE tag
     let packet: Vec<u8> = vec![
-        0x30, 0x0C,             // SEQUENCE, length 12
-        0x02, 0x01, 0x01,       // messageID = 1
-        0x60, 0x07,             // bindRequest [APPLICATION 0], length 7
-        0x02, 0x01, 0x03,       // version = 3
-        0x04, 0x00,             // name = "" (empty = anonymous)
-        0x80, 0x00,             // simple authentication = "" (empty)
+        0x30, 0x0C, // SEQUENCE, length 12
+        0x02, 0x01, 0x01, // messageID = 1
+        0x60, 0x07, // bindRequest [APPLICATION 0], length 7
+        0x02, 0x01, 0x03, // version = 3
+        0x04, 0x00, // name = "" (empty = anonymous)
+        0x80, 0x00, // simple authentication = "" (empty)
     ];
     String::from_utf8_lossy(&packet).to_string()
 }
@@ -1223,7 +1215,7 @@ fn mssql_prelogin_packet() -> String {
     let packet: Vec<u8> = vec![
         0x12, 0x01, 0x00, 0x2F, // TDS header: Pre-Login, status, length
         0x00, 0x00, 0x01, 0x00, // SPID, PacketID, Window
-        0x00,                   // Option
+        0x00, // Option
         // Pre-login options
         0x00, 0x00, 0x15, 0x00, 0x06, // Version option
         0x01, 0x00, 0x1B, 0x00, 0x01, // Encryption option
@@ -1232,9 +1224,9 @@ fn mssql_prelogin_packet() -> String {
         0x04, 0x00, 0x1D, 0x00, 0x01, // Mars option
         // Data
         0x0C, 0x00, 0x10, 0x04, 0x00, 0x00, // Version: 12.0.4096.0
-        0x00,                   // Encryption: not supported
-        0x00,                   // Instance: default
-        0x01,                   // Mars: enabled
+        0x00, // Encryption: not supported
+        0x00, // Instance: default
+        0x01, // Mars: enabled
     ];
     String::from_utf8_lossy(&packet).to_string()
 }
@@ -1461,7 +1453,8 @@ fn rdp_open() -> PoCRule {
             name: "RDP 服务检测 (信息)".to_string(),
             severity: Severity::Info,
             category: "服务检测".to_string(),
-            description: "检测到 RDP 远程桌面服务开放 (仅信息收集，非漏洞)。可关注是否启用 NLA。".to_string(),
+            description: "检测到 RDP 远程桌面服务开放 (仅信息收集，非漏洞)。可关注是否启用 NLA。"
+                .to_string(),
             tags: vec!["rdp".to_string(), "info".to_string()],
             remediation: "如非必要可关闭 RDP，否则限制访问来源并启用网络级别认证(NLA)".to_string(),
         },
@@ -1509,14 +1502,14 @@ fn rdp_open() -> PoCRule {
 fn rdp_negotiation_packet() -> String {
     let packet: Vec<u8> = vec![
         0x03, 0x00, 0x00, 0x13, // TPKT header: version, reserved, length
-        0x0E,                   // X.224 length indicator
-        0xD0,                   // X.224 type: Connection Request
+        0x0E, // X.224 length indicator
+        0xD0, // X.224 type: Connection Request
         0x00, 0x00, 0x12, 0x40, // Destination reference
         0x00, 0x00, 0x00, 0x01, // Source reference
-        0x00,                   // Class option
+        0x00, // Class option
         // RDP Negotiation Request
-        0x01, 0x00,             // Type: RDP negotiation request
-        0x08, 0x00,             // Length: 8
+        0x01, 0x00, // Type: RDP negotiation request
+        0x08, 0x00, // Length: 8
         0x01, 0x00, 0x00, 0x00, // Requested protocols: SSL
     ];
     String::from_utf8_lossy(&packet).to_string()
@@ -1565,7 +1558,11 @@ mod tests {
     #[test]
     fn test_builtin_pocs_loaded() {
         let pocs = get_builtin_pocs();
-        assert!(pocs.len() >= 28, "Expected at least 28 built-in PoCs, got {}", pocs.len());
+        assert!(
+            pocs.len() >= 28,
+            "Expected at least 28 built-in PoCs, got {}",
+            pocs.len()
+        );
     }
 
     #[test]
@@ -1595,7 +1592,9 @@ mod tests {
     #[test]
     fn test_filter_by_severity() {
         let critical = filter_builtin_pocs(Some(Severity::Critical), None);
-        assert!(critical.iter().all(|p| p.info.severity == Severity::Critical));
+        assert!(critical
+            .iter()
+            .all(|p| p.info.severity == Severity::Critical));
 
         let high = filter_builtin_pocs(Some(Severity::High), None);
         assert!(high.iter().all(|p| p.info.severity == Severity::High));

@@ -140,7 +140,14 @@ impl ProcessCollector {
             // Windows: 使用 wmic 获取线程数
             use std::process::Command;
             if let Ok(output) = Command::new("wmic")
-                .args(["process", "where", &format!("ProcessId={}", pid), "get", "ThreadCount", "/value"])
+                .args([
+                    "process",
+                    "where",
+                    &format!("ProcessId={}", pid),
+                    "get",
+                    "ThreadCount",
+                    "/value",
+                ])
                 .output()
             {
                 let content = String::from_utf8_lossy(&output.stdout);
@@ -191,12 +198,20 @@ impl ProcessCollector {
             .filter(|p| {
                 // 检查可疑的进程名
                 let suspicious_names = vec![
-                    "nc", "netcat", "ncat",
-                    "meterpreter", "metasploit",
-                    "powershell", "pwsh",
-                    "cmd.exe", "powershell.exe",
-                    "bash", "sh",
-                    "python", "perl", "ruby",
+                    "nc",
+                    "netcat",
+                    "ncat",
+                    "meterpreter",
+                    "metasploit",
+                    "powershell",
+                    "pwsh",
+                    "cmd.exe",
+                    "powershell.exe",
+                    "bash",
+                    "sh",
+                    "python",
+                    "perl",
+                    "ruby",
                 ];
 
                 let name_lower = p.name.to_lowercase();
@@ -276,13 +291,13 @@ fn get_username_by_uid(uid: u32) -> String {
 
 #[cfg(test)]
 mod tests {
+    // 测试构造数据多为字段赋值模式，与进度条/默认值构建风格一致
+    #![allow(clippy::field_reassign_with_default)]
     use super::*;
 
     #[test]
     fn test_process_collector_creation() {
-        let collector = ProcessCollector::new();
-        // 验证对象创建成功
-        assert!(collector.system.processes().len() >= 0);
+        let _collector = ProcessCollector::new();
     }
 
     #[test]
@@ -296,16 +311,12 @@ mod tests {
     #[test]
     fn test_find_by_name() {
         let mut collector = ProcessCollector::new();
-        let processes = collector.find_by_name("system");
-        // 不应该崩溃
-        assert!(true);
+        let _processes = collector.find_by_name("system");
     }
 
     #[test]
     fn test_find_suspicious_processes() {
         let mut collector = ProcessCollector::new();
-        let processes = collector.find_suspicious_processes();
-        // 不应该崩溃
-        assert!(true);
+        let _processes = collector.find_suspicious_processes();
     }
 }

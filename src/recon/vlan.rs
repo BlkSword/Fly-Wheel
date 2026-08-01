@@ -105,10 +105,9 @@ fn get_local_subnets() -> Result<Vec<(String, u8, Option<String>)>, String> {
 
             // 当收集到IP和掩码时，计算子网
             if let (Some(ref ip), Some(ref mask)) = (&current_ip, &current_mask) {
-                if let (Ok(ip_addr), Ok(mask_addr)) = (
-                    ip.parse::<Ipv4Addr>(),
-                    mask.parse::<Ipv4Addr>(),
-                ) {
+                if let (Ok(ip_addr), Ok(mask_addr)) =
+                    (ip.parse::<Ipv4Addr>(), mask.parse::<Ipv4Addr>())
+                {
                     let network = calculate_network(ip_addr, mask_addr);
                     let cidr = mask_to_cidr(mask_addr);
 
@@ -251,10 +250,9 @@ fn get_routing_table() -> Result<Vec<(String, u8, String)>, String> {
                 let gw = parts[2].to_string();
 
                 if mask != "255.255.255.255" {
-                    if let (Ok(dest_addr), Ok(mask_addr)) = (
-                        dest.parse::<Ipv4Addr>(),
-                        mask.parse::<Ipv4Addr>(),
-                    ) {
+                    if let (Ok(dest_addr), Ok(mask_addr)) =
+                        (dest.parse::<Ipv4Addr>(), mask.parse::<Ipv4Addr>())
+                    {
                         let cidr = mask_to_cidr(mask_addr);
                         let network = calculate_network(dest_addr, mask_addr);
                         if network != "0.0.0.0" && network != "127.0.0.0" {
@@ -296,9 +294,9 @@ pub fn test_reachability(ip: &str, port: u16, timeout_ms: u64) -> bool {
     let timeout = std::time::Duration::from_millis(timeout_ms);
 
     if let Ok(stream) = std::net::TcpStream::connect_timeout(
-        &addr.parse::<SocketAddr>().unwrap_or_else(|_| {
-            SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0)
-        }),
+        &addr
+            .parse::<SocketAddr>()
+            .unwrap_or_else(|_| SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 0)),
         timeout,
     ) {
         drop(stream);

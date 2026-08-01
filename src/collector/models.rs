@@ -2,11 +2,11 @@
 //!
 //! 定义模块化的JSON输出结构
 
-use serde::{Deserialize, Serialize};
 use crate::modules::collect::{
-    SystemInfo, NetworkInterface, RouteEntry, ArpEntry, NetworkConnection,
-    ProcessInfo, HashEntry, Token, SshKey, ApiKey, KnownHost, RemoteSession, SensitiveFile, ConfigFile
+    ApiKey, ArpEntry, ConfigFile, HashEntry, KnownHost, NetworkConnection, NetworkInterface,
+    ProcessInfo, RemoteSession, RouteEntry, SensitiveFile, SshKey, SystemInfo, Token,
 };
+use serde::{Deserialize, Serialize};
 
 /// 系统报告汇总
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,8 +71,7 @@ pub struct NetworkStats {
 }
 
 /// 进程信息报告
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProcessReport {
     /// 进程总数
     pub total_count: usize,
@@ -180,7 +179,6 @@ impl Default for NetworkReport {
     }
 }
 
-
 impl Default for CredentialReport {
     fn default() -> Self {
         Self {
@@ -260,19 +258,25 @@ impl ProcessReport {
     /// 更新统计信息
     pub fn update_stats(&mut self) {
         // 过滤可疑进程
-        self.suspicious = self.processes.iter()
+        self.suspicious = self
+            .processes
+            .iter()
             .filter(|p| is_suspicious_process(p))
             .cloned()
             .collect();
 
         // 高CPU使用率进程（>50%）
-        self.high_cpu = self.processes.iter()
+        self.high_cpu = self
+            .processes
+            .iter()
             .filter(|p| p.cpu_usage > 50.0)
             .cloned()
             .collect();
 
         // 高内存使用率进程（>1GB）
-        self.high_memory = self.processes.iter()
+        self.high_memory = self
+            .processes
+            .iter()
             .filter(|p| p.memory_usage > 1024 * 1024 * 1024)
             .cloned()
             .collect();
@@ -282,11 +286,18 @@ impl ProcessReport {
 /// 判断是否为可疑进程
 fn is_suspicious_process(process: &ProcessInfo) -> bool {
     let suspicious_names = vec![
-        "nc", "netcat", "ncat",
-        "meterpreter", "metasploit",
-        "powershell", "pwsh",
-        "cmd.exe", "powershell.exe",
-        "python", "perl", "ruby",
+        "nc",
+        "netcat",
+        "ncat",
+        "meterpreter",
+        "metasploit",
+        "powershell",
+        "pwsh",
+        "cmd.exe",
+        "powershell.exe",
+        "python",
+        "perl",
+        "ruby",
     ];
 
     let name_lower = process.name.to_lowercase();

@@ -24,12 +24,24 @@ impl Default for RedisCracker {
 #[async_trait]
 impl Cracker for RedisCracker {
     async fn crack(&self, config: &CrackConfig) -> CrackResult {
-        base::run_crack(config, CrackService::Redis, "Redis", |_username, password, target, port, timeout| {
-            Self::try_connect_sync(&target, port, &password, timeout)
-        }).await
+        base::run_crack(
+            config,
+            CrackService::Redis,
+            "Redis",
+            |_username, password, target, port, timeout| {
+                Self::try_connect_sync(&target, port, &password, timeout)
+            },
+        )
+        .await
     }
 
-    async fn verify(&self, target: &str, port: u16, _username: Option<&str>, password: &str) -> bool {
+    async fn verify(
+        &self,
+        target: &str,
+        port: u16,
+        _username: Option<&str>,
+        password: &str,
+    ) -> bool {
         Self::try_connect_sync(target, port, password, Duration::from_secs(5))
     }
 }

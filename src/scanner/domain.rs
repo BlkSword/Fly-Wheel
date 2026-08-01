@@ -49,11 +49,19 @@ impl DomainScanner {
         // 尝试检测当前域环境
         if let Ok(domain_info) = self.detect_domain() {
             let domain_name = domain_info.name.clone();
-            result.domain_name = if domain_name.is_empty() { None } else { Some(domain_name.clone()) };
+            result.domain_name = if domain_name.is_empty() {
+                None
+            } else {
+                Some(domain_name.clone())
+            };
             result.is_joined = domain_info.is_joined;
             result.current_computer = domain_info.computer_name;
             result.current_user = domain_info.username;
-            self.domain_name = if domain_name.is_empty() { None } else { Some(domain_name.clone()) };
+            self.domain_name = if domain_name.is_empty() {
+                None
+            } else {
+                Some(domain_name.clone())
+            };
 
             // 尝试发现域控制器
             if let Ok(dc) = self.find_domain_controller(&domain_name) {
@@ -167,10 +175,7 @@ impl DomainScanner {
             use std::process::Command;
 
             // 使用nltest查找域控制器
-            if let Ok(output) = Command::new("nltest")
-                .args(["/dclist:", domain])
-                .output()
-            {
+            if let Ok(output) = Command::new("nltest").args(["/dclist:", domain]).output() {
                 let content = String::from_utf8_lossy(&output.stdout);
                 // 解析域控制器
                 for line in content.lines() {
@@ -209,8 +214,7 @@ impl DomainScanner {
             {
                 let content = String::from_utf8_lossy(&output.stdout);
                 // 解析结果（SRV 记录提取待实现）
-                for _line in content.lines() {
-                }
+                for _line in content.lines() {}
             }
 
             Err("Unix域发现功能开发中".into())
@@ -236,10 +240,7 @@ impl DomainScanner {
         let mut users = Vec::new();
 
         // 使用net user命令
-        if let Ok(output) = Command::new("net")
-            .args(["user", "/domain"])
-            .output()
-        {
+        if let Ok(output) = Command::new("net").args(["user", "/domain"]).output() {
             let content = String::from_utf8_lossy(&output.stdout);
             // 解析用户列表
             for line in content.lines() {
@@ -315,10 +316,7 @@ impl DomainScanner {
 
             let trusts = Vec::new();
 
-            if let Ok(output) = Command::new("nltest")
-                .args(["/domain_trusts"])
-                .output()
-            {
+            if let Ok(output) = Command::new("nltest").args(["/domain_trusts"]).output() {
                 let content = String::from_utf8_lossy(&output.stdout);
                 // 解析域信任关系
                 for line in content.lines() {
@@ -346,10 +344,7 @@ impl DomainScanner {
             let mut spns = Vec::new();
 
             // 使用setspn命令查询服务主体名称
-            if let Ok(output) = Command::new("setspn")
-                .args(["-q", "*/*"])
-                .output()
-            {
+            if let Ok(output) = Command::new("setspn").args(["-q", "*/*"]).output() {
                 let content = String::from_utf8_lossy(&output.stdout);
                 for line in content.lines() {
                     let line = line.trim();
@@ -395,10 +390,7 @@ impl DomainScanner {
 
             let policy = PasswordPolicy::default();
 
-            if let Ok(output) = Command::new("net")
-                .args(["accounts"])
-                .output()
-            {
+            if let Ok(output) = Command::new("net").args(["accounts"]).output() {
                 let content = String::from_utf8_lossy(&output.stdout);
                 // 解析密码策略
                 for line in content.lines() {
@@ -451,8 +443,7 @@ pub struct DomainScanResult {
 }
 
 /// 密码策略
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct PasswordPolicy {
     pub max_password_age: Option<u32>,
     pub min_password_age: Option<u32>,
@@ -461,7 +452,6 @@ pub struct PasswordPolicy {
     pub lockout_threshold: Option<u32>,
     pub lockout_duration: Option<u32>,
 }
-
 
 #[cfg(test)]
 mod tests {

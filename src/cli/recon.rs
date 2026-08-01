@@ -9,7 +9,15 @@ use crate::output::format::OutputFormat;
 use std::path::PathBuf;
 
 /// 支持的侦察模式
-const RECON_MODES: &[&str] = &["full", "edr", "situational", "shares", "firewall", "vlan", "host"];
+const RECON_MODES: &[&str] = &[
+    "full",
+    "edr",
+    "situational",
+    "shares",
+    "firewall",
+    "vlan",
+    "host",
+];
 
 pub fn run_recon_cmd(
     dc: Option<String>,
@@ -175,7 +183,11 @@ fn run_interactive_recon() -> Result<(Option<String>, Option<String>, String)> {
     println!("仅用户会话猎杀需要域环境，其余模式无需 (留空跳过)");
     println!();
     let domain = InteractiveMenu::read_input("域名 (例: corp.local, 留空=跳过): ");
-    let domain = if domain.is_empty() { None } else { Some(domain) };
+    let domain = if domain.is_empty() {
+        None
+    } else {
+        Some(domain)
+    };
     let dc = InteractiveMenu::read_input("域控地址 (留空=跳过): ");
     let dc = if dc.is_empty() { None } else { Some(dc) };
 
@@ -239,7 +251,10 @@ fn print_recon_results(result: &crate::recon::ReconReport) {
 
     if !result.security_products.is_empty() {
         println!();
-        println!("  [EDR/AV 检测] 共 {} 个安全产品", result.security_products.len());
+        println!(
+            "  [EDR/AV 检测] 共 {} 个安全产品",
+            result.security_products.len()
+        );
         for p in &result.security_products {
             println!(
                 "    - {} ({}): 方法={} 运行中={}",
@@ -303,11 +318,7 @@ fn export_recon_csv(result: &crate::recon::ReconReport, path: &std::path::Path) 
         wtr.write_record(["EDR/AV", &p.name, &format!("{}", p.product_type)])?;
     }
     for f in &result.share_findings {
-        wtr.write_record([
-            "共享",
-            &f.full_path,
-            &format!("敏感: {}", f.is_sensitive),
-        ])?;
+        wtr.write_record(["共享", &f.full_path, &format!("敏感: {}", f.is_sensitive)])?;
     }
     for r in &result.firewall_rules {
         wtr.write_record(["防火墙", &r.name, &format!("{:?}", r.direction)])?;

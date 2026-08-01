@@ -72,12 +72,8 @@ pub async fn dcsync(
     // 3. 调用IDL_DRSGetNCChanges请求用户凭据数据
 
     let results = match (password, nthash) {
-        (Some(pwd), _) => {
-            dcsync_with_password(dc, domain, username, pwd, target_user).await
-        }
-        (_, Some(hash)) => {
-            dcsync_with_hash(dc, domain, username, hash, target_user).await
-        }
+        (Some(pwd), _) => dcsync_with_password(dc, domain, username, pwd, target_user).await,
+        (_, Some(hash)) => dcsync_with_hash(dc, domain, username, hash, target_user).await,
         _ => {
             return Err("需要提供密码或NTLM哈希进行认证".to_string());
         }
@@ -123,7 +119,9 @@ pub fn export_to_hashcat(results: &[DcsyncResult]) -> String {
                 "{}:{}:{}:{}:::",
                 r.username,
                 r.rid,
-                r.lm_hash.as_deref().unwrap_or("aad3b435b51404eeaad3b435b51404ee"),
+                r.lm_hash
+                    .as_deref()
+                    .unwrap_or("aad3b435b51404eeaad3b435b51404ee"),
                 r.ntlm_hash,
             )
         })
@@ -140,7 +138,9 @@ pub fn export_to_pwdump(results: &[DcsyncResult]) -> String {
                 "{}:{}:{}:{}:{}:::",
                 r.username,
                 r.rid,
-                r.lm_hash.as_deref().unwrap_or("aad3b435b51404eeaad3b435b51404ee"),
+                r.lm_hash
+                    .as_deref()
+                    .unwrap_or("aad3b435b51404eeaad3b435b51404ee"),
                 r.ntlm_hash,
                 r.pwd_last_set.as_deref().unwrap_or(""),
             )
@@ -174,19 +174,17 @@ mod tests {
 
     #[test]
     fn test_export_to_hashcat() {
-        let results = vec![
-            DcsyncResult {
-                username: "admin".to_string(),
-                ntlm_hash: "aaa".to_string(),
-                lm_hash: None,
-                rid: 500,
-                enabled: true,
-                pwd_last_set: None,
-                pwd_expires: None,
-                user_account_control: 512,
-                credential_type: None,
-            },
-        ];
+        let results = vec![DcsyncResult {
+            username: "admin".to_string(),
+            ntlm_hash: "aaa".to_string(),
+            lm_hash: None,
+            rid: 500,
+            enabled: true,
+            pwd_last_set: None,
+            pwd_expires: None,
+            user_account_control: 512,
+            credential_type: None,
+        }];
         let output = export_to_hashcat(&results);
         assert!(output.contains("admin"));
         assert!(output.contains("aaa"));
@@ -194,19 +192,17 @@ mod tests {
 
     #[test]
     fn test_export_to_pwdump() {
-        let results = vec![
-            DcsyncResult {
-                username: "testuser".to_string(),
-                ntlm_hash: "bbb".to_string(),
-                lm_hash: Some("ccc".to_string()),
-                rid: 1000,
-                enabled: true,
-                pwd_last_set: Some("2024-01-01".to_string()),
-                pwd_expires: None,
-                user_account_control: 512,
-                credential_type: None,
-            },
-        ];
+        let results = vec![DcsyncResult {
+            username: "testuser".to_string(),
+            ntlm_hash: "bbb".to_string(),
+            lm_hash: Some("ccc".to_string()),
+            rid: 1000,
+            enabled: true,
+            pwd_last_set: Some("2024-01-01".to_string()),
+            pwd_expires: None,
+            user_account_control: 512,
+            credential_type: None,
+        }];
         let output = export_to_pwdump(&results);
         assert!(output.contains("testuser"));
         assert!(output.contains("bbb"));

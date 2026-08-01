@@ -72,7 +72,11 @@ fn run_interactive_cred() -> Result<(Option<String>, Option<String>)> {
     println!("提供域信息后可尝试从 SYSVOL 解密 GPP 密码 (留空跳过)");
     println!();
     let domain = InteractiveMenu::read_input("域名 (例: corp.local, 留空=跳过): ");
-    let domain = if domain.is_empty() { None } else { Some(domain) };
+    let domain = if domain.is_empty() {
+        None
+    } else {
+        Some(domain)
+    };
     let dc = InteractiveMenu::read_input("域控地址 (留空=跳过): ");
     let dc = if dc.is_empty() { None } else { Some(dc) };
 
@@ -125,8 +129,10 @@ fn print_cred_results(result: &crate::cred::CredHarvestResult) {
     }
 
     println!("┌────────────────────────────────────────────────────────────────────────────┐");
-    println!("│ {:<18} {:<10} {:<12} {:<30} │",
-        "类型", "用户名", "目标", "来源");
+    println!(
+        "│ {:<18} {:<10} {:<12} {:<30} │",
+        "类型", "用户名", "目标", "来源"
+    );
     println!("├────────────────────────────────────────────────────────────────────────────┤");
 
     let mut shown = 0;
@@ -135,7 +141,10 @@ fn print_cred_results(result: &crate::cred::CredHarvestResult) {
         let target = cred.target.as_deref().unwrap_or("-");
         println!(
             "│ {:<16}  {:<10} {:<12} {:<28}  │",
-            format!("{}", cred.cred_type).chars().take(16).collect::<String>(),
+            format!("{}", cred.cred_type)
+                .chars()
+                .take(16)
+                .collect::<String>(),
             username.chars().take(10).collect::<String>(),
             target.chars().take(12).collect::<String>(),
             cred.source.chars().take(28).collect::<String>(),
@@ -154,9 +163,7 @@ fn print_cred_results(result: &crate::cred::CredHarvestResult) {
 fn export_cred_csv(result: &crate::cred::CredHarvestResult, path: &std::path::Path) -> Result<()> {
     let mut wtr = csv::Writer::from_path(path)?;
 
-    wtr.write_record([
-        "类型", "用户名", "密码", "NTLM哈希", "域名", "目标", "来源",
-    ])?;
+    wtr.write_record(["类型", "用户名", "密码", "NTLM哈希", "域名", "目标", "来源"])?;
 
     for cred in &result.credentials {
         wtr.write_record([

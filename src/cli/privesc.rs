@@ -6,13 +6,8 @@ use crate::output::color::{print_info, print_success};
 use crate::output::format::OutputFormat;
 use std::path::PathBuf;
 
-pub fn run_privesc_cmd(
-    check: Option<String>,
-    format: &str,
-    output: Option<PathBuf>,
-) -> Result<()> {
-    let output_fmt = OutputFormat::parse(format)
-        .unwrap_or(OutputFormat::Json);
+pub fn run_privesc_cmd(check: Option<String>, format: &str, output: Option<PathBuf>) -> Result<()> {
+    let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
     // 无参数时进入交互式模式
     let selected = match check {
@@ -87,13 +82,20 @@ fn run_interactive_privesc() -> Result<String> {
             println!("  {}. 全部检查 — 运行所有提权检测项目", i + 1);
         } else {
             let desc = match *cat {
-                "service" => "服务配置检查", "credentials" => "凭据存储检查",
-                "registry" => "注册表策略检查", "tokens" => "令牌特权检查",
-                "files" => "敏感文件检查", "patches" => "补丁审计",
-                "suid" => "SUID 二进制检查", "capabilities" => "文件 Capabilities",
-                "cron" => "Cron 任务检查", "writable" => "可写文件检查",
-                "docker" => "Docker 组检查", "sudo" => "Sudo 规则检查",
-                "ssh" => "SSH 密钥检查", "kernel" => "内核漏洞检查",
+                "service" => "服务配置检查",
+                "credentials" => "凭据存储检查",
+                "registry" => "注册表策略检查",
+                "tokens" => "令牌特权检查",
+                "files" => "敏感文件检查",
+                "patches" => "补丁审计",
+                "suid" => "SUID 二进制检查",
+                "capabilities" => "文件 Capabilities",
+                "cron" => "Cron 任务检查",
+                "writable" => "可写文件检查",
+                "docker" => "Docker 组检查",
+                "sudo" => "Sudo 规则检查",
+                "ssh" => "SSH 密钥检查",
+                "kernel" => "内核漏洞检查",
                 "dll" => "DLL 劫持检查",
                 _ => "",
             };
@@ -103,7 +105,11 @@ fn run_interactive_privesc() -> Result<String> {
     println!();
 
     let choice = InteractiveMenu::read_number_opt(
-        &format!("请选择 [1-{}, 默认 {} 全部]: ", categories.len(), all_idx + 1),
+        &format!(
+            "请选择 [1-{}, 默认 {} 全部]: ",
+            categories.len(),
+            all_idx + 1
+        ),
         1,
         categories.len(),
         all_idx + 1,
@@ -129,7 +135,11 @@ fn print_privesc_results(result: &crate::privesc::PrivescResult) {
     println!();
     println!("  主机名: {}", result.hostname);
     println!("  系统: {}", result.os);
-    println!("  当前用户: {} {}", result.current_user, if result.is_admin { "[管理员]" } else { "" });
+    println!(
+        "  当前用户: {} {}",
+        result.current_user,
+        if result.is_admin { "[管理员]" } else { "" }
+    );
     println!();
 
     if result.findings.is_empty() {
@@ -153,11 +163,13 @@ fn print_privesc_results(result: &crate::privesc::PrivescResult) {
 
     // 详细发现
     for finding in &result.findings {
-        println!("  {}[{}] {} [{}]\x1b[0m",
+        println!(
+            "  {}[{}] {} [{}]\x1b[0m",
             finding.severity.color_code(),
             finding.severity.display_name(),
             finding.title,
-            finding.category);
+            finding.category
+        );
         if !finding.description.is_empty() {
             println!("    {}", finding.description);
         }
@@ -172,12 +184,22 @@ fn print_privesc_results(result: &crate::privesc::PrivescResult) {
     }
 }
 
-fn export_privesc_csv(result: &crate::privesc::PrivescResult, path: &std::path::Path) -> Result<()> {
+fn export_privesc_csv(
+    result: &crate::privesc::PrivescResult,
+    path: &std::path::Path,
+) -> Result<()> {
     let mut wtr = csv::Writer::from_path(path)?;
 
     wtr.write_record([
-        "主机名", "系统", "当前用户", "类别", "严重性",
-        "标题", "描述", "详情", "修复建议",
+        "主机名",
+        "系统",
+        "当前用户",
+        "类别",
+        "严重性",
+        "标题",
+        "描述",
+        "详情",
+        "修复建议",
     ])?;
 
     for finding in &result.findings {

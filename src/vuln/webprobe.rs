@@ -162,7 +162,10 @@ impl WebVulnScanner {
             base_url: base_url.trim_end_matches('/').to_string(),
             timeout: Duration::from_secs(5),
             headers: HashMap::from([
-                ("User-Agent".to_string(), "Mozilla/5.0 Intranet Scanner".to_string()),
+                (
+                    "User-Agent".to_string(),
+                    "Mozilla/5.0 Intranet Scanner".to_string(),
+                ),
                 ("Accept".to_string(), "*/*".to_string()),
             ]),
         }
@@ -196,9 +199,15 @@ impl WebVulnScanner {
         // 添加通用测试参数
         if params.is_empty() {
             params.extend_from_slice(&[
-                "id".to_string(), "search".to_string(), "q".to_string(),
-                "page".to_string(), "query".to_string(), "name".to_string(),
-                "file".to_string(), "path".to_string(), "dir".to_string(),
+                "id".to_string(),
+                "search".to_string(),
+                "q".to_string(),
+                "page".to_string(),
+                "query".to_string(),
+                "name".to_string(),
+                "file".to_string(),
+                "path".to_string(),
+                "dir".to_string(),
             ]);
         }
 

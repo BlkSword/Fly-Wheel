@@ -2,11 +2,11 @@
 
 #![allow(dead_code, clippy::lines_filter_map_ok)]
 
+use anyhow::{Context, Result};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::Path;
-use anyhow::{Context, Result};
-use indicatif::{ProgressBar, ProgressStyle};
 use std::time::Duration;
 
 /// 字典条目
@@ -75,7 +75,7 @@ impl DictManager {
     /// 获取默认密码列表
     fn default_passwords() -> Vec<String> {
         vec![
-            "".to_string(),           // 空密码
+            "".to_string(), // 空密码
             "password".to_string(),
             "123456".to_string(),
             "12345678".to_string(),
@@ -134,7 +134,10 @@ impl DictManager {
             .count();
 
         if count == 0 {
-            return Err(anyhow::anyhow!("字典文件为空或没有有效条目: {}", path_ref.display()));
+            return Err(anyhow::anyhow!(
+                "字典文件为空或没有有效条目: {}",
+                path_ref.display()
+            ));
         }
 
         Ok(count)
@@ -147,9 +150,11 @@ impl DictManager {
 
         // 创建进度条
         let pb = ProgressBar::new_spinner();
-        pb.set_style(ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .expect("创建进度条样式失败"));
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .expect("创建进度条样式失败"),
+        );
         pb.set_message("正在加载用户名字典...");
         pb.enable_steady_tick(Duration::from_millis(100));
 
@@ -176,9 +181,11 @@ impl DictManager {
 
         // 创建进度条
         let pb = ProgressBar::new_spinner();
-        pb.set_style(ProgressStyle::default_spinner()
-            .template("{spinner:.green} {msg}")
-            .expect("创建进度条样式失败"));
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg}")
+                .expect("创建进度条样式失败"),
+        );
         pb.set_message("正在加载密码字典...");
         pb.enable_steady_tick(Duration::from_millis(100));
 

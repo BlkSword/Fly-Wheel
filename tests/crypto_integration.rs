@@ -2,9 +2,9 @@
 //!
 //! 测试 EncryptedStream 通过 tokio duplex 通道的往返加解密。
 
-use intrasweep::tunnel::crypto::{CryptoLayer, EncryptedStream, derive_key};
+use intrasweep::tunnel::crypto::{derive_key, CryptoLayer, EncryptedStream};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt, duplex};
+use tokio::io::{duplex, AsyncReadExt};
 
 #[tokio::test]
 async fn test_encrypted_stream_roundtrip() {

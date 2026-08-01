@@ -10,11 +10,11 @@
 //! - DataSources.xml (数据源密码)
 //! - DriveMaps.xml (网络驱动器密码)
 
-use serde::{Deserialize, Serialize};
-use crate::cred::Credential;
 use crate::cred::CredType;
+use crate::cred::Credential;
 use aes::cipher::{BlockDecrypt, KeyInit};
 use aes::Aes256;
+use serde::{Deserialize, Serialize};
 
 /// GPP解密结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,10 +34,8 @@ pub struct GppDecryptedPassword {
 /// 微软公开的GPP AES加密密钥 (MS-GPPD, AES-256-CBC)
 /// 参考: https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-gppd
 const GPP_AES_KEY: [u8; 32] = [
-    0x4e, 0x99, 0x06, 0xe8, 0xfc, 0xb6, 0x6c, 0xc9,
-    0xfa, 0xf4, 0x93, 0x10, 0x62, 0x0f, 0xfe, 0xe8,
-    0xf4, 0x96, 0xe8, 0x06, 0xcc, 0x05, 0x79, 0x90,
-    0x20, 0x9b, 0x09, 0xa4, 0x33, 0xb6, 0x6c, 0x1b,
+    0x4e, 0x99, 0x06, 0xe8, 0xfc, 0xb6, 0x6c, 0xc9, 0xfa, 0xf4, 0x93, 0x10, 0x62, 0x0f, 0xfe, 0xe8,
+    0xf4, 0x96, 0xe8, 0x06, 0xcc, 0x05, 0x79, 0x90, 0x20, 0x9b, 0x09, 0xa4, 0x33, 0xb6, 0x6c, 0x1b,
 ];
 
 /// 解密单个cpassword
@@ -65,8 +63,8 @@ pub fn decrypt_cpassword(cpassword: &str) -> Result<String, String> {
         return Err("密文长度不是16的整数倍".to_string());
     }
 
-    let cipher = Aes256::new_from_slice(&GPP_AES_KEY)
-        .map_err(|e| format!("AES初始化失败: {:?}", e))?;
+    let cipher =
+        Aes256::new_from_slice(&GPP_AES_KEY).map_err(|e| format!("AES初始化失败: {:?}", e))?;
 
     // AES-256-CBC 手动解密
     let mut decrypted = Vec::with_capacity(ciphertext.len());
@@ -120,12 +118,7 @@ pub fn decrypt_cpassword(cpassword: &str) -> Result<String, String> {
     // 回退：直接当作UTF-8
     String::from_utf8(decrypted.clone())
         .map(|s| s.trim_end_matches('\0').to_string())
-        .map_err(|_| {
-            format!(
-                "无法解码为UTF-8，原始十六进制: {}",
-                hex::encode(&decrypted)
-            )
-        })
+        .map_err(|_| format!("无法解码为UTF-8，原始十六进制: {}", hex::encode(&decrypted)))
 }
 
 /// 简单的Base64解码（不依赖外部库）
@@ -217,8 +210,13 @@ fn walk_gpp_files(base_path: &str) -> Result<Vec<Credential>, String> {
                 if p.is_dir() {
                     walk_dir(&p, credentials);
                 } else if let Some(filename) = p.file_name().and_then(|n| n.to_str()) {
-                    let gpp_files = ["Groups.xml", "Services.xml", "ScheduledTasks.xml",
-                                     "DataSources.xml", "DriveMaps.xml"];
+                    let gpp_files = [
+                        "Groups.xml",
+                        "Services.xml",
+                        "ScheduledTasks.xml",
+                        "DataSources.xml",
+                        "DriveMaps.xml",
+                    ];
                     if gpp_files.contains(&filename) {
                         if let Ok(content) = std::fs::read_to_string(&p) {
                             let decrypted = parse_gpp_xml(&content, filename, &p);
@@ -247,18 +245,26 @@ fn parse_gpp_xml(
     // 正则匹配cpassword属性
     // 匹配模式: cpassword="<base64_encoded>" 或 userName="..." cpassword="..."
     let re = regex::Regex::new(
-        r#"(?s)(?:userName|name|username|runAs)="([^"]*)"[^>]*cpassword="([^"]*)""#
-    ).unwrap();
+        r#"(?s)(?:userName|name|username|runAs)="([^"]*)"[^>]*cpassword="([^"]*)""#,
+    )
+    .unwrap();
 
     for cap in re.captures_iter(xml_content) {
-        let username = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
-        let cpassword = cap.get(2).map(|m| m.as_str().to_string()).unwrap_or_default();
+        let username = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
+        let cpassword = cap
+            .get(2)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
 
         match decrypt_cpassword(&cpassword) {
             Ok(password) => {
                 tracing::info!(
                     "[GPP解密] ✓ {} 密码解密成功: {} -> ***",
-                    source_filename, username
+                    source_filename,
+                    username
                 );
 
                 let policy_name = file_path
@@ -296,11 +302,15 @@ fn parse_gpp_xml(
     // 也尝试匹配没有userName的cpassword（仅cpassword属性）
     let re_cp_only = regex::Regex::new(r#"cpassword="([^"]*)""#).unwrap();
     for cap in re_cp_only.captures_iter(xml_content) {
-        let cpassword = cap.get(1).map(|m| m.as_str().to_string()).unwrap_or_default();
+        let cpassword = cap
+            .get(1)
+            .map(|m| m.as_str().to_string())
+            .unwrap_or_default();
         // 跳过已处理的（有userName的）
-        if credentials.iter().any(|c: &Credential| {
-            c.attributes.get("cpassword") == Some(&cpassword)
-        }) {
+        if credentials
+            .iter()
+            .any(|c: &Credential| c.attributes.get("cpassword") == Some(&cpassword))
+        {
             continue;
         }
 
@@ -320,13 +330,13 @@ fn parse_gpp_xml(
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::field_reassign_with_default)]
     use super::*;
 
     #[test]
     fn test_decrypt_cpassword_known() {
         // 使用已知的测试数据验证解密算法
         // 这不是真实的cpassword，而是我们加密的测试数据
-        let test_encrypted = base64_encode_test("testpassword123".as_bytes());
         // 由于AES-CBC需要正确的格式，我们先测试错误情况
         let result = decrypt_cpassword("invalid_base64!!!");
         assert!(result.is_err());
@@ -348,7 +358,7 @@ mod tests {
           acctDisabled="false" userName="LocalAdmin"/>
 </Groups>"#;
 
-        let credentials = parse_gpp_xml(xml, "Groups.xml", std::path::Path::new("test"));
+        let _credentials = parse_gpp_xml(xml, "Groups.xml", std::path::Path::new("test"));
         // cpassword解密会失败，但应该能找到条目
         // 注意：这里的cpassword不是真实的base64编码，所以decrypt_cpassword会失败
         // 在真实环境中，cpassword是有效的base64编码的AES密文
@@ -373,12 +383,6 @@ mod tests {
         assert_eq!(result, b"test");
     }
 
-    // 辅助函数
-    fn base64_encode_test(data: &[u8]) -> String {
-        use base64::Engine;
-        base64::engine::general_purpose::STANDARD.encode(data)
-    }
-
     #[test]
     fn test_gpp_decrypted_password_creation() {
         let gpp = GppDecryptedPassword {
@@ -395,13 +399,19 @@ mod tests {
     #[test]
     fn test_gpp_key_matches_microsoft_spec() {
         // MS-GPPD 公开的 AES-256 密钥，前 10 字节 + 后续 22 字节必须完全匹配
-        assert_eq!(&GPP_AES_KEY[..10],
+        assert_eq!(
+            &GPP_AES_KEY[..10],
             &[0x4e, 0x99, 0x06, 0xe8, 0xfc, 0xb6, 0x6c, 0xc9, 0xfa, 0xf4],
-            "GPP 密钥前 10 字节不匹配微软公开密钥");
-        assert_eq!(&GPP_AES_KEY[10..],
-            &[0x93, 0x10, 0x62, 0x0f, 0xfe, 0xe8, 0xf4, 0x96, 0xe8, 0x06,
-              0xcc, 0x05, 0x79, 0x90, 0x20, 0x9b, 0x09, 0xa4, 0x33, 0xb6, 0x6c, 0x1b],
-            "GPP 密钥第 11 字节起不匹配微软公开密钥");
+            "GPP 密钥前 10 字节不匹配微软公开密钥"
+        );
+        assert_eq!(
+            &GPP_AES_KEY[10..],
+            &[
+                0x93, 0x10, 0x62, 0x0f, 0xfe, 0xe8, 0xf4, 0x96, 0xe8, 0x06, 0xcc, 0x05, 0x79, 0x90,
+                0x20, 0x9b, 0x09, 0xa4, 0x33, 0xb6, 0x6c, 0x1b
+            ],
+            "GPP 密钥第 11 字节起不匹配微软公开密钥"
+        );
     }
 
     #[test]
@@ -417,7 +427,7 @@ mod tests {
         // PKCS#7 填充到 16 的倍数
         let mut padded = plaintext_utf16.clone();
         let pad_len = 16 - (padded.len() % 16);
-        padded.extend(std::iter::repeat(pad_len as u8).take(pad_len));
+        padded.extend(std::iter::repeat_n(pad_len as u8, pad_len));
 
         // AES-256-CBC 加密，IV = 全零
         let cipher = Aes256::new_from_slice(&GPP_AES_KEY).unwrap();
@@ -427,7 +437,9 @@ mod tests {
         for chunk in padded.chunks(16) {
             let mut block = [0u8; 16];
             block.copy_from_slice(chunk);
-            for i in 0..16 { block[i] ^= prev[i]; }
+            for i in 0..16 {
+                block[i] ^= prev[i];
+            }
             let mut enc = block;
             cipher.encrypt_block((&mut enc).into());
             ciphertext.extend_from_slice(&enc);
@@ -468,7 +480,9 @@ mod tests {
         for chunk in padded.chunks(16) {
             let mut block = [0u8; 16];
             block.copy_from_slice(chunk);
-            for i in 0..16 { block[i] ^= prev[i]; }
+            for i in 0..16 {
+                block[i] ^= prev[i];
+            }
             let mut enc = block;
             cipher.encrypt_block((&mut enc).into());
             ciphertext.extend_from_slice(&enc);

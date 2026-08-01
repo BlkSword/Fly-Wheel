@@ -79,18 +79,26 @@ impl HttpTunnel {
     pub async fn start_with_shutdown(&self, shutdown: &Shutdown) -> Result<()> {
         self.config.validate()?;
 
-        let target = self.config.remote_target.clone()
+        let target = self
+            .config
+            .remote_target
+            .clone()
             .ok_or_else(|| IntraSweepError::Config {
                 message: "HTTP 隧道需要指定远程目标".to_string(),
             })?;
 
         // 解析代理地址（从 hops 取第一个作为代理，或使用 remote_target 作为目标）
-        let proxy = self.config.hops.first().cloned()
+        let proxy = self
+            .config
+            .hops
+            .first()
+            .cloned()
             .ok_or_else(|| IntraSweepError::Config {
                 message: "HTTP 隧道需要指定代理地址 (-H/--hop)".to_string(),
             })?;
 
-        let listener = TcpListener::bind(&self.config.local_addr).await
+        let listener = TcpListener::bind(&self.config.local_addr)
+            .await
             .map_err(|e| IntraSweepError::Network {
                 message: format!("绑定端口 {} 失败: {}", self.config.local_addr, e),
             })?;
@@ -209,12 +217,9 @@ mod tests {
     #[test]
     fn test_http_tunnel_creation() {
         let local: std::net::SocketAddr = "127.0.0.1:8888".parse().unwrap();
-        let config = TunnelConfig::new(
-            crate::tunnel::config::TunnelType::Forward,
-            local,
-        )
-        .with_remote_target("internal.corp.local:80".to_string())
-        .with_hops(vec!["proxy.corp.local:8080".to_string()]);
+        let config = TunnelConfig::new(crate::tunnel::config::TunnelType::Forward, local)
+            .with_remote_target("internal.corp.local:80".to_string())
+            .with_hops(vec!["proxy.corp.local:8080".to_string()]);
 
         let handler = crate::tunnel::models::LogEventHandler::new(true);
         let tunnel = HttpTunnel::new(config, Arc::new(handler));

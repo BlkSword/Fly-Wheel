@@ -58,7 +58,11 @@ pub async fn execute_script(
             );
 
             if !out.status.success() && stdout.trim().is_empty() {
-                tracing::debug!("脚本执行失败 (exit {:?}): {}", out.status.code(), stderr.trim());
+                tracing::debug!(
+                    "脚本执行失败 (exit {:?}): {}",
+                    out.status.code(),
+                    stderr.trim()
+                );
                 return None;
             }
 
@@ -136,13 +140,25 @@ fn build_command(
                 } else {
                     file.clone()
                 };
-                let mut args = vec!["-NoProfile".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string(), "-File".to_string(), script_path];
+                let mut args = vec![
+                    "-NoProfile".to_string(),
+                    "-ExecutionPolicy".to_string(),
+                    "Bypass".to_string(),
+                    "-File".to_string(),
+                    script_path,
+                ];
                 for arg in &config.args {
                     args.push(substitute(arg));
                 }
                 Some((exe, args))
             } else if let Some(ref code) = config.code {
-                let mut args = vec!["-NoProfile".to_string(), "-ExecutionPolicy".to_string(), "Bypass".to_string(), "-Command".to_string(), code.clone()];
+                let mut args = vec![
+                    "-NoProfile".to_string(),
+                    "-ExecutionPolicy".to_string(),
+                    "Bypass".to_string(),
+                    "-Command".to_string(),
+                    code.clone(),
+                ];
                 for arg in &config.args {
                     args.push(substitute(arg));
                 }
@@ -313,7 +329,7 @@ mod tests {
         };
 
         let dir = std::path::Path::new("/tmp/pocs");
-        let (cmd, args) = build_command(&config, "10.0.0.1", 445, Some(dir)).unwrap();
+        let (_cmd, args) = build_command(&config, "10.0.0.1", 445, Some(dir)).unwrap();
         assert!(args[1].contains("poc.py"));
     }
 
@@ -323,7 +339,12 @@ mod tests {
             interpreter: "python3".to_string(),
             file: None,
             code: Some("pass".to_string()),
-            args: vec!["--target".to_string(), "{{target}}".to_string(), "--port".to_string(), "{{port}}".to_string()],
+            args: vec![
+                "--target".to_string(),
+                "{{target}}".to_string(),
+                "--port".to_string(),
+                "{{port}}".to_string(),
+            ],
             timeout: 30,
         };
 

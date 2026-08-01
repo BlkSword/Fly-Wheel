@@ -60,11 +60,10 @@ pub struct TunnelProfile {
 
 /// 从 YAML 文件加载配置
 pub fn load_config(path: &Path) -> crate::core::Result<AppConfig> {
-    let content = std::fs::read_to_string(path).map_err(|e| {
-        crate::core::error::IntraSweepError::Config {
+    let content =
+        std::fs::read_to_string(path).map_err(|e| crate::core::error::IntraSweepError::Config {
             message: format!("读取配置文件 {} 失败: {}", path.display(), e),
-        }
-    })?;
+        })?;
 
     let config: AppConfig = serde_yaml::from_str(&content).map_err(|e| {
         crate::core::error::IntraSweepError::Config {
@@ -127,8 +126,17 @@ tunnel:
 "#;
         let config: AppConfig = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(config.defaults.concurrency, Some(50));
-        assert_eq!(config.scan.as_ref().unwrap().scan_type, Some("comprehensive".to_string()));
-        assert_eq!(config.crack.as_ref().unwrap().username_file, Some("./dict/users.txt".to_string()));
-        assert_eq!(config.tunnel.as_ref().unwrap().encryption_key, Some("my-secret".to_string()));
+        assert_eq!(
+            config.scan.as_ref().unwrap().scan_type,
+            Some("comprehensive".to_string())
+        );
+        assert_eq!(
+            config.crack.as_ref().unwrap().username_file,
+            Some("./dict/users.txt".to_string())
+        );
+        assert_eq!(
+            config.tunnel.as_ref().unwrap().encryption_key,
+            Some("my-secret".to_string())
+        );
     }
 }

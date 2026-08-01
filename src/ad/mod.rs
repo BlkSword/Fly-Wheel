@@ -132,6 +132,8 @@ impl Default for AdEnumResult {
 
 #[cfg(test)]
 mod tests {
+    // 测试构造数据多为字段赋值模式，与进度条/默认值构建风格一致
+    #![allow(clippy::field_reassign_with_default)]
     use super::*;
 
     // === 辅助函数 ===
@@ -385,18 +387,26 @@ mod tests {
         result.groups = vec![make_group("Domain Admins"), make_group("Users")];
         result.computers = vec![make_computer("DC01"), make_computer("WS001")];
         result.kerberoast_targets = vec![KerberoastTarget {
-            username: "svc_sql".to_string(), dn: "CN=svc_sql,CN=Users,DC=corp,DC=local".to_string(),
-            spn: "MSSQLSvc/sql01.corp.local:1433".to_string(), service_type: "MSSQLSvc".to_string(),
-            admin_count: false, enabled: true, description: None,
+            username: "svc_sql".to_string(),
+            dn: "CN=svc_sql,CN=Users,DC=corp,DC=local".to_string(),
+            spn: "MSSQLSvc/sql01.corp.local:1433".to_string(),
+            service_type: "MSSQLSvc".to_string(),
+            admin_count: false,
+            enabled: true,
+            description: None,
         }];
         result.asrep_targets = vec![AsrepTarget {
-            username: "no_preauth".to_string(), dn: "CN=no_preauth,CN=Users,DC=corp,DC=local".to_string(),
-            enabled: true, description: None,
+            username: "no_preauth".to_string(),
+            dn: "CN=no_preauth,CN=Users,DC=corp,DC=local".to_string(),
+            enabled: true,
+            description: None,
         }];
         result.gpos = vec!["Default Domain Policy".to_string()];
         result.trusts = vec![AdTrust {
-            domain: "child.corp.local".to_string(), trust_type: "ParentChild".to_string(),
-            trust_direction: "Bidirectional".to_string(), trust_attributes: "TRANSITIVE".to_string(),
+            domain: "child.corp.local".to_string(),
+            trust_type: "ParentChild".to_string(),
+            trust_direction: "Bidirectional".to_string(),
+            trust_attributes: "TRANSITIVE".to_string(),
         }];
 
         assert_eq!(result.domain_name, "corp.local");

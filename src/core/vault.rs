@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 /// 从密码和盐派生 32 字节密钥
 fn derive_vault_key(password: &str, salt: &[u8]) -> [u8; 32] {
-    use sha2::{Sha256, Digest};
+    use sha2::{Digest, Sha256};
 
     // 简化的密钥派生: SHA-256(password || salt)
     let mut hasher = Sha256::new();
@@ -104,7 +104,10 @@ impl Vault {
             .filter(|e| {
                 e.service.to_lowercase().contains(&query_lower)
                     || e.target.to_lowercase().contains(&query_lower)
-                    || e.username.as_deref().map(|u| u.to_lowercase().contains(&query_lower)).unwrap_or(false)
+                    || e.username
+                        .as_deref()
+                        .map(|u| u.to_lowercase().contains(&query_lower))
+                        .unwrap_or(false)
                     || e.credential.to_lowercase().contains(&query_lower)
             })
             .collect()
@@ -112,34 +115,29 @@ impl Vault {
 
     /// 序列化为 JSON
     pub fn to_json(&self) -> Result<String> {
-        serde_json::to_string_pretty(self)
-            .map_err(IntraSweepError::Serialization)
+        serde_json::to_string_pretty(self).map_err(IntraSweepError::Serialization)
     }
 
     /// 从 JSON 反序列化
     pub fn from_json(json: &str) -> Result<Self> {
-        serde_json::from_str(json)
-            .map_err(IntraSweepError::Serialization)
+        serde_json::from_str(json).map_err(IntraSweepError::Serialization)
     }
 
     /// 加密并保存到文件
     pub fn save_encrypted(&self, path: &std::path::Path, password: &str) -> Result<()> {
         let json = self.to_json()?;
         let encrypted = encrypt_data(&json.into_bytes(), password)?;
-        std::fs::write(path, &encrypted)
-            .map_err(IntraSweepError::Io)?;
+        std::fs::write(path, &encrypted).map_err(IntraSweepError::Io)?;
         Ok(())
     }
 
     /// 从加密文件加载
     pub fn load_encrypted(path: &std::path::Path, password: &str) -> Result<Self> {
-        let encrypted = std::fs::read(path)
-            .map_err(IntraSweepError::Io)?;
+        let encrypted = std::fs::read(path).map_err(IntraSweepError::Io)?;
         let decrypted = decrypt_data(&encrypted, password)?;
-        let json = String::from_utf8(decrypted)
-            .map_err(|e| IntraSweepError::Other {
-                message: format!("UTF-8 解码失败: {}", e),
-            })?;
+        let json = String::from_utf8(decrypted).map_err(|e| IntraSweepError::Other {
+            message: format!("UTF-8 解码失败: {}", e),
+        })?;
         Self::from_json(&json)
     }
 }
@@ -159,8 +157,9 @@ fn encrypt_data(data: &[u8], password: &str) -> Result<Vec<u8>> {
 
     let key = derive_vault_key(password, &salt);
     let crypto = crate::tunnel::crypto::CryptoLayer::new(&key);
-    let frame = crypto.encrypt(data)
-        .map_err(|e| IntraSweepError::Other { message: format!("加密失败: {}", e) })?;
+    let frame = crypto.encrypt(data).map_err(|e| IntraSweepError::Other {
+        message: format!("加密失败: {}", e),
+    })?;
 
     // frame: [4B len][24B nonce][ciphertext+tag]
     // vault: magic(24) || salt(32) || frame
@@ -187,8 +186,11 @@ fn decrypt_data(encrypted: &[u8], password: &str) -> Result<Vec<u8>> {
         });
     }
 
-    let salt: [u8; 32] = encrypted[24..56].try_into()
-        .map_err(|_| IntraSweepError::Other { message: "数据格式错误".to_string() })?;
+    let salt: [u8; 32] = encrypted[24..56]
+        .try_into()
+        .map_err(|_| IntraSweepError::Other {
+            message: "数据格式错误".to_string(),
+        })?;
     let frame = &encrypted[56..];
 
     let key = derive_vault_key(password, &salt);
@@ -196,11 +198,16 @@ fn decrypt_data(encrypted: &[u8], password: &str) -> Result<Vec<u8>> {
 
     // frame: [4B len][24B nonce][ciphertext+tag]
     if frame.len() < 4 {
-        return Err(IntraSweepError::Other { message: "加密数据损坏".to_string() });
+        return Err(IntraSweepError::Other {
+            message: "加密数据损坏".to_string(),
+        });
     }
     let nonce_and_ct = &frame[4..];
-    let plaintext = crypto.decrypt_frame(nonce_and_ct)
-        .map_err(|e| IntraSweepError::Other { message: format!("解密失败: {}", e) })?;
+    let plaintext = crypto
+        .decrypt_frame(nonce_and_ct)
+        .map_err(|e| IntraSweepError::Other {
+            message: format!("解密失败: {}", e),
+        })?;
 
     Ok(plaintext)
 }
@@ -236,14 +243,24 @@ mod tests {
     fn test_vault_filter_by_service() {
         let mut vault = Vault::new();
         vault.add_entry(VaultEntry {
-            service: "SSH".to_string(), target: "host1".to_string(), port: 22,
-            username: Some("root".to_string()), credential: "pass1".to_string(),
-            discovered_at: "".to_string(), source: "".to_string(), note: None,
+            service: "SSH".to_string(),
+            target: "host1".to_string(),
+            port: 22,
+            username: Some("root".to_string()),
+            credential: "pass1".to_string(),
+            discovered_at: "".to_string(),
+            source: "".to_string(),
+            note: None,
         });
         vault.add_entry(VaultEntry {
-            service: "RDP".to_string(), target: "host2".to_string(), port: 3389,
-            username: Some("admin".to_string()), credential: "pass2".to_string(),
-            discovered_at: "".to_string(), source: "".to_string(), note: None,
+            service: "RDP".to_string(),
+            target: "host2".to_string(),
+            port: 3389,
+            username: Some("admin".to_string()),
+            credential: "pass2".to_string(),
+            discovered_at: "".to_string(),
+            source: "".to_string(),
+            note: None,
         });
 
         let ssh = vault.filter_by_service("ssh");
@@ -255,9 +272,14 @@ mod tests {
     fn test_vault_search() {
         let mut vault = Vault::new();
         vault.add_entry(VaultEntry {
-            service: "MySQL".to_string(), target: "db-server".to_string(), port: 3306,
-            username: Some("root".to_string()), credential: "mysql_pass".to_string(),
-            discovered_at: "".to_string(), source: "".to_string(), note: None,
+            service: "MySQL".to_string(),
+            target: "db-server".to_string(),
+            port: 3306,
+            username: Some("root".to_string()),
+            credential: "mysql_pass".to_string(),
+            discovered_at: "".to_string(),
+            source: "".to_string(),
+            note: None,
         });
 
         let results = vault.search("mysql");
@@ -271,9 +293,13 @@ mod tests {
     fn test_vault_json_roundtrip() {
         let mut vault = Vault::new();
         vault.add_entry(VaultEntry {
-            service: "SSH".to_string(), target: "test".to_string(), port: 22,
-            username: Some("user".to_string()), credential: "pass".to_string(),
-            discovered_at: "2024-01-01T00:00:00Z".to_string(), source: "test".to_string(),
+            service: "SSH".to_string(),
+            target: "test".to_string(),
+            port: 22,
+            username: Some("user".to_string()),
+            credential: "pass".to_string(),
+            discovered_at: "2024-01-01T00:00:00Z".to_string(),
+            source: "test".to_string(),
             note: None,
         });
 
@@ -345,9 +371,13 @@ mod tests {
     fn test_vault_save_load_encrypted() {
         let mut vault = Vault::new();
         vault.add_entry(VaultEntry {
-            service: "RDP".to_string(), target: "10.0.0.1".to_string(), port: 3389,
-            username: Some("Administrator".to_string()), credential: "Admin123!".to_string(),
-            discovered_at: "2024-06-01T12:00:00Z".to_string(), source: "喷射".to_string(),
+            service: "RDP".to_string(),
+            target: "10.0.0.1".to_string(),
+            port: 3389,
+            username: Some("Administrator".to_string()),
+            credential: "Admin123!".to_string(),
+            discovered_at: "2024-06-01T12:00:00Z".to_string(),
+            source: "喷射".to_string(),
             note: Some("域控".to_string()),
         });
 

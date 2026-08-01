@@ -66,9 +66,7 @@ pub fn run_category(category: &str) -> Vec<PrivescFinding> {
             f.extend(check_sam_access());
             f
         }
-        "registry" => {
-            check_always_install_elevated()
-        }
+        "registry" => check_always_install_elevated(),
         "tokens" => check_token_privileges(),
         "files" => check_sensitive_files(),
         "patches" => check_patches(),
@@ -81,9 +79,7 @@ struct System;
 
 impl System {
     fn os_version() -> String {
-        let output = Command::new("cmd")
-            .args(["/C", "ver"])
-            .output();
+        let output = Command::new("cmd").args(["/C", "ver"]).output();
         match output {
             Ok(o) => String::from_utf8_lossy(&o.stdout).trim().to_string(),
             Err(_) => "Windows".to_string(),
@@ -100,14 +96,19 @@ fn check_admin() -> bool {
 }
 
 fn run_cmd(cmd: &str, args: &[&str]) -> Option<String> {
-    Command::new(cmd).args(args).output().ok().map(|o| {
-        String::from_utf8_lossy(&o.stdout).to_string()
-    })
+    Command::new(cmd)
+        .args(args)
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
 }
 
 /// 通过 PowerShell 执行命令（替代已弃用的 wmic）
 fn run_powershell(command: &str) -> Option<String> {
-    run_cmd("powershell", &["-NoProfile", "-NonInteractive", "-Command", command])
+    run_cmd(
+        "powershell",
+        &["-NoProfile", "-NonInteractive", "-Command", command],
+    )
 }
 
 /// 解析 CSV 行（处理引号内的逗号和转义引号）
@@ -175,7 +176,8 @@ fn check_unquoted_service_paths() -> Vec<PrivescFinding> {
                 title: "未引用的服务路径".to_string(),
                 description: format!("服务 '{}' 的可执行路径包含空格且未用引号包裹", service_name),
                 detail: format!("路径: {}", path),
-                remediation: "在注册表中为服务路径添加引号，或将可执行文件移动到无空格路径".to_string(),
+                remediation: "在注册表中为服务路径添加引号，或将可执行文件移动到无空格路径"
+                    .to_string(),
             });
         }
     }
@@ -296,8 +298,24 @@ fn check_always_install_elevated() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
 
     // 检查 HKLM 和 HKCU 的 AlwaysInstallElevated
-    let hklm = run_cmd("reg", &["query", r"HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer", "/v", "AlwaysInstallElevated"]);
-    let hkcu = run_cmd("reg", &["query", r"HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer", "/v", "AlwaysInstallElevated"]);
+    let hklm = run_cmd(
+        "reg",
+        &[
+            "query",
+            r"HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer",
+            "/v",
+            "AlwaysInstallElevated",
+        ],
+    );
+    let hkcu = run_cmd(
+        "reg",
+        &[
+            "query",
+            r"HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer",
+            "/v",
+            "AlwaysInstallElevated",
+        ],
+    );
 
     let hklm_enabled = hklm.map(|o| o.contains("0x1")).unwrap_or(false);
     let hkcu_enabled = hkcu.map(|o| o.contains("0x1")).unwrap_or(false);
@@ -307,7 +325,8 @@ fn check_always_install_elevated() -> Vec<PrivescFinding> {
             category: "注册表".to_string(),
             severity: PrivescSeverity::Critical,
             title: "AlwaysInstallElevated 已启用".to_string(),
-            description: "MSI 安装包以 SYSTEM 权限运行，任何用户安装的 MSI 都能获得最高权限".to_string(),
+            description: "MSI 安装包以 SYSTEM 权限运行，任何用户安装的 MSI 都能获得最高权限"
+                .to_string(),
             detail: "HKLM 和 HKCU 的 AlwaysInstallElevated 均设置为 1".to_string(),
             remediation: "禁用 AlwaysInstallElevated 策略".to_string(),
         });
@@ -344,7 +363,15 @@ fn check_stored_credentials() -> Vec<PrivescFinding> {
 fn check_auto_logon() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
 
-    if let Some(output) = run_cmd("reg", &["query", r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon", "/v", "DefaultPassword"]) {
+    if let Some(output) = run_cmd(
+        "reg",
+        &[
+            "query",
+            r"HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon",
+            "/v",
+            "DefaultPassword",
+        ],
+    ) {
         if output.contains("DefaultPassword") && !output.contains("未找到") {
             findings.push(PrivescFinding {
                 category: "凭据".to_string(),
@@ -395,13 +422,37 @@ fn check_token_privileges() -> Vec<PrivescFinding> {
 
     if let Some(output) = run_cmd("whoami", &["/priv"]) {
         let high_priv = [
-            ("SeDebugPrivilege", "调试程序", "可注入任意进程，包括 SYSTEM 进程"),
-            ("SeImpersonatePrivilege", "模拟客户端", "可模拟高权限令牌（土豆系列提权）"),
-            ("SeAssignPrimaryTokenPrivilege", "分配主令牌", "可分配新进程令牌"),
+            (
+                "SeDebugPrivilege",
+                "调试程序",
+                "可注入任意进程，包括 SYSTEM 进程",
+            ),
+            (
+                "SeImpersonatePrivilege",
+                "模拟客户端",
+                "可模拟高权限令牌（土豆系列提权）",
+            ),
+            (
+                "SeAssignPrimaryTokenPrivilege",
+                "分配主令牌",
+                "可分配新进程令牌",
+            ),
             ("SeLoadDriverPrivilege", "加载驱动", "可加载未签名内核驱动"),
-            ("SeTakeOwnershipPrivilege", "取得所有权", "可取得任意文件/注册表所有权"),
-            ("SeBackupPrivilege", "备份文件", "可读取任意文件，包括 SAM/SYSTEM"),
-            ("SeRestorePrivilege", "恢复文件", "可写入任意文件，包括系统文件"),
+            (
+                "SeTakeOwnershipPrivilege",
+                "取得所有权",
+                "可取得任意文件/注册表所有权",
+            ),
+            (
+                "SeBackupPrivilege",
+                "备份文件",
+                "可读取任意文件，包括 SAM/SYSTEM",
+            ),
+            (
+                "SeRestorePrivilege",
+                "恢复文件",
+                "可写入任意文件，包括系统文件",
+            ),
             ("SeCreateTokenPrivilege", "创建令牌", "可创建任意权限的令牌"),
         ];
 
@@ -430,12 +481,36 @@ fn check_sensitive_files() -> Vec<PrivescFinding> {
     let mut findings = Vec::new();
 
     let sensitive_paths = [
-        (r"C:\Windows\Panther\Unattend.xml", "Windows 无人值守安装文件", PrivescSeverity::Critical),
-        (r"C:\Windows\Panther\Unattend.xml.bak", "Windows 无人值守安装备份", PrivescSeverity::Critical),
-        (r"C:\Windows\System32\sysprep\unattend.xml", "Sysprep 配置文件", PrivescSeverity::Critical),
-        (r"C:\Windows\System32\sysprep\Panther\unattend.xml", "Sysprep Panther 配置", PrivescSeverity::High),
-        (r"C:\Users\*\AppData\Local\Microsoft\Credentials", "Windows 凭据目录", PrivescSeverity::High),
-        (r"C:\Users\*\AppData\Roaming\Microsoft\Credentials", "Windows 凭据目录", PrivescSeverity::High),
+        (
+            r"C:\Windows\Panther\Unattend.xml",
+            "Windows 无人值守安装文件",
+            PrivescSeverity::Critical,
+        ),
+        (
+            r"C:\Windows\Panther\Unattend.xml.bak",
+            "Windows 无人值守安装备份",
+            PrivescSeverity::Critical,
+        ),
+        (
+            r"C:\Windows\System32\sysprep\unattend.xml",
+            "Sysprep 配置文件",
+            PrivescSeverity::Critical,
+        ),
+        (
+            r"C:\Windows\System32\sysprep\Panther\unattend.xml",
+            "Sysprep Panther 配置",
+            PrivescSeverity::High,
+        ),
+        (
+            r"C:\Users\*\AppData\Local\Microsoft\Credentials",
+            "Windows 凭据目录",
+            PrivescSeverity::High,
+        ),
+        (
+            r"C:\Users\*\AppData\Roaming\Microsoft\Credentials",
+            "Windows 凭据目录",
+            PrivescSeverity::High,
+        ),
     ];
 
     for (path, desc, severity) in &sensitive_paths {
@@ -445,7 +520,12 @@ fn check_sensitive_files() -> Vec<PrivescFinding> {
                 if let Ok(entries) = std::fs::read_dir(parent) {
                     for entry in entries.flatten() {
                         let suffix = path.split('*').nth(1).unwrap_or("");
-                        let full_path = format!("{}{}{}", entry.path().display(), if suffix.starts_with('\\') { "" } else { "\\" }, suffix.trim_start_matches('\\'));
+                        let full_path = format!(
+                            "{}{}{}",
+                            entry.path().display(),
+                            if suffix.starts_with('\\') { "" } else { "\\" },
+                            suffix.trim_start_matches('\\')
+                        );
                         if std::fs::metadata(&full_path).is_ok() {
                             findings.push(PrivescFinding {
                                 category: "敏感文件".to_string(),
@@ -515,7 +595,8 @@ fn check_patches() -> Vec<PrivescFinding> {
 
 /// 检查目录是否可写（通过尝试创建临时文件）
 fn is_dir_writable(dir: &str) -> bool {
-    let test_file = std::path::Path::new(dir).join(format!(".intrasweep_probe_{}", std::process::id()));
+    let test_file =
+        std::path::Path::new(dir).join(format!(".intrasweep_probe_{}", std::process::id()));
     if std::fs::write(&test_file, b"probe").is_ok() {
         let _ = std::fs::remove_file(&test_file);
         true
@@ -665,9 +746,18 @@ fn check_missing_service_dlls() -> Vec<PrivescFinding> {
 
     // 常见可被劫持的 DLL 名称
     let common_dlls = [
-        "version.dll", "winmm.dll", "dwmapi.dll", "wbemcomn.dll",
-        "profapi.dll", "cryptbase.dll", "amsi.dll", "uxtheme.dll",
-        "dxva2.dll", "msftedit.dll", "propsys.dll", "secur32.dll",
+        "version.dll",
+        "winmm.dll",
+        "dwmapi.dll",
+        "wbemcomn.dll",
+        "profapi.dll",
+        "cryptbase.dll",
+        "amsi.dll",
+        "uxtheme.dll",
+        "dxva2.dll",
+        "msftedit.dll",
+        "propsys.dll",
+        "secur32.dll",
     ];
 
     for (name, raw_path) in get_service_paths() {
@@ -735,10 +825,25 @@ fn check_missing_service_dlls() -> Vec<PrivescFinding> {
 fn compute_stats(findings: &[PrivescFinding]) -> PrivescStats {
     PrivescStats {
         total_checks: findings.len(),
-        critical_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Critical).count(),
-        high_count: findings.iter().filter(|f| f.severity == PrivescSeverity::High).count(),
-        medium_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Medium).count(),
-        low_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Low).count(),
-        info_count: findings.iter().filter(|f| f.severity == PrivescSeverity::Info).count(),
+        critical_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Critical)
+            .count(),
+        high_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::High)
+            .count(),
+        medium_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Medium)
+            .count(),
+        low_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Low)
+            .count(),
+        info_count: findings
+            .iter()
+            .filter(|f| f.severity == PrivescSeverity::Info)
+            .count(),
     }
 }

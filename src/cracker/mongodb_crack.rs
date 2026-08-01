@@ -1,7 +1,7 @@
 //! MongoDB 爆破模块
 
 use async_trait::async_trait;
-use mongodb::{Client, options::ClientOptions};
+use mongodb::{options::ClientOptions, Client};
 use std::time::Duration;
 
 use crate::cracker::base;
@@ -28,20 +28,32 @@ impl Cracker for MongodbCracker {
         let target = config.target.clone();
         let port = config.port;
 
-        base::run_crack(config, CrackService::Mongodb, "MongoDB", move |_username, password, _, _, timeout| {
-            let target = target.clone();
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(_) => return false,
-            };
+        base::run_crack(
+            config,
+            CrackService::Mongodb,
+            "MongoDB",
+            move |_username, password, _, _, timeout| {
+                let target = target.clone();
+                let rt = match tokio::runtime::Runtime::new() {
+                    Ok(rt) => rt,
+                    Err(_) => return false,
+                };
 
-            rt.block_on(async {
-                Self::try_connect_async(&target, port, &password, timeout).await
-            })
-        }).await
+                rt.block_on(async {
+                    Self::try_connect_async(&target, port, &password, timeout).await
+                })
+            },
+        )
+        .await
     }
 
-    async fn verify(&self, target: &str, port: u16, _username: Option<&str>, password: &str) -> bool {
+    async fn verify(
+        &self,
+        target: &str,
+        port: u16,
+        _username: Option<&str>,
+        password: &str,
+    ) -> bool {
         Self::try_connect_async(target, port, password, Duration::from_secs(5)).await
     }
 }

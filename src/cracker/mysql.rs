@@ -28,34 +28,58 @@ impl Cracker for MysqlCracker {
         let target = config.target.clone();
         let port = config.port;
 
-        base::run_crack(config, CrackService::Mysql, "MySQL", move |username, password, _, _, timeout| {
-            let username = username.unwrap_or_else(|| "root".to_string());
-            let url = format!("mysql://{}:{}@{}:{}/mysql", username, password, target, port);
+        base::run_crack(
+            config,
+            CrackService::Mysql,
+            "MySQL",
+            move |username, password, _, _, timeout| {
+                let username = username.unwrap_or_else(|| "root".to_string());
+                let url = format!(
+                    "mysql://{}:{}@{}:{}/mysql",
+                    username, password, target, port
+                );
 
-            let pool = match Pool::from_url(&url) {
-                Ok(p) => p,
-                Err(_) => return false,
-            };
+                let pool = match Pool::from_url(&url) {
+                    Ok(p) => p,
+                    Err(_) => return false,
+                };
 
-            // 使用 tokio runtime 执行异步连接
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(_) => return false,
-            };
+                // 使用 tokio runtime 执行异步连接
+                let rt = match tokio::runtime::Runtime::new() {
+                    Ok(rt) => rt,
+                    Err(_) => return false,
+                };
 
-            matches!(rt.block_on(tokio::time::timeout(timeout, pool.get_conn())), Ok(Ok(_)))
-        }).await
+                matches!(
+                    rt.block_on(tokio::time::timeout(timeout, pool.get_conn())),
+                    Ok(Ok(_))
+                )
+            },
+        )
+        .await
     }
 
-    async fn verify(&self, target: &str, port: u16, username: Option<&str>, password: &str) -> bool {
+    async fn verify(
+        &self,
+        target: &str,
+        port: u16,
+        username: Option<&str>,
+        password: &str,
+    ) -> bool {
         let username = username.unwrap_or("root");
-        let url = format!("mysql://{}:{}@{}:{}/mysql", username, password, target, port);
+        let url = format!(
+            "mysql://{}:{}@{}:{}/mysql",
+            username, password, target, port
+        );
 
         let pool = match Pool::from_url(&url) {
             Ok(p) => p,
             Err(_) => return false,
         };
 
-        matches!(tokio::time::timeout(Duration::from_secs(5), pool.get_conn()).await, Ok(Ok(_)))
+        matches!(
+            tokio::time::timeout(Duration::from_secs(5), pool.get_conn()).await,
+            Ok(Ok(_))
+        )
     }
 }

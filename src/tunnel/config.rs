@@ -189,7 +189,9 @@ mod tests {
         let config = TunnelConfig::new(TunnelType::Forward, local);
         assert!(config.validate().is_err());
 
-        let config = config.clone().with_remote_target("192.168.1.100:80".to_string());
+        let config = config
+            .clone()
+            .with_remote_target("192.168.1.100:80".to_string());
         assert!(config.validate().is_ok());
 
         // 链式隧道需要跳板和目标

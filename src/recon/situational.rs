@@ -47,7 +47,8 @@ fn get_os_info() -> String {
         if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
             for line in content.lines() {
                 if line.starts_with("PRETTY_NAME=") {
-                    return line.trim_start_matches("PRETTY_NAME=")
+                    return line
+                        .trim_start_matches("PRETTY_NAME=")
                         .trim_matches('"')
                         .to_string();
                 }
@@ -62,7 +63,10 @@ fn get_os_info() -> String {
 fn get_os_version() -> String {
     if cfg!(windows) {
         // ver是cmd.exe内置命令，必须通过cmd /c调用
-        if let Ok(output) = std::process::Command::new("cmd").args(["/c", "ver"]).output() {
+        if let Ok(output) = std::process::Command::new("cmd")
+            .args(["/c", "ver"])
+            .output()
+        {
             let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !ver.is_empty() {
                 return ver;
@@ -79,9 +83,7 @@ fn get_current_privileges() -> Vec<String> {
 
     if cfg!(windows) {
         // 检查是否管理员
-        let output = std::process::Command::new("net")
-            .args(["session"])
-            .output();
+        let output = std::process::Command::new("net").args(["session"]).output();
 
         match output {
             Ok(o) if o.status.success() => {
@@ -123,7 +125,13 @@ fn get_current_privileges() -> Vec<String> {
             }
         }
         // 检查sudo
-        if std::process::Command::new("sudo").arg("-n").arg("true").output().map(|o| o.status.success()).unwrap_or(false) {
+        if std::process::Command::new("sudo")
+            .arg("-n")
+            .arg("true")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             privs.push("sudo (passwordless)".to_string());
         }
     }
@@ -134,8 +142,7 @@ fn get_current_privileges() -> Vec<String> {
 fn check_domain_membership() -> (bool, Option<String>) {
     if cfg!(windows) {
         // systeminfo | findstr /B /C:"Domain"
-        let output = std::process::Command::new("systeminfo")
-            .output();
+        let output = std::process::Command::new("systeminfo").output();
 
         if let Ok(o) = output {
             let stdout = String::from_utf8_lossy(&o.stdout);
@@ -357,7 +364,13 @@ fn list_installed_software() -> Vec<String> {
         // 备用：从注册表读取
         if software.is_empty() {
             let output = std::process::Command::new("reg")
-                .args(["query", r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "/s", "/f", "DisplayName"])
+                .args([
+                    "query",
+                    r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                    "/s",
+                    "/f",
+                    "DisplayName",
+                ])
                 .output();
 
             if let Ok(o) = output {
@@ -377,7 +390,11 @@ fn list_installed_software() -> Vec<String> {
     } else if cfg!(unix) {
         // dpkg -l 或 rpm -qa
         for cmd in &["dpkg", "rpm"] {
-            let args = if *cmd == "dpkg" { vec!["-l"] } else { vec!["-qa"] };
+            let args = if *cmd == "dpkg" {
+                vec!["-l"]
+            } else {
+                vec!["-qa"]
+            };
             if let Ok(output) = std::process::Command::new(cmd).args(&args).output() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 for line in stdout.lines().take(50) {
@@ -458,10 +475,9 @@ fn list_installed_patches() -> Vec<String> {
                 for line in stdout.lines() {
                     if line.contains("KB") {
                         for part in line.split_whitespace() {
-                            if part.starts_with("KB")
-                                && !patches.contains(&part.to_string()) {
-                                    patches.push(part.to_string());
-                                }
+                            if part.starts_with("KB") && !patches.contains(&part.to_string()) {
+                                patches.push(part.to_string());
+                            }
                         }
                     }
                 }
@@ -483,17 +499,49 @@ fn check_missing_patches(installed: &[String]) -> Vec<PotentialVuln> {
 
     // 关键漏洞与对应KB号
     let critical_patches = [
-        ("KB4012212", "MS17-010 EternalBlue (永恒之蓝)", VulnSeverity::Critical),
-        ("KB4012213", "MS17-010 EternalBlue (Win10)", VulnSeverity::Critical),
-        ("KB4012606", "MS17-010 EternalBlue (Win8.1)", VulnSeverity::Critical),
-        ("KB4551762", "CVE-2020-0796 SMBGhost", VulnSeverity::Critical),
-        ("KB5005565", "CVE-2021-36934 HiveNightmare (SeriousSAM)", VulnSeverity::High),
-        ("KB5005568", "CVE-2021-36934 HiveNightmare (Win11)", VulnSeverity::High),
+        (
+            "KB4012212",
+            "MS17-010 EternalBlue (永恒之蓝)",
+            VulnSeverity::Critical,
+        ),
+        (
+            "KB4012213",
+            "MS17-010 EternalBlue (Win10)",
+            VulnSeverity::Critical,
+        ),
+        (
+            "KB4012606",
+            "MS17-010 EternalBlue (Win8.1)",
+            VulnSeverity::Critical,
+        ),
+        (
+            "KB4551762",
+            "CVE-2020-0796 SMBGhost",
+            VulnSeverity::Critical,
+        ),
+        (
+            "KB5005565",
+            "CVE-2021-36934 HiveNightmare (SeriousSAM)",
+            VulnSeverity::High,
+        ),
+        (
+            "KB5005568",
+            "CVE-2021-36934 HiveNightmare (Win11)",
+            VulnSeverity::High,
+        ),
         ("KB5000802", "CVE-2021-24084 (Win10)", VulnSeverity::High),
-        ("KB4534273", "CVE-2020-0601 CurveBall (CryptoAPI)", VulnSeverity::High),
+        (
+            "KB4534273",
+            "CVE-2020-0601 CurveBall (CryptoAPI)",
+            VulnSeverity::High,
+        ),
         ("KB4499175", "CVE-2019-1388 UAC Bypass", VulnSeverity::High),
         ("KB4524244", "CVE-2020-0787 (Win7)", VulnSeverity::High),
-        ("KB4500331", "CVE-2019-0841 (Win10 AppX)", VulnSeverity::Medium),
+        (
+            "KB4500331",
+            "CVE-2019-0841 (Win10 AppX)",
+            VulnSeverity::Medium,
+        ),
         ("KB4578013", "CVE-2020-17087 (Win10)", VulnSeverity::Medium),
     ];
 
@@ -539,10 +587,22 @@ mod tests {
     #[test]
     fn test_check_missing_patches_all_installed() {
         let installed: Vec<String> = [
-            "KB4012212", "KB4012213", "KB4012606", "KB4551762",
-            "KB5005565", "KB5005568", "KB5000802", "KB4534273",
-            "KB4499175", "KB4524244", "KB4500331", "KB4578013",
-        ].iter().map(|s| s.to_string()).collect();
+            "KB4012212",
+            "KB4012213",
+            "KB4012606",
+            "KB4551762",
+            "KB5005565",
+            "KB5005568",
+            "KB5000802",
+            "KB4534273",
+            "KB4499175",
+            "KB4524244",
+            "KB4500331",
+            "KB4578013",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
         let vulns = check_missing_patches(&installed);
         assert!(vulns.is_empty());
     }

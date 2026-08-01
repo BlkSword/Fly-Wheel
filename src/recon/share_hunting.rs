@@ -117,17 +117,29 @@ const SENSITIVE_EXTENSIONS: &[(&str, FileType)] = &[
 
 /// 凭据相关关键词
 const CREDENTIAL_KEYWORDS: &[&str] = &[
-    "password", "passwd", "pwd",
-    "credential", "secret", "token",
-    "connectionString", "connection string",
-    "User ID=", "UserID=", "uid=",
-    "Password=", "Pwd=", "pwd=",
-    "sa", "admin",
+    "password",
+    "passwd",
+    "pwd",
+    "credential",
+    "secret",
+    "token",
+    "connectionString",
+    "connection string",
+    "User ID=",
+    "UserID=",
+    "uid=",
+    "Password=",
+    "Pwd=",
+    "pwd=",
+    "sa",
+    "admin",
     "PRIVATE KEY",
     "-----BEGIN RSA PRIVATE KEY-----",
     "-----BEGIN OPENSSH PRIVATE KEY-----",
-    "NTLM", "hash",
-    "DSN=", "Provider=",
+    "NTLM",
+    "hash",
+    "DSN=",
+    "Provider=",
 ];
 
 /// 扫描网络共享
@@ -238,19 +250,18 @@ fn scan_share_recursive(
 
             if file_path.is_dir() {
                 // 跳过系统目录
-                let dir_name = file_path.file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("");
-                if dir_name.starts_with("System") || dir_name == "Windows" || dir_name == "$Recycle.Bin" {
+                let dir_name = file_path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                if dir_name.starts_with("System")
+                    || dir_name == "Windows"
+                    || dir_name == "$Recycle.Bin"
+                {
                     continue;
                 }
 
                 // 递归进入子目录
-                if let Ok(sub_count) = scan_share_recursive(
-                    &file_path.to_string_lossy(),
-                    max_depth - 1,
-                    findings,
-                ) {
+                if let Ok(sub_count) =
+                    scan_share_recursive(&file_path.to_string_lossy(), max_depth - 1, findings)
+                {
                     count += sub_count;
                 }
             } else if file_path.is_file() {
@@ -391,7 +402,15 @@ pub fn search_files_by_keyword(
                             continue;
                         }
                     }
-                    search_dir(&path, keyword_lower, max_files, count, findings, base_path, keyword);
+                    search_dir(
+                        &path,
+                        keyword_lower,
+                        max_files,
+                        count,
+                        findings,
+                        base_path,
+                        keyword,
+                    );
                 } else if path.is_file() {
                     if let Ok(metadata) = std::fs::metadata(&path) {
                         if metadata.len() < 1024 * 1024 {
@@ -399,7 +418,11 @@ pub fn search_files_by_keyword(
                                 if content.to_lowercase().contains(keyword_lower) {
                                     findings.push(ShareFinding {
                                         share_path: base_path.to_string(),
-                                        filename: path.file_name().unwrap_or_default().to_string_lossy().to_string(),
+                                        filename: path
+                                            .file_name()
+                                            .unwrap_or_default()
+                                            .to_string_lossy()
+                                            .to_string(),
                                         full_path: path.to_string_lossy().to_string(),
                                         file_size: metadata.len(),
                                         file_type: FileType::Other,

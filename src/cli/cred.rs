@@ -18,12 +18,13 @@ pub fn run_cred_cmd(
 ) -> Result<()> {
     let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
-    // 无任何有效参数时进入交互式模式
-    let (dc, domain, username, password) = match (dc, domain, username, password) {
-        (None, None, None, None) => run_interactive_cred()?,
-        (dc_opt, domain_opt, username_opt, password_opt) => {
-            (dc_opt, domain_opt, username_opt, password_opt)
-        }
+    // 无任何有效参数时进入交互式模式（含 -o 输出，避免仅指定输出误入向导）
+    let interactive = dc.is_none() && domain.is_none() && username.is_none()
+        && password.is_none() && output.is_none();
+    let (dc, domain, username, password) = if interactive {
+        run_interactive_cred()?
+    } else {
+        (dc, domain, username, password)
     };
 
     let mut manager = crate::cred::CredManager::new(

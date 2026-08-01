@@ -20,10 +20,12 @@ pub fn run_recon_cmd(
 ) -> Result<()> {
     let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
-    // 无任何有效参数时进入交互式模式
-    let (dc, domain, mode) = match (dc, domain) {
-        (None, None) if mode == "full" => run_interactive_recon()?,
-        (dc_opt, domain_opt) => (dc_opt, domain_opt, mode),
+    // 无任何有效参数时进入交互式模式（含 -o 输出，避免仅指定输出误入向导）
+    let interactive = dc.is_none() && domain.is_none() && mode == "full" && output.is_none();
+    let (dc, domain, mode) = if interactive {
+        run_interactive_recon()?
+    } else {
+        (dc, domain, mode)
     };
 
     let mode = if RECON_MODES.contains(&mode.as_str()) {

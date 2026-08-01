@@ -454,16 +454,6 @@ impl NetworkCollector {
         self.collect_generic_routes()
     }
 
-    #[cfg(not(windows))]
-    fn collect_windows_arp(&self) -> Vec<ArpEntry> {
-        Vec::new()
-    }
-
-    #[cfg(not(windows))]
-    fn collect_windows_connections(&self) -> Vec<NetworkConnection> {
-        Vec::new()
-    }
-
     #[cfg(not(target_os = "macos"))]
     fn collect_macos_interfaces(&self) -> Vec<NetworkInterface> {
         self.collect_generic_interfaces()
@@ -521,7 +511,8 @@ impl Default for NetworkCollector {
 
 // ==================== 辅助函数 ====================
 
-/// 解析地址和端口
+/// 解析地址和端口（Windows netstat / macOS netstat 格式）
+#[cfg(any(windows, target_os = "macos"))]
 fn parse_addr_port(addr_str: &str) -> (String, u16) {
     let parts: Vec<&str> = addr_str.rsplitn(2, ':').collect();
     if parts.len() == 2 {
@@ -921,6 +912,7 @@ mod tests {
         assert_eq!(hex_to_ip("0000A8C0"), "192.168.0.0");
     }
 
+    #[cfg(any(windows, target_os = "macos"))]
     #[test]
     fn test_parse_addr_port() {
         let (addr, port) = parse_addr_port("192.168.1.1:80");

@@ -206,9 +206,8 @@ impl DomainScanner {
                 .output()
             {
                 let content = String::from_utf8_lossy(&output.stdout);
-                // 解析结果
-                for line in content.lines() {
-                    // 简单解析逻辑
+                // 解析结果（SRV 记录提取待实现）
+                for _line in content.lines() {
                 }
             }
 

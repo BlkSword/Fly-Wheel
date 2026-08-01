@@ -66,6 +66,7 @@ impl HostScanner {
     /// 合并 TCP 和 ARP 扫描结果
     ///
     /// ARP 结果提供 MAC 地址，TCP 结果提供端口和延迟信息
+    #[cfg(windows)]
     fn merge_scan_results(mut tcp_results: Vec<HostResult>, arp_results: Vec<HostResult>) -> Vec<HostResult> {
         // 建立 ARP MAC 地址映射
         let mut mac_map = std::collections::HashMap::new();

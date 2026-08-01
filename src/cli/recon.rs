@@ -20,11 +20,9 @@ pub fn run_recon_cmd(
 ) -> Result<()> {
     let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
-    // 无参数时进入交互式模式
+    // 无任何有效参数时进入交互式模式
     let (dc, domain, mode) = match (dc, domain) {
-        (dc_opt, domain_opt) if dc_opt.is_none() && domain_opt.is_none() => {
-            run_interactive_recon(mode)?
-        }
+        (None, None) if mode == "full" => run_interactive_recon()?,
         (dc_opt, domain_opt) => (dc_opt, domain_opt, mode),
     };
 
@@ -143,7 +141,7 @@ fn mode_label(mode: &str) -> &str {
     }
 }
 
-fn run_interactive_recon(initial_mode: String) -> Result<(Option<String>, Option<String>, String)> {
+fn run_interactive_recon() -> Result<(Option<String>, Option<String>, String)> {
     print_banner();
     println!();
     print_info("IntraSweep 交互式信息侦察向导");
@@ -159,16 +157,7 @@ fn run_interactive_recon(initial_mode: String) -> Result<(Option<String>, Option
     println!("  7. vlan       - VLAN/网络拓扑发现");
     println!();
 
-    let default_mode = match initial_mode.as_str() {
-        "edr" => 2,
-        "situational" => 3,
-        "host" => 4,
-        "shares" => 5,
-        "firewall" => 6,
-        "vlan" => 7,
-        _ => 1,
-    };
-    let choice = InteractiveMenu::read_number_opt("请选择 [1-7, 默认 1]: ", 1, 7, default_mode);
+    let choice = InteractiveMenu::read_number_opt("请选择 [1-7, 默认 1]: ", 1, 7, 1);
     let mode = match choice {
         1 => "full".to_string(),
         2 => "edr".to_string(),

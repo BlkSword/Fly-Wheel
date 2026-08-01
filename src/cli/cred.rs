@@ -18,12 +18,12 @@ pub fn run_cred_cmd(
 ) -> Result<()> {
     let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
-    // 无任何参数时进入交互式模式
-    let (dc, domain, username, password) = match (dc, domain) {
-        (dc_opt, domain_opt) if dc_opt.is_none() && domain_opt.is_none() => {
-            run_interactive_cred(username, password)?
+    // 无任何有效参数时进入交互式模式
+    let (dc, domain, username, password) = match (dc, domain, username, password) {
+        (None, None, None, None) => run_interactive_cred()?,
+        (dc_opt, domain_opt, username_opt, password_opt) => {
+            (dc_opt, domain_opt, username_opt, password_opt)
         }
-        (dc_opt, domain_opt) => (dc_opt, domain_opt, username, password),
     };
 
     let mut manager = crate::cred::CredManager::new(
@@ -64,10 +64,7 @@ pub fn run_cred_cmd(
     Ok(())
 }
 
-fn run_interactive_cred(
-    initial_username: Option<String>,
-    initial_password: Option<String>,
-) -> Result<(Option<String>, Option<String>, Option<String>, Option<String>)> {
+fn run_interactive_cred() -> Result<(Option<String>, Option<String>, Option<String>, Option<String>)> {
     print_banner();
     println!();
     print_info("IntraSweep 交互式本地凭据收集向导");
@@ -76,9 +73,7 @@ fn run_interactive_cred(
     InteractiveMenu::print_step(1, 4, "认证凭据 (可选)");
     println!("凭据用于域环境 GPP 解密；本机浏览器/WiFi/应用凭据无需凭据即可提取。");
     println!();
-    let username = if initial_username.is_some() {
-        initial_username
-    } else {
+    let username = {
         let u = InteractiveMenu::read_input("用户名 (留空=仅本机提取): ");
         if u.is_empty() {
             None
@@ -86,7 +81,7 @@ fn run_interactive_cred(
             Some(u)
         }
     };
-    let password = if username.is_some() && initial_password.is_none() {
+    let password = if username.is_some() {
         let p = InteractiveMenu::read_input("密码: ");
         if p.is_empty() {
             None
@@ -94,7 +89,7 @@ fn run_interactive_cred(
             Some(p)
         }
     } else {
-        initial_password
+        None
     };
 
     InteractiveMenu::print_step(2, 4, "域信息 (可选)");

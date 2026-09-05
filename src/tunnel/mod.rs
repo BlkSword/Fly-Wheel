@@ -24,6 +24,7 @@ pub mod socks5;
 pub use chain::ChainTunnel;
 pub use config::{TunnelConfig, TunnelType};
 pub use forward::ForwardTunnel;
+pub use http::HttpTunnel;
 pub use models::{LogEventHandler, TunnelEventHandler};
 pub use reverse::ReverseTunnel;
 pub use socks5::Socks5Server;
@@ -70,6 +71,11 @@ impl TunnelManager {
     /// 创建链式隧道
     pub fn create_chain_tunnel(&self, config: TunnelConfig) -> ChainTunnel {
         ChainTunnel::new(config, self.event_handler.clone())
+    }
+
+    /// 创建 HTTP CONNECT 隧道
+    pub fn create_http_tunnel(&self, config: TunnelConfig) -> HttpTunnel {
+        HttpTunnel::new(config, self.event_handler.clone())
     }
 }
 

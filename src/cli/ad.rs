@@ -82,6 +82,18 @@ pub fn run_ad_cmd(
             print_success(&format!("BloodHound 数据已导出到: {}", bh_dir.display()));
             return Ok(());
         }
+        "adcs" => {
+            let result = crate::recon::adcs::enumerate_adcs(&dc, &domain).map_err(ad_err)?;
+            print_adcs_results(&result);
+            save_ad_result(&output_fmt, &output, &serde_json::to_value(&result)?)?;
+            return Ok(());
+        }
+        "gpp" => {
+            let creds = crate::cred::gpp::find_and_decrypt_gpp(&dc, &domain).map_err(ad_err)?;
+            print_gpp_results(&creds);
+            save_ad_result(&output_fmt, &output, &serde_json::to_value(&creds)?)?;
+            return Ok(());
+        }
         _ => {
             let enumerator = crate::ad::ldap::AdEnumerator::new(config);
             let result = rt.block_on(enumerator.enumerate_all()).map_err(ad_err)?;
@@ -267,6 +279,37 @@ fn save_ad_result(
         print_success(&format!("结果已保存到: {}", path.display()));
     }
     Ok(())
+}
+
+fn print_adcs_results(result: &crate::recon::adcs::AdcsEnumResult) {
+    println!();
+    println!("{}", "=".repeat(70));
+    println!("║  ADCS 枚举结果");
+    println!("║  CA 服务器: {}", result.ca_servers.len());
+    println!("║  证书模板: {}", result.certificate_templates.len());
+    println!("║  可利用配置: {}", result.exploitable_issues.len());
+    println!("╠{}", "=".repeat(69));
+
+    for issue in &result.exploitable_issues {
+        println!(
+            "║  [{}] {} - {}",
+            issue.esc_type, issue.description, issue.severity
+        );
+    }
+
+    println!("╚{}", "=".repeat(69));
+}
+
+fn print_gpp_results(creds: &[crate::cred::Credential]) {
+    println!();
+    println!("{}", "=".repeat(70));
+    println!("║  GPP 解密结果 (共 {} 条)", creds.len());
+    println!("╠{}", "=".repeat(69));
+    for cred in creds {
+        let username = cred.username.as_deref().unwrap_or("(未知用户)");
+        println!("║  {} : *** | {}", username, cred.source);
+    }
+    println!("╚{}", "=".repeat(69));
 }
 
 fn print_ad_enum_results(result: &crate::ad::AdEnumResult) {

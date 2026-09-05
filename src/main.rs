@@ -178,10 +178,6 @@ fn main() {
             timeout,
             web_probe,
         } => {
-            if web_probe {
-                print_error("--web-probe Web 主动探测尚未实现（仅有 payload 生成器，无执行逻辑）。请等待后续版本。");
-                std::process::exit(1);
-            }
             let (concurrency, timeout) = if let Some(ref c) = cfg {
                 (
                     if concurrency != 20 {

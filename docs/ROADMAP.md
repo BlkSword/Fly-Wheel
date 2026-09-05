@@ -75,6 +75,7 @@
 | FTP / Telnet / VNC 爆破 | Hydra 常用协议 | P2 |
 | 爆破结果自动写入凭据库 | NetExec `--loot` | P1 |
 | 密码喷洒扩展到 SMB/WinRM | NetExec `--spray` | P1 |
+  - **已部分完成**：SSH/WinRM 已支持，SMB 未实现 |
 
 ### 隧道模块
 
@@ -82,6 +83,7 @@
 |------|------|:------:|
 | 加密隧道接线 | Chisel `--key` | P0 |
 | HTTP 隧道（CONNECT 代理穿透） | Neo-reGeorg | P1 |
+  - **已完成 CLI 接线**：`intrasweep tunnel http -H proxy -t target` |
 | 隧道流量统计与状态面板 | Chisel UI | P2 |
 
 ### 凭据模块
@@ -116,6 +118,7 @@
 |------|------|:------:|
 | PoC 规则扩充到 100+ | Nuclei 常用模板 | P1 |
 | Web 主动探测引擎接线 | Nuclei / sqlmap | P2 |
+  - **已部分完成**：`vuln --web-probe` 已接入基础 GET/POST 探测 |
 | 子域名/目录枚举 | dirsearch / subfinder | P2 |
 
 ---

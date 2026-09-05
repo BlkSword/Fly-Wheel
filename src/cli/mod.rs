@@ -234,9 +234,9 @@ pub enum Commands {
         spray: bool,
     },
 
-    /// 内网穿透 — 正向/反向/SOCKS5/链式/HTTP/DNS隧道 (缩写: tu)
+    /// 内网穿透 — 正向/反向/SOCKS5/链式/HTTP隧道 (缩写: tu)
     Tunnel {
-        /// 隧道类型: forward, reverse, socks5, chain, http, dns
+        /// 隧道类型: forward, reverse, socks5, chain, http（DNS 编码器已实现但隧道未接线）
         #[arg(value_name = "TYPE")]
         tunnel_type: Option<String>,
 
@@ -466,6 +466,7 @@ pub(crate) const TUNNEL_TYPES: &[(&str, &str)] = &[
     ("reverse", "re"),
     ("socks5", "so"),
     ("chain", "ch"),
+    ("http", "ht"),
 ];
 
 // ============================================================

@@ -9,6 +9,7 @@
 //! - 基于季节/公司名称的弱密码猜测
 
 use crate::core::Result;
+use crate::cracker::service::Cracker;
 use crate::cracker::CrackService;
 use std::time::Duration;
 
@@ -328,6 +329,10 @@ async fn try_single_login(
                         .userauth_password(username, password)
                         .map(|_| true)
                         .map_err(|e| format!("认证失败: {}", e))
+                }
+                CrackService::Winrm => {
+                    let cracker = crate::cracker::winrm::WinrmCracker::new();
+                    Ok(cracker.verify(target, port, Some(username), password).await)
                 }
                 _ => {
                     // 其他服务类型返回"未实现快速测试"

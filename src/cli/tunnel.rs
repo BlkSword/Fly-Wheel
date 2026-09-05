@@ -76,6 +76,7 @@ fn run_tunnel(
         TunnelType::Reverse => 8080,
         TunnelType::Socks5 => 1080,
         TunnelType::Chain => 8080,
+        TunnelType::Http => 8080,
     });
 
     let local_addr_str = format!("127.0.0.1:{}", local_port);
@@ -140,6 +141,10 @@ fn run_tunnel(
             let tunnel = manager.create_chain_tunnel(config);
             rt.block_on(tunnel.start_with_shutdown(&shutdown))?;
         }
+        TunnelType::Http => {
+            let tunnel = manager.create_http_tunnel(config);
+            rt.block_on(tunnel.start_with_shutdown(&shutdown))?;
+        }
     }
 
     println!("隧道已关闭");
@@ -178,14 +183,16 @@ fn run_interactive_tunnel(
         println!("  2. 反向隧道       - 从内网建立连接回外网");
         println!("  3. SOCKS5 代理    - 动态端口转发代理");
         println!("  4. 链式隧道       - 多级跳板连接");
+        println!("  5. HTTP 隧道      - 通过 HTTP CONNECT 代理穿透出站限制");
         println!();
 
-        let choice = InteractiveMenu::read_number_opt("请选择隧道类型 [1-4, 默认 1]: ", 1, 4, 1);
+        let choice = InteractiveMenu::read_number_opt("请选择隧道类型 [1-5, 默认 1]: ", 1, 5, 1);
         let tunnel_type = match choice {
             1 => "forward".to_string(),
             2 => "reverse".to_string(),
             3 => "socks5".to_string(),
             4 => "chain".to_string(),
+            5 => "http".to_string(),
             _ => "forward".to_string(),
         };
         print_success(&format!("已选择: {}", format_tunnel_type(&tunnel_type)));
@@ -201,6 +208,7 @@ fn run_interactive_tunnel(
         TunnelType::Reverse => 8080,
         TunnelType::Socks5 => 1080,
         TunnelType::Chain => 8080,
+        TunnelType::Http => 8080,
     };
 
     let local_port = if let Some(lp) = initial_local_port {
@@ -271,6 +279,31 @@ fn run_interactive_tunnel(
             };
 
             config = config.with_hops(hops).with_remote_target(target);
+            println!();
+        }
+        TunnelType::Http => {
+            InteractiveMenu::print_step(3, 5, "HTTP 代理和目标");
+            let proxy = if let Some(h) = &initial_hop {
+                let proxy = h.first().cloned().unwrap_or_default();
+                println!("已指定代理: {}", proxy);
+                proxy
+            } else {
+                InteractiveMenu::read_input_required(
+                    "请输入 HTTP 代理地址 (host:port): ",
+                    "HTTP 代理不能为空",
+                )
+            };
+            let target = if let Some(t) = &initial_target {
+                println!("已指定目标: {}", t);
+                println!();
+                t.clone()
+            } else {
+                InteractiveMenu::read_input_required(
+                    "请输入最终目标地址 (host:port): ",
+                    "目标不能为空",
+                )
+            };
+            config = config.with_hops(vec![proxy]).with_remote_target(target);
             println!();
         }
         TunnelType::Socks5 => {
@@ -376,6 +409,10 @@ fn run_interactive_tunnel(
             let tunnel = manager.create_chain_tunnel(config);
             rt.block_on(tunnel.start_with_shutdown(&shutdown))?;
         }
+        TunnelType::Http => {
+            let tunnel = manager.create_http_tunnel(config);
+            rt.block_on(tunnel.start_with_shutdown(&shutdown))?;
+        }
     }
 
     println!("隧道已关闭");
@@ -389,6 +426,7 @@ fn format_tunnel_type(ty: &str) -> String {
         "reverse" => crate::core::obfstr::sensitive::reverse_tunnel_label(),
         "socks5" => crate::core::obfstr::sensitive::socks5_proxy_label(),
         "chain" => crate::core::obfstr::sensitive::chain_tunnel_label(),
+        "http" => "HTTP隧道".to_string(),
         _ => ty.to_string(),
     }
 }

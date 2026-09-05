@@ -26,7 +26,7 @@ pub fn run_crack_cmd(
     if spray {
         let supported = service
             .as_deref()
-            .map(|s| matches!(s.to_lowercase().as_str(), "ssh"))
+            .map(|s| matches!(s.to_lowercase().as_str(), "ssh" | "winrm"))
             .unwrap_or(false);
         if supported {
             return run_spray(
@@ -38,7 +38,7 @@ pub fn run_crack_cmd(
                 password_file,
             );
         }
-        print_info("密码喷射当前仅支持 SSH（WinRM 等快速认证测试未实现），回退到普通爆破模式");
+        print_info("密码喷射当前仅支持 SSH/WinRM，其余服务回退到普通爆破模式");
     }
 
     match target {
@@ -66,7 +66,7 @@ pub fn run_crack_cmd(
     }
 }
 
-/// 运行密码喷射（SSH）
+/// 运行密码喷射（SSH/WinRM）
 ///
 /// 使用少量高价值密码对大量用户名轮次尝试，轮次间冷却以防账户锁定。
 fn run_spray(
@@ -89,6 +89,7 @@ fn run_spray(
 
     let service_type = match service.to_lowercase().as_str() {
         "ssh" => CrackService::Ssh,
+        "winrm" => CrackService::Winrm,
         other => {
             print_error(&format!("密码喷射不支持服务: {}", other));
             return Ok(());

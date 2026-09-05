@@ -15,6 +15,8 @@ pub enum TunnelType {
     Socks5,
     /// 链式隧道 - 多级跳板
     Chain,
+    /// HTTP CONNECT 隧道 - 通过 HTTP 代理穿透出站限制
+    Http,
 }
 
 impl TunnelType {
@@ -26,6 +28,7 @@ impl TunnelType {
             TunnelType::Reverse => "反向隧道",
             TunnelType::Socks5 => "SOCKS5代理",
             TunnelType::Chain => "链式隧道",
+            TunnelType::Http => "HTTP隧道",
         }
     }
 
@@ -36,6 +39,7 @@ impl TunnelType {
             TunnelType::Reverse => "reverse",
             TunnelType::Socks5 => "socks5",
             TunnelType::Chain => "chain",
+            TunnelType::Http => "http",
         }
     }
 
@@ -46,6 +50,7 @@ impl TunnelType {
             "reverse" | "r" | "re" => Some(TunnelType::Reverse),
             "socks5" | "socks" | "s" | "so" => Some(TunnelType::Socks5),
             "chain" | "c" => Some(TunnelType::Chain),
+            "http" | "h" | "ht" => Some(TunnelType::Http),
             _ => None,
         }
     }
@@ -161,6 +166,18 @@ impl TunnelConfig {
                 }
             }
             TunnelType::Socks5 => {}
+            TunnelType::Http => {
+                if self.remote_target.is_none() {
+                    return Err(crate::core::error::IntraSweepError::Config {
+                        message: "HTTP 隧道需要指定远程目标 (-t/--target)".to_string(),
+                    });
+                }
+                if self.hops.is_empty() {
+                    return Err(crate::core::error::IntraSweepError::Config {
+                        message: "HTTP 隧道需要指定 HTTP 代理地址 (-H/--hop)".to_string(),
+                    });
+                }
+            }
         }
 
         Ok(())
@@ -178,6 +195,7 @@ mod tests {
         assert_eq!(TunnelType::parse("reverse"), Some(TunnelType::Reverse));
         assert_eq!(TunnelType::parse("socks5"), Some(TunnelType::Socks5));
         assert_eq!(TunnelType::parse("chain"), Some(TunnelType::Chain));
+        assert_eq!(TunnelType::parse("http"), Some(TunnelType::Http));
         assert_eq!(TunnelType::parse("invalid"), None);
     }
 
@@ -202,6 +220,16 @@ mod tests {
             .clone()
             .with_hops(vec!["hop1:2222".to_string()])
             .with_remote_target("target:80".to_string());
+        assert!(config.validate().is_ok());
+
+        // HTTP 隧道需要代理和远程目标
+        let config =
+            TunnelConfig::new(TunnelType::Http, local).with_remote_target("target:80".to_string());
+        assert!(config.validate().is_err());
+
+        let config = config
+            .clone()
+            .with_hops(vec!["proxy.corp.local:8080".to_string()]);
         assert!(config.validate().is_ok());
     }
 }

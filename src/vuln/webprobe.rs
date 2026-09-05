@@ -13,7 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// Web 漏洞发现结果
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -362,6 +362,188 @@ impl WebVulnScanner {
         all.extend(self.generate_default_cred_tests());
         all
     }
+
+    /// 对单个 Web 目标执行全部探测并返回发现
+    pub async fn scan_all(&self, url: &str) -> Vec<WebVuln> {
+        let tests = self.generate_all_tests(url);
+        let client = reqwest::Client::builder()
+            .timeout(self.timeout)
+            .danger_accept_invalid_certs(true)
+            .no_proxy()
+            .build();
+        let client = match client {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::debug!("[WebProbe] 构建 HTTP 客户端失败: {}", e);
+                return Vec::new();
+            }
+        };
+
+        let mut findings = Vec::new();
+        for test in tests {
+            if let Some(finding) = self.scan_test(&test, &client).await {
+                findings.push(finding);
+            }
+        }
+        findings
+    }
+
+    /// 执行单个 Web 探测向量
+    async fn scan_test(&self, test: &WebVulnTest, client: &reqwest::Client) -> Option<WebVuln> {
+        let start = Instant::now();
+        let mut builder = match test.method.as_str() {
+            "POST" => client.post(&test.url),
+            _ => client.get(&test.url),
+        };
+        for (k, v) in &self.headers {
+            builder = builder.header(k.as_str(), v.as_str());
+        }
+
+        let resp = builder.send().await.ok()?;
+        let elapsed = start.elapsed();
+        let status = resp.status().as_u16();
+        let body = resp.text().await.unwrap_or_default();
+
+        self.detect(test, status, &body, elapsed)
+    }
+
+    /// 根据响应内容/耗时判定漏洞
+    fn detect(
+        &self,
+        test: &WebVulnTest,
+        status: u16,
+        body: &str,
+        elapsed: Duration,
+    ) -> Option<WebVuln> {
+        let (name, severity, evidence, remediation) = match &test.vuln_type {
+            WebVulnType::Xss => {
+                let refs = [
+                    "<script>alert(1)</script>",
+                    "<svg/onload=alert(1)>",
+                    "onerror=alert(1)",
+                ];
+                let reflected =
+                    body.contains(&test.payload) || refs.iter().any(|r| body.contains(r));
+                if !reflected {
+                    return None;
+                }
+                (
+                    "反射型 XSS",
+                    WebSeverity::Medium,
+                    format!("参数 {} 反射了 payload: {}", test.parameter, test.payload),
+                    "对用户输入进行 HTML 编码，配置 CSP，避免将不可信数据拼入 HTML".to_string(),
+                )
+            }
+            WebVulnType::SqlInjection => {
+                let is_time_based = test.payload.contains("SLEEP")
+                    || test.payload.contains("pg_sleep")
+                    || test.payload.contains("WAITFOR");
+                if !(is_time_based && elapsed >= Duration::from_secs(3)) {
+                    return None;
+                }
+                (
+                    "SQL 注入（时间盲注）",
+                    WebSeverity::High,
+                    format!(
+                        "参数 {} 响应耗时 {:.2}s (payload: {})",
+                        test.parameter,
+                        elapsed.as_secs_f64(),
+                        test.payload
+                    ),
+                    "使用参数化查询，严格限制数据库账户权限".to_string(),
+                )
+            }
+            WebVulnType::CommandInjection => {
+                if elapsed < Duration::from_secs(3) {
+                    return None;
+                }
+                (
+                    "命令注入（时间盲测）",
+                    WebSeverity::Critical,
+                    format!(
+                        "参数 {} 响应耗时 {:.2}s (payload: {})",
+                        test.parameter,
+                        elapsed.as_secs_f64(),
+                        test.payload
+                    ),
+                    "禁止拼接系统命令，使用白名单和沙箱执行".to_string(),
+                )
+            }
+            WebVulnType::PathTraversal => {
+                let markers = [
+                    "root:x:0:0:",
+                    "[extensions]",
+                    "[fonts]",
+                    "[mci extensions]",
+                    "[Mail]",
+                    "MAPI=1",
+                ];
+                if !markers.iter().any(|m| body.contains(m)) {
+                    return None;
+                }
+                (
+                    "路径遍历/任意文件读取",
+                    WebSeverity::High,
+                    format!("{} 返回了敏感文件内容", test.url),
+                    "对文件路径做规范化校验，禁止包含 ../ 的路径穿越".to_string(),
+                )
+            }
+            WebVulnType::InformationDisclosure => {
+                let hit = match test.payload.as_str() {
+                    p if p.contains(".git/HEAD") => body.contains("ref: refs/heads/"),
+                    p if p.contains(".env") => {
+                        body.contains("APP_KEY")
+                            || body.contains("DB_PASSWORD")
+                            || body.contains("SECRET_KEY")
+                            || body.contains("AWS_")
+                    }
+                    p if p.contains("phpinfo.php") => {
+                        body.contains("phpinfo()") || body.contains("PHP Version")
+                    }
+                    p if p.contains("/actuator") => {
+                        body.contains("\"status\"")
+                            || body.contains("\"health\"")
+                            || body.contains("actuator")
+                    }
+                    p if p.contains("swagger-ui") => {
+                        body.contains("Swagger UI") || body.contains("swagger-ui")
+                    }
+                    p if p.contains("api-docs") => {
+                        body.contains("\"swagger\"")
+                            || body.contains("openapi")
+                            || body.contains("api-docs")
+                    }
+                    p if p.contains("pprof") => {
+                        body.contains("Types of profiles")
+                            || body.contains("heap profile")
+                            || body.contains("goroutine profile")
+                    }
+                    _ => false,
+                };
+                if !hit {
+                    return None;
+                }
+                (
+                    "Web 信息泄露",
+                    WebSeverity::High,
+                    format!("{} 可访问（HTTP {}）", test.url, status),
+                    "移除敏感端点或增加访问控制".to_string(),
+                )
+            }
+            WebVulnType::DefaultCredentials | WebVulnType::UnauthorizedAccess => return None,
+        };
+
+        Some(WebVuln {
+            vuln_id: format!("WEB-{:?}", test.vuln_type).to_uppercase(),
+            name: name.to_string(),
+            target_url: test.url.clone(),
+            parameter: test.parameter.clone(),
+            vuln_type: test.vuln_type.clone(),
+            severity,
+            evidence,
+            remediation,
+        })
+    }
 }
 
 /// Web 漏洞测试向量
@@ -535,5 +717,86 @@ mod tests {
     fn test_web_severity_display() {
         assert_eq!(WebSeverity::Critical.display_name(), "严重");
         assert_eq!(WebSeverity::Info.display_name(), "信息");
+    }
+
+    #[test]
+    fn test_detect_xss_reflected() {
+        let scanner = WebVulnScanner::new("http://test.com");
+        let test = WebVulnTest {
+            vuln_type: WebVulnType::Xss,
+            url: "http://test.com/?q=%3Cscript%3Ealert(1)%3C/script%3E".to_string(),
+            parameter: "q".to_string(),
+            payload: "<script>alert(1)</script>".to_string(),
+            description: String::new(),
+            method: "GET".to_string(),
+        };
+        let finding = scanner.detect(
+            &test,
+            200,
+            "<html><script>alert(1)</script></html>",
+            Duration::from_millis(10),
+        );
+        assert!(finding.is_some());
+        assert_eq!(finding.unwrap().vuln_type, WebVulnType::Xss);
+    }
+
+    #[test]
+    fn test_detect_path_traversal() {
+        let scanner = WebVulnScanner::new("http://test.com");
+        let test = WebVulnTest {
+            vuln_type: WebVulnType::PathTraversal,
+            url: "http://test.com/../../../etc/passwd".to_string(),
+            parameter: "path".to_string(),
+            payload: "../../../etc/passwd".to_string(),
+            description: String::new(),
+            method: "GET".to_string(),
+        };
+        let finding = scanner.detect(
+            &test,
+            200,
+            "root:x:0:0:root:/root:/bin/bash",
+            Duration::from_millis(10),
+        );
+        assert!(finding.is_some());
+    }
+
+    #[test]
+    fn test_detect_info_leak_git() {
+        let scanner = WebVulnScanner::new("http://test.com");
+        let test = WebVulnTest {
+            vuln_type: WebVulnType::InformationDisclosure,
+            url: "http://test.com/.git/HEAD".to_string(),
+            parameter: String::new(),
+            payload: "/.git/HEAD".to_string(),
+            description: String::new(),
+            method: "GET".to_string(),
+        };
+        let finding = scanner.detect(
+            &test,
+            200,
+            "ref: refs/heads/main",
+            Duration::from_millis(10),
+        );
+        assert!(finding.is_some());
+    }
+
+    #[test]
+    fn test_detect_no_false_positive() {
+        let scanner = WebVulnScanner::new("http://test.com");
+        let test = WebVulnTest {
+            vuln_type: WebVulnType::Xss,
+            url: "http://test.com/?q=hello".to_string(),
+            parameter: "q".to_string(),
+            payload: "<script>alert(1)</script>".to_string(),
+            description: String::new(),
+            method: "GET".to_string(),
+        };
+        let finding = scanner.detect(
+            &test,
+            200,
+            "hello world, nothing reflected",
+            Duration::from_millis(10),
+        );
+        assert!(finding.is_none());
     }
 }

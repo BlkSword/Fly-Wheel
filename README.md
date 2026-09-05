@@ -115,13 +115,15 @@ nmap + hydra + chisel + rubeus       intrasweep
 | 正向隧道 | ✅ | ssh -L / Chisel | TCP 转发，半关闭 |
 | 反向隧道 | ✅ | ssh -R / Chisel | 自动重连 |
 | 链式隧道 | ✅ | 多级 ssh -L | 多跳板 |
-| 加密传输 | ❌ | Chisel / Ligolo | 加密层已实现，管道未接线 |
+| HTTP 隧道 | ✅ | Neo-reGeorg | HTTP CONNECT 代理穿透 |
+| 加密传输 | ❌ | Chisel / Ligolo | 加密层已实现，CLI 未开放 |
 
 ### 漏洞与提权
 
 | 功能 | 状态 | 对标工具 | 说明 |
 |------|:----:|----------|------|
-| PoC 漏洞扫描 | ✅ | Nuclei（轻量版） | 33 条内置 + YAML/JSON/脚本外部加载 |
+| PoC 漏洞扫描 | ✅ | Nuclei（轻量版） | 31 条内置 + YAML/JSON/脚本外部加载 |
+| Web 主动探测 | ⚠️ | Nuclei / sqlmap | 基础 GET/POST 非破坏性探测（SQLi/XSS/命令注入/路径遍历/信息泄露） |
 | Windows 提权检测 | ✅ | WinPEAS / PowerUp | 7 类检查，PowerShell/CIM |
 | Linux 提权检测 | ✅ | LinPEAS / LinEnum | 8 类检查 |
 | EDR/AV 检测 | ✅ | SharpEDRChecker | 18 厂商签名 |
@@ -256,7 +258,7 @@ intrasweep crack [TARGET] -s <SERVICE> [-u USERS] [-U USER_FILE] [-P PASS_FILE]
 ### tunnel — 内网穿透
 
 ```bash
-intrasweep tunnel [forward|reverse|socks5|chain] [-t TARGET] [-L PORT] [-H HOP]
+intrasweep tunnel [forward|reverse|socks5|chain|http] [-t TARGET] [-L PORT] [-H HOP]
                   [--socks5-username USER] [--socks5-password PASS]
 ```
 
@@ -264,10 +266,10 @@ intrasweep tunnel [forward|reverse|socks5|chain] [-t TARGET] [-L PORT] [-H HOP]
 
 ```bash
 intrasweep vuln [TARGETS] [--poc-file PATH] [--severity LEVEL] [--category CAT]
-                [--format json|csv] [-c CONCURRENCY] [-t TIMEOUT]
+                [--format json|csv] [-c CONCURRENCY] [-t TIMEOUT] [--web-probe]
 ```
 
-33 条内置 PoC（反序列化/未授权/OA/RCE/信息泄露/配置检测），支持 YAML/JSON/脚本外部加载。
+31 条内置 PoC（反序列化/未授权/OA/RCE/信息泄露/配置检测），支持 YAML/JSON/脚本外部加载；`--web-probe` 启用基础 Web 主动探测。
 
 ### ad — AD 域枚举
 
@@ -347,8 +349,8 @@ src/
 ├── cli/                 10 个命令 + 交互式向导
 ├── scanner/             主机发现 / 端口扫描 / 服务探测 / Web 指纹 / ARP
 ├── cracker/             8 种服务爆破 + 并发引擎 + NTLMv2 + 密码喷洒
-├── tunnel/              正向 / 反向 / SOCKS5 / 链式 + relay + 加密层
-├── vuln/                PoC 引擎 / 33 条规则 / 外部加载 / 匹配器
+├── tunnel/              正向 / 反向 / SOCKS5 / 链式 / HTTP + relay + 加密层
+├── vuln/                PoC 引擎 / 31 条规则 / 外部加载 / Web 主动探测 / 匹配器
 ├── ad/                  LDAP 枚举 / BloodHound / SID 解析 / 分页查询
 ├── cred/                浏览器 / WiFi / 应用 / SAM / LSASS / GPP 凭据提取
 ├── recon/               EDR 检测 / 用户猎杀 / 共享搜索 / 防火墙 / ADCS / VLAN

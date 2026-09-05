@@ -15,7 +15,7 @@ pub fn run_vuln_cmd(
     output: Option<PathBuf>,
     concurrency: usize,
     timeout: u64,
-    _web_probe: bool,
+    web_probe: bool,
 ) -> Result<()> {
     let output_fmt = OutputFormat::parse(format).unwrap_or(OutputFormat::Json);
 
@@ -29,6 +29,7 @@ pub fn run_vuln_cmd(
             output,
             concurrency,
             timeout,
+            web_probe,
         ),
         None => run_interactive_vuln(
             poc_file,
@@ -38,6 +39,7 @@ pub fn run_vuln_cmd(
             output,
             concurrency,
             timeout,
+            web_probe,
         ),
     }
 }
@@ -51,6 +53,7 @@ fn run_vuln_scan(
     output: Option<PathBuf>,
     concurrency: usize,
     timeout: u64,
+    web_probe: bool,
 ) -> Result<()> {
     print_banner();
     println!();
@@ -102,6 +105,19 @@ fn run_vuln_scan(
 
     print_vuln_results(&result);
 
+    let web_findings = if web_probe {
+        let findings = rt.block_on(run_web_probe(&result.targets, timeout));
+        if !findings.is_empty() {
+            print_web_vuln_results(&findings);
+        } else {
+            print_info("Web 主动探测未发现明显问题");
+        }
+        findings
+    } else {
+        Vec::new()
+    };
+
+    let web_findings_ref = &web_findings;
     let path = output.unwrap_or_else(|| {
         let base = if !result.targets.is_empty() {
             result.targets[0].replace(['.', ':'], "_")
@@ -115,11 +131,32 @@ fn run_vuln_scan(
 
     match output_fmt {
         OutputFormat::Json => {
-            let json = serde_json::to_string_pretty(&result)?;
-            std::fs::write(&path, json)?;
+            if web_findings_ref.is_empty() {
+                let json = serde_json::to_string_pretty(&result)?;
+                std::fs::write(&path, json)?;
+            } else {
+                #[derive(serde::Serialize)]
+                struct CombinedVulnResult {
+                    #[serde(rename = "poc_scan")]
+                    poc_scan: crate::vuln::VulnScanResult,
+                    #[serde(rename = "web_probe")]
+                    web_probe: Vec<crate::vuln::webprobe::WebVuln>,
+                }
+                let combined = CombinedVulnResult {
+                    poc_scan: result,
+                    web_probe: web_findings_ref.to_vec(),
+                };
+                let json = serde_json::to_string_pretty(&combined)?;
+                std::fs::write(&path, json)?;
+            }
         }
         OutputFormat::Csv => {
             export_vuln_csv(&result, &path)?;
+            if !web_findings_ref.is_empty() {
+                let web_path = path.with_extension("web.csv");
+                export_web_vuln_csv(web_findings_ref, &web_path)?;
+                print_success(&format!("Web 探测结果已保存: {}", web_path.display()));
+            }
         }
     }
 
@@ -135,6 +172,7 @@ fn run_interactive_vuln(
     output: Option<PathBuf>,
     concurrency: usize,
     timeout: u64,
+    web_probe: bool,
 ) -> Result<()> {
     print_banner();
     println!();
@@ -222,6 +260,10 @@ fn run_interactive_vuln(
         timeout_input.parse::<u64>().unwrap_or(timeout)
     };
 
+    let web_probe_input =
+        InteractiveMenu::read_input("是否启用 Web 主动探测 (SQLi/XSS/命令注入/路径穿越)? [y/N]: ");
+    let final_web_probe = web_probe || web_probe_input.to_lowercase() == "y";
+
     // 步骤 5: 确认
     InteractiveMenu::print_step(5, 5, "确认配置");
     println!("  目标: {}", targets.join(", "));
@@ -236,6 +278,10 @@ fn run_interactive_vuln(
     if let Some(ref ext) = external_path {
         println!("  外部PoC: {}", ext.display());
     }
+    println!(
+        "  Web主动探测: {}",
+        if final_web_probe { "启用" } else { "禁用" }
+    );
     println!();
 
     if !InteractiveMenu::confirm("确认开始扫描? [Y/n]: ") {
@@ -252,6 +298,7 @@ fn run_interactive_vuln(
         output,
         final_concurrency,
         final_timeout,
+        final_web_probe,
     )
 }
 
@@ -347,6 +394,88 @@ fn print_vuln_results(result: &crate::vuln::VulnScanResult) {
         }
         println!();
     }
+}
+
+/// 对目标列表执行轻量级 Web 主动探测
+async fn run_web_probe(targets: &[String], timeout: u64) -> Vec<crate::vuln::webprobe::WebVuln> {
+    let mut findings = Vec::new();
+
+    for target in targets {
+        let Some(url) = normalize_web_target(target) else {
+            continue;
+        };
+
+        let scanner = crate::vuln::webprobe::WebVulnScanner::new(&url).with_timeout(timeout.max(5));
+        findings.extend(scanner.scan_all(&url).await);
+    }
+
+    findings
+}
+
+/// 将目标格式化为可探测的 HTTP(S) URL；仅支持显式端口或完整 URL
+fn normalize_web_target(target: &str) -> Option<String> {
+    if target.contains("://") {
+        return Some(target.to_string());
+    }
+
+    let (host, port) = target.rsplit_once(':')?;
+    let port: u16 = port.parse().ok()?;
+    if matches!(port, 80 | 443 | 8000 | 8080 | 8443 | 8888 | 9200 | 9443) {
+        Some(format!("http://{}:{}", host, port))
+    } else {
+        None
+    }
+}
+
+fn print_web_vuln_results(findings: &[crate::vuln::webprobe::WebVuln]) {
+    println!();
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!("  Web 主动探测结果");
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!();
+
+    if findings.is_empty() {
+        print_info("未发现明显 Web 漏洞");
+        return;
+    }
+
+    for finding in findings {
+        println!(
+            "  [{}] {} - {} ({})",
+            finding.severity.display_name(),
+            finding.vuln_type.display_name(),
+            finding.target_url,
+            finding.parameter
+        );
+        if !finding.evidence.is_empty() {
+            println!("    证据: {}", finding.evidence);
+        }
+        println!("    修复: {}", finding.remediation);
+        println!();
+    }
+}
+
+fn export_web_vuln_csv(
+    findings: &[crate::vuln::webprobe::WebVuln],
+    path: &std::path::Path,
+) -> Result<()> {
+    let mut wtr = csv::Writer::from_path(path)?;
+
+    wtr.write_record(["目标URL", "参数", "漏洞类型", "严重性", "证据", "修复建议"])?;
+
+    for finding in findings {
+        wtr.write_record([
+            &finding.target_url,
+            &finding.parameter,
+            finding.vuln_type.display_name(),
+            finding.severity.display_name(),
+            &finding.evidence,
+            &finding.remediation,
+        ])?;
+    }
+
+    wtr.flush()?;
+    Ok(())
 }
 
 fn export_vuln_csv(result: &crate::vuln::VulnScanResult, path: &std::path::Path) -> Result<()> {

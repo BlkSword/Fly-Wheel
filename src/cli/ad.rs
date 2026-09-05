@@ -197,24 +197,30 @@ fn run_interactive_ad(
     println!("  2. Kerberoast   - 仅提取 SPN 账户");
     println!("  3. AS-REP Roast - 仅查找预认证禁用用户");
     println!("  4. BloodHound   - 枚举并导出 BloodHound JSON");
+    println!("  5. ADCS         - 枚举证书服务与可利用模板");
+    println!("  6. GPP          - 搜索并解密 SYSVOL 中的 GPP 密码");
     println!();
 
     let default_mode = match initial_mode.as_str() {
         "kerberoast" => 2,
         "asrep-roast" => 3,
         "bloodhound" => 4,
+        "adcs" => 5,
+        "gpp" => 6,
         _ => 1,
     };
     let mode = if initial_mode != "all" {
         println!("已指定模式: {}", initial_mode);
         initial_mode
     } else {
-        let choice = InteractiveMenu::read_number_opt("请选择 [1-4, 默认 1]: ", 1, 4, default_mode);
+        let choice = InteractiveMenu::read_number_opt("请选择 [1-6, 默认 1]: ", 1, 6, default_mode);
         let m = match choice {
             1 => "all".to_string(),
             2 => "kerberoast".to_string(),
             3 => "asrep-roast".to_string(),
             4 => "bloodhound".to_string(),
+            5 => "adcs".to_string(),
+            6 => "gpp".to_string(),
             _ => "all".to_string(),
         };
         print_success(&format!("已选择模式: {}", m));
@@ -271,14 +277,91 @@ fn save_ad_result(
     data: &serde_json::Value,
 ) -> Result<()> {
     if let Some(path) = output {
-        let content = match fmt {
-            OutputFormat::Json => serde_json::to_string_pretty(data)?,
-            OutputFormat::Csv => serde_json::to_string_pretty(data)?,
-        };
-        std::fs::write(path, content)?;
+        match fmt {
+            OutputFormat::Json => {
+                let content = serde_json::to_string_pretty(data)?;
+                std::fs::write(&path, content)?;
+            }
+            OutputFormat::Csv => export_value_csv(&path, data)?,
+        }
         print_success(&format!("结果已保存到: {}", path.display()));
     }
     Ok(())
+}
+
+/// 将 AD 结果转换为可用的 CSV；数组展开为多行，对象输出一行摘要
+fn export_value_csv(path: &std::path::Path, data: &serde_json::Value) -> Result<()> {
+    let mut wtr = csv::Writer::from_path(path)?;
+
+    match data {
+        serde_json::Value::Array(items) => {
+            if items.is_empty() {
+                wtr.write_record(["value"])?;
+                wtr.write_record([""])?;
+                wtr.flush()?;
+                return Ok(());
+            }
+
+            let keys = collect_object_keys(items);
+            if keys.is_empty() {
+                wtr.write_record(["value"])?;
+                for item in items {
+                    wtr.write_record([scalar_value_to_string(item)])?;
+                }
+                wtr.flush()?;
+                return Ok(());
+            }
+
+            wtr.write_record(&keys)?;
+            for item in items {
+                let values: Vec<String> = keys
+                    .iter()
+                    .map(|k| item.get(k).map(scalar_value_to_string).unwrap_or_default())
+                    .collect();
+                wtr.write_record(&values)?;
+            }
+        }
+        serde_json::Value::Object(obj) => {
+            let keys: Vec<String> = obj.keys().cloned().collect();
+            wtr.write_record(&keys)?;
+            let values: Vec<String> = keys
+                .iter()
+                .map(|k| obj.get(k).map(scalar_value_to_string).unwrap_or_default())
+                .collect();
+            wtr.write_record(&values)?;
+        }
+        other => {
+            wtr.write_record(["value"])?;
+            wtr.write_record([scalar_value_to_string(other)])?;
+        }
+    }
+
+    wtr.flush()?;
+    Ok(())
+}
+
+fn collect_object_keys(items: &[serde_json::Value]) -> Vec<String> {
+    let mut keys = Vec::new();
+    for item in items {
+        if let Some(obj) = item.as_object() {
+            for key in obj.keys() {
+                if !keys.iter().any(|k| k == key) {
+                    keys.push(key.clone());
+                }
+            }
+        }
+    }
+    keys
+}
+
+fn scalar_value_to_string(value: &serde_json::Value) -> String {
+    match value {
+        serde_json::Value::Null => String::new(),
+        serde_json::Value::Bool(b) => b.to_string(),
+        serde_json::Value::Number(n) => n.to_string(),
+        serde_json::Value::String(s) => s.clone(),
+        other => serde_json::to_string(other).unwrap_or_default(),
+    }
 }
 
 fn print_adcs_results(result: &crate::recon::adcs::AdcsEnumResult) {

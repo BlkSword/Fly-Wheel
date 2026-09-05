@@ -421,7 +421,12 @@ fn normalize_web_target(target: &str) -> Option<String> {
     let (host, port) = target.rsplit_once(':')?;
     let port: u16 = port.parse().ok()?;
     if matches!(port, 80 | 443 | 8000 | 8080 | 8443 | 8888 | 9200 | 9443) {
-        Some(format!("http://{}:{}", host, port))
+        let scheme = if matches!(port, 443 | 8443 | 9443) {
+            "https"
+        } else {
+            "http"
+        };
+        Some(format!("{}://{}:{}", scheme, host, port))
     } else {
         None
     }
